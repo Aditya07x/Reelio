@@ -20,7 +20,9 @@ class DashboardActivity : ComponentActivity() {
     private val executorService: ExecutorService = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private var injectionRunnable: Runnable? = null
-    private var isProcessing = false
+    @Volatile private var isProcessing = false
+    private var injectionAttempts = 0
+    private val MAX_INJECTION_ATTEMPTS = 3
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,16 +53,21 @@ class DashboardActivity : ComponentActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                injectionAttempts = 0  // Reset retry counter
                 injectDataWithDebounce(webView)
             }
 
             override fun onReceivedError(view: WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
                 android.util.Log.e("ReactDashboard", "WebView Error: ${error?.description} for URL: ${request?.url}")
+                // Inject error state to React
+                injectErrorToReact(webView, "WebView Error: ${error?.description}")
                 super.onReceivedError(view, request, error)
             }
 
             override fun onReceivedHttpError(view: WebView?, request: android.webkit.WebResourceRequest?, errorResponse: android.webkit.WebResourceResponse?) {
                 android.util.Log.e("ReactDashboard", "HTTP Error: ${errorResponse?.statusCode} ${errorResponse?.reasonPhrase} for URL: ${request?.url}")
+                // Inject error state to React
+                injectErrorToReact(webView, "HTTP ${errorResponse?.statusCode}: ${errorResponse?.reasonPhrase}")
                 super.onReceivedHttpError(view, request, errorResponse)
             }
         }
@@ -73,55 +80,111 @@ class DashboardActivity : ComponentActivity() {
         injectionRunnable?.let { handler.removeCallbacks(it) }
 
         injectionRunnable = Runnable {
-            if (isProcessing) return@Runnable // Prevent concurrent Python executions
+            // Check flag INSIDE the runnable (thread-safe)
+            if (isProcessing) {
+                android.util.Log.w("ReactDashboard", "Already processing, skipping injection")
+                return@Runnable
+            }
             isProcessing = true
             
             executorService.execute {
-                val file = File(filesDir, "insta_data.csv")
-                var csvContent = ""
-                
-                if (file.exists()) {
-                    csvContent = file.readText()
-                }
-
-                if (!Python.isStarted()) {
-                    Python.start(AndroidPlatform(this))
-                }
-                
-                var jsonContent = "{}"
                 try {
-                    val py = Python.getInstance()
-                    val hmmModule = py.getModule("hmm")
-                    jsonContent = hmmModule.callAttr("run_hmm_from_string", csvContent).toString()
-                } catch (e: Exception) {
-                    android.util.Log.e("ReactDashboard", "Python Error: ${e.message}")
-                    jsonContent = "{\"error\": \"${e.message}\"}"
-                }
+                    val file = File(filesDir, "insta_data.csv")
+                    var csvContent = ""
+                    
+                    if (file.exists()) {
+                        csvContent = file.readText()
+                    } else {
+                        // Send error immediately if file doesn't exist
+                        handler.post {
+                            injectErrorToReact(webView, "No data file found. Please scroll some reels first!")
+                            isProcessing = false
+                        }
+                        return@execute
+                    }
 
-                // Escape newlines and quotes to safely pass into Javascript string literal
-                val escapedJson = jsonContent
-                    .replace("\\", "\\\\")
-                    .replace("\n", "\\n")
-                    .replace("\r", "")
-                    .replace("'", "\\'")
-                    .replace("\"", "\\\"")
+                    if (csvContent.isEmpty()) {
+                        // Handle empty CSV case
+                        handler.post {
+                            injectErrorToReact(webView, "No data available yet. Scroll a few more reels!")
+                            isProcessing = false
+                        }
+                        return@execute
+                    }
 
-                // Return to main thread to interact with WebView
-                handler.post {
+                    if (!Python.isStarted()) {
+                        Python.start(AndroidPlatform(this@DashboardActivity))
+                    }
+                    
+                    var jsonContent = "{}"
                     try {
-                        val jsCode = "javascript:injectData('$escapedJson');"
-                        webView.evaluateJavascript(jsCode, null)
+                        val py = Python.getInstance()
+                        val hmmModule = py.getModule("hmm")
+                        jsonContent = hmmModule.callAttr("run_hmm_from_string", csvContent).toString()
                     } catch (e: Exception) {
-                        android.util.Log.e("ReactDashboard", "JS Evaluation Error: ${e.message}")
-                    } finally {
+                        android.util.Log.e("ReactDashboard", "Python Error: ${e.message}", e)
+                        // Always send error back to React
+                        handler.post {
+                            injectErrorToReact(webView, "Processing error: ${e.message}")
+                            isProcessing = false
+                        }
+                        return@execute
+                    }
+
+                    // Validate JSON response
+                    if (jsonContent.isEmpty() || jsonContent == "{}" || jsonContent == "null") {
+                        handler.post {
+                            injectErrorToReact(webView, "No sufficient data yet. Scroll a few more reels!")
+                            isProcessing = false
+                        }
+                        return@execute
+                    }
+
+                    // Escape newlines and quotes to safely pass into Javascript string literal
+                    val escapedJson = jsonContent
+                        .replace("\\", "\\\\")
+                        .replace("\n", "\\n")
+                        .replace("\r", "")
+                        .replace("'", "\\'")
+                        .replace("\"", "\\\"")
+
+                    // Return to main thread to interact with WebView
+                    handler.post {
+                        try {
+                            val jsCode = "javascript:injectData('$escapedJson');"
+                            webView.evaluateJavascript(jsCode, null)
+                            android.util.Log.d("ReactDashboard", "Data injected successfully")
+                        } catch (e: Exception) {
+                            android.util.Log.e("ReactDashboard", "JS Evaluation Error: ${e.message}", e)
+                            injectErrorToReact(webView, "Failed to render dashboard: ${e.message}")
+                        } finally {
+                            isProcessing = false  // Always reset flag in finally block
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("ReactDashboard", "Unexpected error in executor: ${e.message}", e)
+                    handler.post {
+                        injectErrorToReact(webView, "Unexpected error: ${e.message}")
                         isProcessing = false
                     }
                 }
             }
         }
         
-        // 500ms debounce
-        handler.postDelayed(injectionRunnable!!, 500)
+        // Reduce debounce to 250ms
+        handler.postDelayed(injectionRunnable!!, 250)
+    }
+
+    // New helper to inject error state directly to React
+    private fun injectErrorToReact(webView: WebView, errorMsg: String) {
+        val errorJson = "{\"error\": \"$errorMsg\"}".replace("\"", "\\\"")
+        try {
+            val jsCode = "javascript:injectData('$errorJson');"
+            webView.evaluateJavascript(jsCode, null)
+            android.util.Log.d("ReactDashboard", "Error injected: $errorMsg")
+        } catch (e: Exception) {
+            android.util.Log.e("ReactDashboard", "Failed to inject error: ${e.message}")
+        }
     }
 
     override fun onDestroy() {

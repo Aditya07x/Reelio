@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Instagram Tracker</string>
+    <string name="app_name">Reelio</string>
     <string name="accessibility_service_description">
         Tracks Instagram reel scrolling behaviour
     </string>

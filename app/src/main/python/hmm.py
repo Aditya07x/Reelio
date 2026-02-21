@@ -170,7 +170,7 @@ def m_step(sessions, gammas, xis, p_old):
             
     return A_new, pi_new, p_new, mu_new, sigma_new
 
-def train_hmm(sessions, max_iter=100, tol=1e-4):
+def train_hmm(sessions, max_iter=15, tol=1e-3):
     A, pi, p, mu, sigma = initialize_parameters()
     
     prev_log_likelihood = -np.inf
@@ -254,6 +254,10 @@ def run_hmm_from_string(csv_data):
         return json.dumps({"error": "Empty CSV data", "sessions": []})
         
     sessions = load_and_preprocess_data(csv_data)
+    
+    # Performance Optimization: Bound to the most recent sessions for mobile CPU
+    if len(sessions) > 50:
+        sessions = sessions[-50:]
     
     if len(sessions) > 0:
         A, pi, p, mu, sigma, gammas = train_hmm(sessions)
