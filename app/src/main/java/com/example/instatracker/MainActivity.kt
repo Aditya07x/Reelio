@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
         settings.allowFileAccessFromFileURLs = true
         settings.allowUniversalAccessFromFileURLs = true
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        settings.cacheMode = WebSettings.LOAD_NO_CACHE
 
         // Expose Native Android Methods to React
         webView.addJavascriptInterface(WebAppInterface(this), "Android")
@@ -73,6 +74,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        webView.clearCache(true)
         webView.loadUrl("file:///android_asset/www/index.html")
     }
 
@@ -148,17 +150,15 @@ class MainActivity : ComponentActivity() {
                         return@execute
                     }
 
-                    val escapedJson = jsonContent
-                        .replace("\\", "\\\\")
-                        .replace("\n", "\\n")
-                        .replace("\r", "")
-                        .replace("'", "\\'")
-                        .replace("\"", "\\\"")
+                     val b64Json = android.util.Base64.encodeToString(
+                         jsonContent.toByteArray(Charsets.UTF_8),
+                         android.util.Base64.NO_WRAP
+                     )
 
-                    handler.post {
-                        try {
-                            val jsCode = "javascript:injectData('$escapedJson');"
-                            webView.evaluateJavascript(jsCode, null)
+                     handler.post {
+                         try {
+                             val jsCode = "injectDataB64('$b64Json');"
+                             webView.evaluateJavascript(jsCode, null)
                             Log.d("ReactDashboard", "Data injected successfully")
                         } catch (e: Exception) {
                             Log.e("ReactDashboard", "JS Evaluation Error: ${e.message}", e)
@@ -181,10 +181,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun injectErrorToReact(webView: WebView, errorMsg: String) {
-        val errorJson = "{\"error\": \"$errorMsg\"}".replace("\"", "\\\"")
+        val safeMsg = errorMsg.replace("\"", "'")
+        val errorJson = "{\"error\": \"$safeMsg\"}"
+        val b64 = android.util.Base64.encodeToString(
+            errorJson.toByteArray(Charsets.UTF_8),
+            android.util.Base64.NO_WRAP
+        )
         try {
-            val jsCode = "javascript:injectData('$errorJson');"
-            webView.evaluateJavascript(jsCode, null)
+            webView.evaluateJavascript("injectDataB64('$b64');", null)
             Log.d("ReactDashboard", "Error injected: $errorMsg")
         } catch (e: Exception) {
             Log.e("ReactDashboard", "Failed to inject error: ${e.message}")
