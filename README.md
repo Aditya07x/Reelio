@@ -1,5 +1,5 @@
 # Reelio — Adaptive Latent State Engine
-> 🔗 [View Interactive README](https://aditya07x.github.io/InstagramTracker/)
+> 🔗 [View Interactive README](https://aditya07x.github.io/Reelio/)
 
 > An on-device behavioral intelligence system for Android that passively monitors Instagram Reels sessions, models doomscrolling capture probability using a Hidden Markov Model, and surfaces interpretable, personalized insights — all without any data leaving your device.
 
