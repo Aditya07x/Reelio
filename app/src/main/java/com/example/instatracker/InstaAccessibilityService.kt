@@ -650,9 +650,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         }
         
         // --- Layer 8: Trigger Pre-Session IntentionProbe ---
-        if (timeSinceLastSessionMin > 30 && Math.random() < 0.25) {
-            showIntentionPrompt()
-        }
+        showIntentionPrompt()
         // ---------------------------------------------------
         
         currentSessionNumber = if (today != lastDate) 1 else prefs.getInt(KEY_SESSION_NUM, 0) + 1
@@ -796,9 +794,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         if (lastReelStartTime != 0L && endTime > lastReelStartTime) processPreviousReel(endTime)
         
         // --- Layer 8: Trigger Post-Session MicroProbe ---
-        if ((reelCount > 15 || appExitAttempts > 2) && Math.random() < 0.35) {
-            showSurveyPrompt()
-        }
+        showSurveyPrompt()
         // ------------------------------------------------
         
         sensorManager.unregisterListener(this)
@@ -933,7 +929,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         val intent = Intent(this, MicroProbeActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
-        val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -951,7 +947,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         val intent = Intent(this, com.example.instatracker.IntentionProbeActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
-        val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 1, intent, PendingIntent.FLAG_IMMUTABLE)
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)

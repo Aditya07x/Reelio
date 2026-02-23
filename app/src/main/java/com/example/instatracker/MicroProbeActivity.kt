@@ -26,58 +26,26 @@ class MicroProbeActivity : Activity() {
         moodBefore = prefs.getInt("current_mood_before", 0)
         intendedAction = prefs.getString("current_intended_action", "") ?: ""
         
-        // 20% Sampling Rate per request!
-        if (Random.nextFloat() > 0.2f) {
-            finish()
-            return
-        }
 
         showPostSessionRating()
     }
 
     private fun showPostSessionRating() {
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(64, 64, 64, 64)
-            setBackgroundColor(Color.parseColor("#0B1220"))
-        }
-        
-        val title = TextView(this).apply {
-            text = "Reelio Post-Session"
-            textSize = 24f
-            setTextColor(Color.parseColor("#22D3EE"))
-            setPadding(0, 0, 0, 16)
-            gravity = Gravity.CENTER
-        }
-        
-        val question = TextView(this).apply {
-            text = "How do you feel after this session? (1-5)"
-            textSize = 18f
-            setTextColor(Color.parseColor("#F3F4F6"))
-            setPadding(0, 0, 0, 48)
-            gravity = Gravity.CENTER
-        }
-        
-        val buttonsLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
+        val layout = SurveyUIUtils.createMainLayout(this)
+        val title = SurveyUIUtils.createTitleView(this, "Reelio Post-Session")
+        val question = SurveyUIUtils.createQuestionView(this, "How do you feel after this session? (1-5)")
+        val buttonsLayout = SurveyUIUtils.createButtonLayout(this)
         
         for (i in 1..5) {
-            val btn = Button(this).apply {
-                text = i.toString()
-                setTextColor(Color.WHITE)
-                setBackgroundColor(Color.parseColor("#1F2A3D"))
-                setOnClickListener {
-                    postSessionRating = i
-                    showMoodAfterPrompt()
-                }
+            val btn = SurveyUIUtils.createStyledButton(this, i.toString()) {
+                postSessionRating = i
+                showMoodAfterPrompt()
             }
             val params = LinearLayout.LayoutParams(
+                0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(8, 0, 8, 0) }
+                1f
+            ).apply { setMargins(4, 0, 4, 0) }
             buttonsLayout.addView(btn, params)
         }
         
@@ -88,40 +56,20 @@ class MicroProbeActivity : Activity() {
     }
 
     private fun showMoodAfterPrompt() {
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(64, 64, 64, 64)
-            setBackgroundColor(Color.parseColor("#0B1220"))
-        }
-
-        val question = TextView(this).apply {
-            text = "Rate your mood right now (1-5)"
-            textSize = 18f
-            setTextColor(Color.parseColor("#F3F4F6"))
-            setPadding(0, 0, 0, 48)
-            gravity = Gravity.CENTER
-        }
-
-        val buttonsLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
+        val layout = SurveyUIUtils.createMainLayout(this)
+        val question = SurveyUIUtils.createQuestionView(this, "Rate your mood right now (1-5)")
+        val buttonsLayout = SurveyUIUtils.createButtonLayout(this)
         
         for (i in 1..5) {
-            val btn = Button(this).apply {
-                text = i.toString()
-                setTextColor(Color.WHITE)
-                setBackgroundColor(Color.parseColor("#1F2A3D"))
-                setOnClickListener {
-                    moodAfter = i
-                    showRegretPrompt()
-                }
+            val btn = SurveyUIUtils.createStyledButton(this, i.toString()) {
+                moodAfter = i
+                showRegretPrompt()
             }
             val params = LinearLayout.LayoutParams(
+                0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(8, 0, 8, 0) }
+                1f
+            ).apply { setMargins(4, 0, 4, 0) }
             buttonsLayout.addView(btn, params)
         }
         
@@ -131,40 +79,20 @@ class MicroProbeActivity : Activity() {
     }
 
     private fun showRegretPrompt() {
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(64, 64, 64, 64)
-            setBackgroundColor(Color.parseColor("#0B1220"))
-        }
-
-        val question = TextView(this).apply {
-            text = "Did you mean to scroll that long? (1=No, 5=Yes)"
-            textSize = 18f
-            setTextColor(Color.parseColor("#F3F4F6"))
-            setPadding(0, 0, 0, 48)
-            gravity = Gravity.CENTER
-        }
-
-        val buttonsLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
+        val layout = SurveyUIUtils.createMainLayout(this)
+        val question = SurveyUIUtils.createQuestionView(this, "Did you mean to scroll that long? (1=No, 5=Yes)")
+        val buttonsLayout = SurveyUIUtils.createButtonLayout(this)
         
         for (i in 1..5) {
-            val btn = Button(this).apply {
-                text = i.toString()
-                setTextColor(Color.WHITE)
-                setBackgroundColor(Color.parseColor("#1F2A3D"))
-                setOnClickListener {
-                    regretScore = 6 - i // Invert so higher regret = higher score
-                    finalizeProbe()
-                }
+            val btn = SurveyUIUtils.createStyledButton(this, i.toString()) {
+                regretScore = 6 - i // Invert so higher regret = higher score
+                finalizeProbe()
             }
             val params = LinearLayout.LayoutParams(
+                0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(8, 0, 8, 0) }
+                1f
+            ).apply { setMargins(4, 0, 4, 0) }
             buttonsLayout.addView(btn, params)
         }
         

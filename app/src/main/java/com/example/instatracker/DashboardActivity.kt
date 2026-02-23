@@ -80,89 +80,74 @@ class DashboardActivity : ComponentActivity() {
         injectionRunnable?.let { handler.removeCallbacks(it) }
 
         injectionRunnable = Runnable {
-            // Check flag INSIDE the runnable (thread-safe)
             if (isProcessing) {
                 android.util.Log.w("ReactDashboard", "Already processing, skipping injection")
                 return@Runnable
             }
             isProcessing = true
-            
+
             executorService.execute {
                 try {
-                    val file = File(filesDir, "insta_data.csv")
-                    var csvContent = ""
-                    
-                    if (file.exists()) {
-                        csvContent = file.readText()
-                    } else {
-                        // Send error immediately if file doesn't exist
+                    // ── Prefer pre-computed HMM JSON ──────────────────────────────
+                    val hmmFile  = File(filesDir, "hmm_results.json")
+                    val csvFile  = File(filesDir, "insta_data.csv")
+
+                    val jsonContent: String = when {
+                        hmmFile.exists() && hmmFile.length() > 10 && (!csvFile.exists() || hmmFile.lastModified() >= csvFile.lastModified()) -> {
+                            android.util.Log.d("ReactDashboard", "Loading pre-computed HMM JSON (${hmmFile.length()} bytes)")
+                            hmmFile.readText(Charsets.UTF_8)
+                        }
+                        csvFile.exists() -> {
+                            // ── Fallback: run HMM on the fly via Chaquopy ─────────
+                            android.util.Log.d("ReactDashboard", "Running HMM inference on CSV…")
+                            if (!Python.isStarted()) {
+                                Python.start(AndroidPlatform(this@DashboardActivity))
+                            }
+                            val csvContent = csvFile.readText()
+                            val py = Python.getInstance()
+                            val hmmModule = py.getModule("hmm")
+                            val result = hmmModule.callAttr("run_hmm_from_string", csvContent).toString()
+                            // Cache it for next time
+                            hmmFile.writeText(result)
+                            result
+                        }
+                        else -> {
+                            handler.post {
+                                injectErrorToReact(webView, "No data yet. Open Instagram and scroll some Reels first!")
+                                isProcessing = false
+                            }
+                            return@execute
+                        }
+                    }
+
+                    if (jsonContent.isBlank() || jsonContent == "{}" || jsonContent.contains("\"error\"")) {
                         handler.post {
-                            injectErrorToReact(webView, "No data file found. Please scroll some reels first!")
+                            injectErrorToReact(webView, "Not enough data yet — scroll a few more sessions!")
                             isProcessing = false
                         }
                         return@execute
                     }
 
-                    if (csvContent.isEmpty()) {
-                        // Handle empty CSV case
-                        handler.post {
-                            injectErrorToReact(webView, "No data available yet. Scroll a few more reels!")
-                            isProcessing = false
-                        }
-                        return@execute
-                    }
+                    // ── Encode as Base64 to avoid escaping nightmares ─────────────
+                    val b64 = android.util.Base64.encodeToString(
+                        jsonContent.toByteArray(Charsets.UTF_8),
+                        android.util.Base64.NO_WRAP
+                    )
 
-                    if (!Python.isStarted()) {
-                        Python.start(AndroidPlatform(this@DashboardActivity))
-                    }
-                    
-                    var jsonContent = "{}"
-                    try {
-                        val py = Python.getInstance()
-                        val alseModule = py.getModule("reelio_alse")
-                        jsonContent = alseModule.callAttr("run_dashboard_payload", csvContent).toString()
-                    } catch (e: Exception) {
-                        android.util.Log.e("ReactDashboard", "Python Error: ${e.message}", e)
-                        // Always send error back to React
-                        handler.post {
-                            injectErrorToReact(webView, "Processing error: ${e.message}")
-                            isProcessing = false
-                        }
-                        return@execute
-                    }
-
-                    // Validate JSON response
-                    if (jsonContent.isEmpty() || jsonContent == "{}" || jsonContent == "null") {
-                        handler.post {
-                            injectErrorToReact(webView, "No sufficient data yet. Scroll a few more reels!")
-                            isProcessing = false
-                        }
-                        return@execute
-                    }
-
-                    // Escape newlines and quotes to safely pass into Javascript string literal
-                    val escapedJson = jsonContent
-                        .replace("\\", "\\\\")
-                        .replace("\n", "\\n")
-                        .replace("\r", "")
-                        .replace("'", "\\'")
-                        .replace("\"", "\\\"")
-
-                    // Return to main thread to interact with WebView
                     handler.post {
                         try {
-                            val jsCode = "javascript:injectData('$escapedJson');"
-                            webView.evaluateJavascript(jsCode, null)
-                            android.util.Log.d("ReactDashboard", "Data injected successfully")
+                            webView.evaluateJavascript("javascript:injectDataB64('$b64');", null)
+                            android.util.Log.d("ReactDashboard", "HMM JSON injected via B64 (${b64.length} chars)")
                         } catch (e: Exception) {
-                            android.util.Log.e("ReactDashboard", "JS Evaluation Error: ${e.message}", e)
-                            injectErrorToReact(webView, "Failed to render dashboard: ${e.message}")
+                            android.util.Log.e("ReactDashboard", "JS injection error: ${e.message}", e)
+                            injectErrorToReact(webView, "Failed to render: ${e.message}")
                         } finally {
-                            isProcessing = false  // Always reset flag in finally block
+                            isProcessing = false
                         }
                     }
+
                 } catch (e: Exception) {
-                    android.util.Log.e("ReactDashboard", "Unexpected error in executor: ${e.message}", e)
+                    android.util.Log.e("ReactDashboard", "Unexpected error: ${e.message}", e)
                     handler.post {
                         injectErrorToReact(webView, "Unexpected error: ${e.message}")
                         isProcessing = false
@@ -170,8 +155,7 @@ class DashboardActivity : ComponentActivity() {
                 }
             }
         }
-        
-        // Reduce debounce to 250ms
+
         handler.postDelayed(injectionRunnable!!, 250)
     }
 

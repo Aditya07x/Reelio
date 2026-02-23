@@ -20,58 +20,26 @@ class IntentionProbeActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // 30% Sampling Rate
-        if (Random.nextFloat() > 0.3f) {
-            finish()
-            return
-        }
 
         showMoodPrompt()
     }
     
     private fun showMoodPrompt() {
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(64, 64, 64, 64)
-            setBackgroundColor(Color.parseColor("#0B1220"))
-        }
-        
-        val title = TextView(this).apply {
-            text = "Reelio Pre-Session"
-            textSize = 24f
-            setTextColor(Color.parseColor("#22D3EE"))
-            setPadding(0, 0, 0, 16)
-            gravity = Gravity.CENTER
-        }
-        
-        val question = TextView(this).apply {
-            text = "Rate your mood right now (1-5)"
-            textSize = 18f
-            setTextColor(Color.parseColor("#F3F4F6"))
-            setPadding(0, 0, 0, 48)
-            gravity = Gravity.CENTER
-        }
-        
-        val buttonsLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
+        val layout = SurveyUIUtils.createMainLayout(this)
+        val title = SurveyUIUtils.createTitleView(this, "Reelio Pre-Session")
+        val question = SurveyUIUtils.createQuestionView(this, "Rate your mood right now (1-5)")
+        val buttonsLayout = SurveyUIUtils.createButtonLayout(this)
         
         for (i in 1..5) {
-            val btn = Button(this).apply {
-                text = i.toString()
-                setTextColor(Color.WHITE)
-                setBackgroundColor(Color.parseColor("#1F2A3D"))
-                setOnClickListener {
-                    moodBefore = i
-                    showIntentionPrompt()
-                }
+            val btn = SurveyUIUtils.createStyledButton(this, i.toString()) {
+                moodBefore = i
+                showIntentionPrompt()
             }
             val params = LinearLayout.LayoutParams(
+                0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(8, 0, 8, 0) }
+                1f
+            ).apply { setMargins(4, 0, 4, 0) }
             buttonsLayout.addView(btn, params)
         }
         
@@ -82,39 +50,20 @@ class IntentionProbeActivity : Activity() {
     }
 
     private fun showIntentionPrompt() {
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(64, 64, 64, 64)
-            setBackgroundColor(Color.parseColor("#0B1220"))
-        }
-
-        val question = TextView(this).apply {
-            text = "What do you want to do?"
-            textSize = 18f
-            setTextColor(Color.parseColor("#F3F4F6"))
-            setPadding(0, 0, 0, 48)
-            gravity = Gravity.CENTER
-        }
-
-        val options = listOf("Browse", "Specific Search", "Habit", "Killing Time")
+        val layout = SurveyUIUtils.createMainLayout(this)
+        val question = SurveyUIUtils.createQuestionView(this, "What do you want to do?")
         
+        val options = listOf("Browse", "Specific Search", "Habit", "Killing Time")
         layout.addView(question)
         
         for (opt in options) {
-            val btn = Button(this).apply {
-                text = opt
-                setTextColor(Color.WHITE)
-                setBackgroundColor(Color.parseColor("#1F2A3D"))
-                width = 500
-                setOnClickListener {
-                    intendedAction = opt
-                    savePreSessionData()
-                    finish()
-                }
+            val btn = SurveyUIUtils.createStyledButton(this, opt) {
+                intendedAction = opt
+                savePreSessionData()
+                finish()
             }
             val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(0, 8, 0, 8) }
             layout.addView(btn, params)

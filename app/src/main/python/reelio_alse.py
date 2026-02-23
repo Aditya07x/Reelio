@@ -419,6 +419,8 @@ class ReelioCLSE:
         
         # Tracking
         self.n_sessions_seen = 0
+        self.n_regime_alerts = 0
+        self.labeled_sessions = 0
         self.session_ll_history = []
         self._checkpoint_dict = {}
 
@@ -472,7 +474,10 @@ class ReelioCLSE:
             'A': self.A.copy(),
             'pi': self.pi.copy(),
             'h': self.h.copy(),
-            'feature_weights': self.feature_weights.copy()
+            'feature_weights': self.feature_weights.copy(),
+            'n_sessions_seen': self.n_sessions_seen,
+            'n_regime_alerts': self.n_regime_alerts,
+            'labeled_sessions': self.labeled_sessions
         }
 
     def _rollback(self):
@@ -676,6 +681,44 @@ class ReelioCLSE:
         
         return path, doom_prob, gamma
 
+    def compute_model_confidence(self) -> float:
+        # ── COMPONENT 1: Data Volume (50% weight) ──────────────────
+        C_volume = min(self.n_sessions_seen / 20.0, 1.0)
+
+        # ── COMPONENT 2: State Separation (30% weight) ─────────────
+        mu_doom   = self.mu[0, 1]   # doom state mean log_dwell
+        mu_casual = self.mu[0, 0]   # casual state mean log_dwell
+        sigma_avg = (self.sigma[0, 0] + self.sigma[0, 1]) / 2
+
+        if sigma_avg > 0:
+            separation = (mu_doom - mu_casual) / sigma_avg
+            C_separation = float(np.clip(separation / 2.0, 0.0, 1.0))
+        else:
+            C_separation = 0.0
+
+        # ── COMPONENT 3: Stability (20% weight) ────────────────────
+        if self.n_sessions_seen > 0:
+            alert_rate = self.n_regime_alerts / self.n_sessions_seen
+            C_stability = float(np.clip(1.0 - (alert_rate / 0.5), 0.0, 1.0))
+        else:
+            C_stability = 0.0
+
+        # ── COMBINED ────────────────────────────────────────────────
+        confidence = (
+            0.50 * C_volume +
+            0.30 * C_separation +
+            0.20 * C_stability
+        )
+
+        # ── COMPONENT 4: Ground Truth Penalty ──────────────────────
+        if self.labeled_sessions == 0:
+            return float(min(confidence, 0.60))
+        elif self.labeled_sessions < 10:
+            cap = 0.60 + (self.labeled_sessions / 10.0) * 0.20
+            return float(min(confidence, cap))
+        else:
+            return float(min(confidence, 0.90))
+
     def _update_feature_weights(self):
         kl_divs = np.zeros(self.num_features)
         
@@ -875,6 +918,13 @@ class ReelioCLSE:
         # 5. Regime Check
         dominant_state = np.argmax(gamma.sum(axis=0))
         reg_alert = regime_detector.update(np.mean(gamma[:, 1]), df, baseline)
+        if reg_alert:
+            self.n_regime_alerts += 1
+            
+        post_rating = df['PostSessionRating'].iloc[0] if 'PostSessionRating' in df else 0
+        regret = df['RegretScore'].iloc[0] if 'RegretScore' in df else 0
+        if post_rating != 0 or regret != 0:
+            self.labeled_sessions += 1
         
         # 6. Update SS Banks
         self._update_ss(gamma, xi, obs, dominant_state, len(df), reg_alert)
@@ -950,7 +1000,13 @@ def load_full_state(state_path: str):
     model = ReelioCLSE()
     model._checkpoint_dict = data.get('model_state', {})
     model._rollback() # Restore ALL numpy array params from dict
-    model.n_sessions_seen = data.get('model_state', {}).get('n_sessions_seen', 0)
+    
+    if 'n_sessions_seen' not in model._checkpoint_dict:
+        model.n_sessions_seen = data.get('model_state', {}).get('n_sessions_seen', 0)
+    if 'n_regime_alerts' not in model._checkpoint_dict:
+        model.n_regime_alerts = data.get('model_state', {}).get('n_regime_alerts', 0)
+    if 'labeled_sessions' not in model._checkpoint_dict:
+        model.labeled_sessions = data.get('model_state', {}).get('labeled_sessions', 0)
     
     baseline = UserBaseline.from_dict(data.get('baseline_state', {}))
     
@@ -1012,7 +1068,7 @@ def run_inference_on_latest(new_session_csv_path: str, model_state_path: str) ->
     
     save_full_state(model_state_path, model, baseline, detector, gamma)
     
-    confidence = float(np.mean(np.abs(gamma[:, 1] - 0.5)) * 2.0)
+    confidence = float(model.compute_model_confidence())
     label = "DOOMSCROLLING" if doom_prob[1] > 0.65 else "CASUAL"
     
     return {
@@ -1105,11 +1161,14 @@ def run_dashboard_payload(csv_data: str, state_path: str = None) -> str:
             else:
                 date_str = "Unknown"
             
+            avg_dwell = float(s_df['DwellTime'].mean()) if 'DwellTime' in s_df.columns else float(np.exp(s_df['log_dwell']).mean())
+            
             results.append({
                 "sessionNum": int(sess_id),
                 "S_t": mean_gamma_1,
                 "dominantState": dom_state,
                 "nReels": len(s_df),
+                "avgDwell": avg_dwell,
                 "timePeriod": str(time_period),
                 "date": str(date_str)
             })
@@ -1118,9 +1177,6 @@ def run_dashboard_payload(csv_data: str, state_path: str = None) -> str:
         except Exception as e:
             continue
             
-    if len(p_capture_timeline) > 100:
-        p_capture_timeline = p_capture_timeline[-100:]
-        
     regime_stability = 1.0 / (1.0 - model.A[1, 1]) if (1.0 - model.A[1, 1]) > 1e-5 else 999.0
     
     output_payload = {
@@ -1131,7 +1187,8 @@ def run_dashboard_payload(csv_data: str, state_path: str = None) -> str:
         "sessions": results,
         "timeline": {
             "p_capture": p_capture_timeline
-        }
+        },
+        "model_confidence": float(model.compute_model_confidence())
     }
     return json.dumps(output_payload)
 

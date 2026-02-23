@@ -1,101 +1,1111 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-<title>Reelio</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100%;height:100%;background:#060810;overflow-x:hidden}
-#root{width:100%;min-height:100vh}
-body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
-.mono{font-family:'Courier New',Courier,monospace}
-.app-shell{width:100%;min-height:100vh;background:#060810;color:#D0DCF0;position:relative;overflow:hidden;max-width:500px;margin:0 auto}
-.glow-doom{box-shadow:0 0 40px rgba(255,45,85,0.15),0 0 80px rgba(255,45,85,0.06)}
-@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.8)}}
-@keyframes ring-out{0%{transform:scale(1);opacity:0.7}100%{transform:scale(1.8);opacity:0}}
-@keyframes slide-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
-@keyframes scan-line{0%{top:-2px}100%{top:100%}}
-@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-@keyframes spin{to{transform:rotate(360deg)}}
-.pulse{animation:pulse-dot 2s ease-in-out infinite}
-.slide-up{animation:slide-up 0.5s ease both}
-.float{animation:float 3s ease-in-out infinite}
-.scan{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,229,200,0.53),transparent);animation:scan-line 5s linear infinite;pointer-events:none}
-.card{background:rgba(16,22,42,0.9);border:1px solid rgba(0,229,200,0.1);border-radius:16px;backdrop-filter:blur(20px);position:relative;overflow:hidden}
-.card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,229,200,0.03) 0%,transparent 60%);pointer-events:none}
-.card-hot{border-color:rgba(255,45,85,0.35)}
-.card-hot::before{content:'';position:absolute;inset:-1px;border-radius:17px;background:transparent;box-shadow:0 0 30px rgba(255,45,85,0.2),inset 0 0 30px rgba(255,45,85,0.03);pointer-events:none}
-::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#3D4F6B;border-radius:2px}
-.btn-primary{width:100%;padding:18px;border-radius:16px;border:none;cursor:pointer;font-family:inherit;font-size:16px;font-weight:700;letter-spacing:0.03em;background:linear-gradient(135deg,#00E5C8,#00B8A4);color:#020A0A;position:relative;overflow:hidden;transition:transform 0.15s ease}
-.btn-primary:active{transform:scale(0.98)}
-input[type=range]{-webkit-appearance:none;width:100%;height:3px;border-radius:2px;background:rgba(0,229,200,0.2);outline:none}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#00E5C8;box-shadow:0 0 10px #00E5C8;cursor:pointer}
-.tab-bar{position:sticky;bottom:0;background:rgba(6,8,16,0.95);backdrop-filter:blur(20px);border-top:1px solid rgba(0,229,200,0.1);display:flex}
-.tab-item{flex:1;padding:12px 8px 16px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;border:none;background:transparent;color:#3D4F6B;font-family:inherit;font-size:10px;transition:color 0.2s}
-.tab-item.active{color:#00E5C8}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Reelio</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Space+Mono:wght@400;700&display=swap"
+    rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      background: #05050A;
+      overflow-x: hidden
+    }
+
+    #root {
+      width: 100%;
+      min-height: 100vh
+    }
+
+    body {
+      font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif
+    }
+
+    .mono {
+      font-family: 'Share Tech Mono', 'Courier New', monospace
+    }
+
+    .spacemono {
+      font-family: 'Space Mono', monospace
+    }
+
+    .app-shell {
+      width: 100%;
+      min-height: 100vh;
+      background: #05050A;
+      color: #D0DCF0;
+      position: relative;
+      overflow: hidden;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    /* Cyber grid */
+    .app-shell::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(to right, rgba(13, 223, 242, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(13, 223, 242, 0.04) 1px, transparent 1px);
+      background-size: 20px 20px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Top bloom */
+    .app-shell::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 180px;
+      background: linear-gradient(to bottom, rgba(13, 223, 242, 0.06), transparent);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Scanlines */
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, 0.07) 50%);
+      background-size: 100% 4px;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.35;
+    }
+
+    @keyframes pulse-dot {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1)
+      }
+
+      50% {
+        opacity: .4;
+        transform: scale(.8)
+      }
+    }
+
+    @keyframes ring-out {
+      0% {
+        transform: scale(1);
+        opacity: .7
+      }
+
+      100% {
+        transform: scale(1.8);
+        opacity: 0
+      }
+    }
+
+    @keyframes slide-up {
+      from {
+        opacity: 0;
+        transform: translateY(16px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    @keyframes scan-line {
+      0% {
+        top: -2px
+      }
+
+      100% {
+        top: 100%
+      }
+    }
+
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: translateY(0)
+      }
+
+      50% {
+        transform: translateY(-3px)
+      }
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    @keyframes ping-slow {
+
+      0%,
+      100% {
+        transform: scale(1);
+        opacity: .75
+      }
+
+      50% {
+        transform: scale(1.6);
+        opacity: 0
+      }
+    }
+
+    .pulse {
+      animation: pulse-dot 2s ease-in-out infinite
+    }
+
+    .slide-up {
+      animation: slide-up .5s ease both
+    }
+
+    .float {
+      animation: float 3s ease-in-out infinite
+    }
+
+    .ping {
+      animation: ping-slow 2s ease-in-out infinite
+    }
+
+    .scan {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(13, 223, 242, 0.5), transparent);
+      animation: scan-line 5s linear infinite;
+      pointer-events: none;
+    }
+
+    /* Base card */
+    .card {
+      background: rgba(10, 17, 20, 0.85);
+      border: 1px solid rgba(13, 223, 242, 0.12);
+      border-radius: 16px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(13, 223, 242, 0.03) 0%, transparent 60%);
+      pointer-events: none;
+      border-radius: inherit;
+    }
+
+    /* Magenta doom card */
+    .card-doom {
+      background: rgba(26, 11, 21, 0.85);
+      border-color: rgba(242, 13, 166, 0.35);
+    }
+
+    .card-doom::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #f20da6, transparent);
+      opacity: .7;
+    }
+
+    /* Red danger card */
+    .card-danger {
+      border-color: rgba(255, 45, 85, 0.35)
+    }
+
+    .card-danger::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #FF2D55, transparent);
+      opacity: .5;
+    }
+
+    ::-webkit-scrollbar {
+      width: 3px
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #3D4F6B;
+      border-radius: 2px
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 18px;
+      border-radius: 14px;
+      border: none;
+      cursor: pointer;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: .03em;
+      background: linear-gradient(135deg, #0ddff2, #00B8A4);
+      color: #020A0A;
+      position: relative;
+      overflow: hidden;
+      transition: transform .15s ease;
+      box-shadow: 0 8px 32px rgba(13, 223, 242, 0.25);
+    }
+
+    .btn-primary:active {
+      transform: scale(.98)
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(13, 223, 242, 0.2);
+      outline: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #0ddff2;
+      box-shadow: 0 0 10px #0ddff2;
+      cursor: pointer;
+    }
+
+    .tab-bar {
+      position: sticky;
+      bottom: 0;
+      background: rgba(5, 5, 10, 0.97);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(13, 223, 242, 0.1);
+      display: flex;
+    }
+
+    .tab-item {
+      flex: 1;
+      padding: 12px 8px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: #3D4F6B;
+      font-family: 'Space Grotesk';
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .05em;
+      transition: color .2s;
+    }
+
+    .tab-item.active {
+      color: #0ddff2
+    }
+
+    .tab-item.active svg {
+      filter: drop-shadow(0 0 6px #0ddff2)
+    }
+
+    /* Driver progress bar */
+    .driver-bar {
+      height: 5px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .driver-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 1s ease
+    }
+  </style>
 </head>
+
 <body>
-<div id="root"><div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#060810;gap:16px"><div style="width:40px;height:40px;border:3px solid rgba(0,229,200,0.15);border-top-color:#00E5C8;border-radius:50%;animation:spin 0.8s linear infinite"></div><div style="color:#3D4F6B;font-family:monospace;font-size:11px;letter-spacing:0.2em">REELIO</div></div></div>
-<script src="react.min.js"></script>
-<script src="react-dom.min.js"></script>
-<script>
-(function(){
-'use strict';
-var e=React.createElement,useState=React.useState,useEffect=React.useEffect;
-var D={bg:"#060810",doom:"#FF2D55",safe:"#00E5C8",warn:"#FFB340",violet:"#BF5AF2",blue:"#0A84FF",text:"#D0DCF0",muted:"#3D4F6B",border:"rgba(0,229,200,0.1)",borderDoom:"rgba(255,45,85,0.35)"};
-var ICONS={Eye:"M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8 M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6",Zap:"M13 2L3 14h9l-1 8 10-12h-9l1-8z",Shield:"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",Brain:"M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-2.5 2.5 M14.5 2A2.5 2.5 0 0 1 17 4.5v15a2.5 2.5 0 0 1-2.5 2.5",Activity:"M22 12h-4l-3 9L9 3l-3 9H2",AlertTriangle:"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0 M12 9v4 M12 17h.01",ChevronRight:"M9 18l6-6-6-6",ChevronUp:"M18 15l-6-6-6 6",ChevronDown:"M6 9l6 6 6-6",Radio:"M12 1a3 3 0 1 0 0 6 3 3 0 0 0 0-6 M6.3 4.3a9 9 0 0 0 0 15.4 M17.7 4.3a9 9 0 0 1 0 15.4",Download:"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3",Trash2:"M3 6h18 M8 6V4h8v2 M19 6l-1 14H6L5 6",Settings:"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6",ArrowLeft:"M19 12H5 M12 19l-7-7 7-7",TrendingDown:"M23 18l-9.5-9.5-5 5L1 6 M17 18h6v-6",Lock:"M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2 M17 11V7a5 5 0 0 0-10 0v4",Cpu:"M9 3H5a2 2 0 0 0-2 2v4 M9 3h6 M9 3v18 M15 3h4a2 2 0 0 1 2 2v4 M15 3v18 M9 21h6 M15 21h4a2 2 0 0 0 2-2v-4",BarChart2:"M18 20V10 M12 20V4 M6 20v-6",Moon:"M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"};
-function Ico(p){var d=ICONS[p.name]||"",sz=p.size||16,col=p.color||"currentColor";var segs=d.split(" M ").map(function(s,i){return i===0?s:"M "+s;});return e("svg",{width:sz,height:sz,viewBox:"0 0 24 24",fill:"none",stroke:col,strokeWidth:p.strokeWidth||2,strokeLinecap:"round",strokeLinejoin:"round",style:Object.assign({display:"inline-block",verticalAlign:"middle",flexShrink:0},p.style||{})},segs.map(function(s,i){return e("path",{key:i,d:s});}));}
-function Label(p){return e("span",{className:"mono",style:Object.assign({fontSize:10,letterSpacing:"0.18em",color:D.muted,textTransform:"uppercase"},p.style||{})},p.children);}
-function Tag(p){var c=p.label==="DOOM"?D.doom:p.label==="BORDERLINE"?D.warn:D.safe;return e("span",{className:"mono",style:{fontSize:10,padding:"3px 8px",borderRadius:4,color:c,background:c+"22",border:"1px solid "+c+"44",letterSpacing:"0.12em"}},p.label);}
-function Divider(){return e("div",{style:{height:1,background:D.border,margin:"0 -1px"}});}
+  <div id="root">
+    <div
+      style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#05050A;gap:16px">
+      <div
+        style="width:40px;height:40px;border:3px solid rgba(13,223,242,0.15);border-top-color:#0ddff2;border-radius:50%;animation:spin .8s linear infinite">
+      </div>
+      <div class="mono" style="color:#3D4F6B;font-size:11px;letter-spacing:.2em">REELIO</div>
+    </div>
+  </div>
+  <script src="react.min.js"></script>
+  <script src="react-dom.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      var e = React.createElement, useState = React.useState, useEffect = React.useEffect;
 
-function AreaChartSVG(p){var data=p.data||[],height=p.height||100;if(!data.length)return e("div",{style:{height:height,display:"flex",alignItems:"center",justifyContent:"center"}},e(Label,null,"No data"));var vals=data.map(function(d){return d.p||0;});var maxV=Math.max.apply(null,vals)||1;var pad={t:8,r:4,b:20,l:32},W=340-pad.l-pad.r,H=height-pad.t-pad.b;var pts=vals.map(function(v,i){return[pad.l+(i/Math.max(vals.length-1,1))*W,pad.t+H-(v/maxV)*H];});var lp=pts.map(function(pt,i){return(i===0?"M":"L")+pt[0].toFixed(1)+" "+pt[1].toFixed(1);}).join(" ");var ap=lp+" L"+pts[pts.length-1][0].toFixed(1)+" "+(pad.t+H)+" L"+pad.l+" "+(pad.t+H)+" Z";var cx=pad.l+(p.cursor/Math.max(vals.length-1,1))*W;return e("svg",{viewBox:"0 0 340 "+height,width:"100%",style:{overflow:"visible"}},e("defs",null,e("linearGradient",{id:"cg",x1:"0",y1:"0",x2:"0",y2:"1"},e("stop",{offset:"5%",stopColor:D.doom,stopOpacity:0.4}),e("stop",{offset:"95%",stopColor:D.doom,stopOpacity:0.02}))),e("line",{x1:pad.l,y1:pad.t+H*0.5,x2:pad.l+W,y2:pad.t+H*0.5,stroke:D.doom,strokeDasharray:"4 3",strokeOpacity:0.5,strokeWidth:1}),e("path",{d:ap,fill:"url(#cg)"}),e("path",{d:lp,fill:"none",stroke:D.doom,strokeWidth:2}),e("line",{x1:cx,y1:pad.t,x2:cx,y2:pad.t+H,stroke:D.safe,strokeDasharray:"3 2",strokeOpacity:0.7,strokeWidth:1}),[0,0.5,1].map(function(v,i){var y=pad.t+H-v*H;return e("text",{key:i,x:pad.l-2,y:y+3,textAnchor:"end",fontFamily:"monospace",fontSize:7,fill:D.muted},Math.round(v*100)+"%");}),vals.map(function(v,i){if(i===0||i===vals.length-1||(i+1)%10===0){var x=pad.l+(i/Math.max(vals.length-1,1))*W;return e("text",{key:i,x:x,y:pad.t+H+12,textAnchor:"middle",fontFamily:"monospace",fontSize:7,fill:D.muted},i+1);}return null;}));}
+      /* ── Design tokens ── */
+      var D = {
+        bg: "#05050A", doom: "#FF2D55", doomMag: "#f20da6",
+        safe: "#0ddff2", warn: "#FFB340", violet: "#BF5AF2", blue: "#0A84FF",
+        text: "#D0DCF0", muted: "#3D4F6B",
+        border: "rgba(13,223,242,0.12)",
+        borderDoom: "rgba(242,13,166,0.35)",
+        borderDanger: "rgba(255,45,85,0.35)"
+      };
 
-function HomeScreen(p){var onNav=p.onNav,S=p.SESSION,L=p.LIVE,svc=p.isServiceActive;return e("div",{className:"slide-up",style:{padding:"0 20px 24px",position:"relative",zIndex:1}},e("div",{style:{padding:"60px 0 32px",textAlign:"center"}},e("div",{style:{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:20}},e("div",{style:{position:"absolute",width:72,height:72,borderRadius:"50%",border:"1px solid "+D.safe+"33",animation:"ring-out 3s ease-in-out infinite"}}),e("div",{className:"float",style:{width:56,height:56,borderRadius:"50%",background:"radial-gradient(circle,"+D.safe+"22,"+D.safe+"08)",border:"1px solid "+D.safe+"55",display:"flex",alignItems:"center",justifyContent:"center"}},e(Ico,{name:"Eye",size:24,color:D.safe,style:{filter:"drop-shadow(0 0 8px "+D.safe+")"}}))),e("div",{style:{fontSize:38,fontWeight:800,letterSpacing:"-0.02em",color:"#fff",lineHeight:1,textShadow:"0 0 40px rgba(0,229,200,0.3)"}},"Reelio"),e("div",{className:"mono",style:{fontSize:10,letterSpacing:"0.35em",color:D.safe,marginTop:6}},"ADAPTIVE LATENT STATE ENGINE")),e("div",{className:"card",style:{padding:"16px 18px",marginBottom:12}},e("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between"}},e("div",{style:{display:"flex",alignItems:"center",gap:10}},e("div",{style:{width:36,height:36,borderRadius:10,background:(svc?D.safe:D.doom)+"15",border:"1px solid "+(svc?D.safe:D.doom)+"33",display:"flex",alignItems:"center",justifyContent:"center"}},e(Ico,{name:"Radio",size:16,color:svc?D.safe:D.doom})),e("div",null,e("div",{style:{fontSize:15,fontWeight:600}},"Accessibility Service"),e(Label,null,svc?"Neural monitor active":"Service Offline"))),e("div",{style:{display:"flex",alignItems:"center",gap:6}},!svc?e("button",{className:"btn-primary",style:{padding:"8px 12px",width:"auto",fontSize:12},onClick:function(){window.Android&&window.Android.enableAccessibility&&window.Android.enableAccessibility();}},"Enable"):e("div",{style:{display:"flex",alignItems:"center",gap:6}},e("div",{style:{position:"relative",width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center"}},e("div",{style:{position:"absolute",width:16,height:16,borderRadius:"50%",background:D.safe+"33",animation:"ring-out 2s ease-in-out infinite"}}),e("div",{className:"pulse",style:{width:8,height:8,borderRadius:"50%",background:D.safe,boxShadow:"0 0 8px "+D.safe}})),e("span",{className:"mono",style:{fontSize:12,color:D.safe}},"Active"))))),e("div",{style:{marginBottom:4}},e(Label,{style:{paddingLeft:4}},"Live Session Summary")),e("div",{className:"card "+(S.doom_label==="DOOM"?"card-hot":""),style:{padding:0,marginBottom:12,overflow:"hidden"}},e("div",{style:{padding:"10px 18px",background:S.doom_label==="DOOM"?"linear-gradient(90deg,"+D.doom+"22,transparent)":"linear-gradient(90deg,"+D.safe+"15,transparent)",borderBottom:"1px solid "+(S.doom_label==="DOOM"?D.borderDoom:D.border),display:"flex",justifyContent:"space-between",alignItems:"center"}},e(Label,null,"Current Risk State"),e(Tag,{label:S.doom_label})),e("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr"}},[{label:"Session Duration",value:L.duration,big:true,col:"#fff"},{label:"Reels Observed",value:L.reels,big:true,col:"#fff"},{label:"Avg Dwell Time",value:L.avg_dwell+"s",big:false,col:D.warn},{label:"Capture Prob",value:Math.round(S.S_t*100)+"%",big:false,col:D.doom}].map(function(it,i){return e("div",{key:it.label,style:{padding:"16px 18px",borderRight:i%2===0?"1px solid "+D.border:"none",borderBottom:i<2?"1px solid "+D.border:"none"}},e("div",{style:{fontSize:it.big?34:26,fontWeight:800,color:it.col,lineHeight:1,fontFamily:"monospace",textShadow:it.col!=="#fff"?"0 0 20px "+it.col+"66":"none"}},it.value),e(Label,{style:{marginTop:4,display:"block"}},it.label));})),e("div",{style:{padding:"12px 18px",borderTop:"1px solid "+D.border}},e("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:6}},e(Label,null,"Doom Score"),e("span",{className:"mono",style:{fontSize:11,color:D.doom}},Math.round(S.doom_score*100)+"/100")),e("div",{style:{height:4,background:"rgba(255,255,255,0.06)",borderRadius:2,overflow:"hidden"}},e("div",{style:{height:"100%",width:(S.doom_score*100)+"%",background:"linear-gradient(90deg,"+D.warn+","+D.doom+")",borderRadius:2,boxShadow:"0 0 8px "+D.doom}})))),e("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:24}},[{label:"Sessions",value:S.sessions_today,col:D.violet},{label:"Dwell Total",value:S.total_dwell_today_min+"m",col:D.warn},{label:"Confidence",value:Math.round(S.model_confidence*100)+"%",col:D.safe}].map(function(it){return e("div",{key:it.label,className:"card",style:{padding:"14px 12px",textAlign:"center"}},e("div",{style:{fontSize:22,fontWeight:800,color:it.col,textShadow:"0 0 15px "+it.col+"66",fontFamily:"monospace"}},it.value),e(Label,{style:{marginTop:3,display:"block",fontSize:9}},it.label));})),(e("button",{className:"btn-primary",style:{boxShadow:"0 8px 32px rgba(0,229,200,0.25)"},onClick:function(){onNav("dashboard");}},"View Behavioral Dashboard ",e(Ico,{name:"ChevronRight",size:18,color:"#020A0A",style:{marginLeft:6}}))),e("div",{style:{display:"flex",justifyContent:"center",alignItems:"center",gap:20,marginTop:20}},e("button",{onClick:function(){window.Android&&window.Android.exportCsv&&window.Android.exportCsv();},style:{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,color:D.muted,fontFamily:"inherit",fontSize:13}},e(Ico,{name:"Download",size:13,color:D.muted})," Export CSV"),e("div",{style:{width:4,height:4,borderRadius:"50%",background:D.muted}}),e("button",{onClick:function(){window.Android&&window.Android.clearData&&window.Android.clearData();},style:{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,color:D.doom+"99",fontFamily:"inherit",fontSize:13}},e(Ico,{name:"Trash2",size:13,color:D.doom+"99"})," Clear Data")));}
+      /* ── Inline SVG icons ── */
+      var ICONS = {
+        Eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8 M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6",
+        Zap: "M13 2L3 14h9l-1 8 10-12h-9l1-8z",
+        Brain: "M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-2.5 2.5",
+        Activity: "M22 12h-4l-3 9L9 3l-3 9H2",
+        AlertTriangle: "M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0 M12 9v4 M12 17h.01",
+        ChevronRight: "M9 18l6-6-6-6", ChevronUp: "M18 15l-6-6-6 6", ChevronDown: "M6 9l6 6 6-6",
+        Radio: "M12 1a3 3 0 1 0 0 6 3 3 0 0 0 0-6 M6.3 4.3a9 9 0 0 0 0 15.4 M17.7 4.3a9 9 0 0 1 0 15.4",
+        Download: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3",
+        Trash2: "M3 6h18 M8 6V4h8v2 M19 6l-1 14H6L5 6",
+        Settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
+        ArrowLeft: "M19 12H5 M12 19l-7-7 7-7",
+        TrendingDown: "M23 18l-9.5-9.5-5 5L1 6 M17 18h6v-6",
+        Lock: "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2 M17 11V7a5 5 0 0 0-10 0v4",
+        Cpu: "M9 3H5a2 2 0 0 0-2 2v4 M9 3h6 M9 3v18 M15 3h4a2 2 0 0 1 2 2v4 M15 3v18 M9 21h6 M15 21h4a2 2 0 0 0 2-2v-4",
+        BarChart2: "M18 20V10 M12 20V4 M6 20v-6",
+        Moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z",
+        Shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
+        Wifi: "M5 12.55a11 11 0 0 1 14.08 0 M1.42 9a16 16 0 0 1 21.16 0 M8.53 16.11a6 6 0 0 1 6.95 0 M12 20h.01",
+        Battery: "M23 7h-2v10h2V7z M1 7h16v10H1V7z"
+      };
 
-function DashboardScreen(p){var S=p.SESSION,RD=p.REELS_DATA,D14=p.DAYS_14;var rs=useState(Math.max(0,RD.length-1)),rc=rs[0],setRc=rs[1];var xs=useState(null),exp=xs[0],setExp=xs[1];var cur=RD[rc]||RD[RD.length-1]||{p:0};var score=Math.round((1-S.S_t)*80+(1-S.A[1][1])*20);var sc=score>65?D.safe:score>40?D.warn:D.doom;var cd=(1/S.h[1]).toFixed(1);function tog(k){setExp(exp===k?null:k);}return e("div",{className:"slide-up",style:{padding:"16px 16px 32px",position:"relative",zIndex:1}},e("div",{className:"card card-hot glow-doom",style:{padding:"20px",marginBottom:12}},e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}},e("div",null,e(Label,null,"Cognitive Stability Index"),e("div",{style:{fontSize:13,color:D.text,marginTop:4,fontWeight:600}},"Neural Load Assessment")),e(Tag,{label:S.doom_label})),e("div",{style:{display:"flex",alignItems:"center",gap:20}},e("div",{style:{position:"relative",flexShrink:0}},e("svg",{width:120,height:80,viewBox:"0 0 120 80"},e("path",{d:"M 10 75 A 50 50 0 1 1 110 75",fill:"none",stroke:"rgba(255,255,255,0.06)",strokeWidth:10,strokeLinecap:"round"}),e("path",{d:"M 10 75 A 50 50 0 1 1 110 75",fill:"none",stroke:sc,strokeWidth:10,strokeLinecap:"round",strokeDasharray:((score/100)*157)+" 157",style:{filter:"drop-shadow(0 0 6px "+sc+")",transition:"stroke-dasharray 1.5s ease"}}),e("text",{x:"60",y:"65",textAnchor:"middle",fontFamily:"monospace",fontSize:"28",fontWeight:"700",fill:sc},score))),e("div",{style:{flex:1,display:"flex",flexDirection:"column",gap:8}},[{label:"Capture Rate",v:Math.round(S.S_t*100)+"%",col:D.doom},{label:"Doom Inertia",v:Math.round(S.A[1][1]*100)+"%",col:D.doom},{label:"Escape Rate",v:Math.round(S.A[1][0]*100)+"%",col:D.safe},{label:"Pull Index",v:S.doom_pull_index+"x",col:D.warn}].map(function(it){return e("div",{key:it.label,style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},e(Label,null,it.label),e("span",{className:"mono",style:{fontSize:12,color:it.col}},it.v));}))),e("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:16}},e("div",{style:{padding:"10px 12px",borderRadius:10,background:"rgba(0,0,0,0.3)",border:"1px solid "+D.border}},e("div",{className:"mono",style:{fontSize:18,color:"#fff"}},RD.length),e(Label,{style:{display:"block",marginTop:2}},"Total Reels")),e("div",{style:{padding:"10px 12px",borderRadius:10,background:"rgba(0,0,0,0.3)",border:"1px solid "+D.border}},e("div",{className:"mono",style:{fontSize:18,color:D.warn}},cd),e(Label,{style:{display:"block",marginTop:2}},"Doom Duration (reels)")))),e("div",{className:"card",style:{padding:"16px",marginBottom:12}},e("div",{style:{marginBottom:12}},e(Label,null,"State Dynamics")),e("svg",{width:"100%",viewBox:"0 0 340 110",style:{overflow:"visible"}},e("circle",{cx:"70",cy:"55",r:"40",fill:D.safe+"12",stroke:D.safe,strokeWidth:1.5}),e("text",{x:"70",y:"50",textAnchor:"middle",fontFamily:"inherit",fontSize:"11",fontWeight:"700",fill:D.safe},"CASUAL"),e("text",{x:"70",y:"65",textAnchor:"middle",fontFamily:"monospace",fontSize:"9",fill:D.muted},"STATE 0"),e("circle",{cx:"270",cy:"55",r:"40",fill:D.doom+"12",stroke:D.doom,strokeWidth:1.5}),e("text",{x:"270",y:"50",textAnchor:"middle",fontFamily:"inherit",fontSize:"11",fontWeight:"700",fill:D.doom},"DOOM"),e("text",{x:"270",y:"65",textAnchor:"middle",fontFamily:"monospace",fontSize:"9",fill:D.muted},"STATE 1"),e("path",{d:"M 108 38 Q 170 0 232 38",fill:"none",stroke:D.doom,strokeWidth:2.5}),e("polygon",{points:"232,38 222,32 226,44",fill:D.doom}),e("text",{x:"170",y:"14",textAnchor:"middle",fontFamily:"monospace",fontSize:"11",fontWeight:"700",fill:D.doom},Math.round(S.A[0][1]*100)+"%"),e("text",{x:"170",y:"26",textAnchor:"middle",fontFamily:"inherit",fontSize:"8",fill:D.muted},"TRAP"),e("path",{d:"M 232 72 Q 170 110 108 72",fill:"none",stroke:D.safe,strokeWidth:1.5,strokeDasharray:"5,3",opacity:0.7}),e("polygon",{points:"108,72 120,66 118,78",fill:D.safe,opacity:0.7}),e("text",{x:"170",y:"105",textAnchor:"middle",fontFamily:"monospace",fontSize:"11",fontWeight:"700",fill:D.safe},Math.round(S.A[1][0]*100)+"%"),e("text",{x:"170",y:"93",textAnchor:"middle",fontFamily:"inherit",fontSize:"8",fill:D.muted},"ESCAPE"),e("text",{x:"70",y:"14",textAnchor:"middle",fontFamily:"monospace",fontSize:"9",fill:D.safe+"99"},"~"+Math.round(S.A[0][0]*100)+"%"),e("text",{x:"270",y:"14",textAnchor:"middle",fontFamily:"monospace",fontSize:"9",fill:D.doom+"cc"},"~"+Math.round(S.A[1][1]*100)+"%")),e("div",{style:{display:"flex",gap:8,marginTop:8}},[{label:"Doom Pull",v:S.doom_pull_index+"x",col:D.doom},{label:"Regime Life",v:S.regime_stability.toFixed(0)+"r",col:D.warn},{label:"Conf",v:Math.round(S.model_confidence*100)+"%",col:D.violet}].map(function(it){return e("div",{key:it.label,style:{flex:1,padding:"8px",borderRadius:8,textAlign:"center",background:it.col+"10",border:"1px solid "+it.col+"25"}},e("div",{className:"mono",style:{fontSize:13,color:it.col}},it.v),e(Label,{style:{fontSize:9}},it.label));}))),e("div",{className:"card",style:{padding:"16px",marginBottom:12}},e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},e(Label,null,"14-Day Risk Heatmap"),e("span",{className:"mono",style:{fontSize:9,color:D.muted}},"AVG "+(D14.length?(D14.reduce(function(a,b){return a+b.v;},0)/D14.length).toFixed(2):0)+" S_t")),e("div",{style:{display:"flex",gap:4,alignItems:"flex-end"}},D14.map(function(day,i){var c=day.v>0.7?D.doom:day.v>0.5?"#FF6830":day.v>0.35?D.warn:D.safe,h=14+day.v*36;return e("div",{key:i,style:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}},e("div",{style:{position:"relative",width:"100%",height:h,borderRadius:4,background:c+"25",border:"1px solid "+c+"44",overflow:"hidden"}},e("div",{style:{position:"absolute",bottom:0,left:0,right:0,height:(day.v*100)+"%",background:c+"55",borderRadius:"0 0 3px 3px"}})),e("span",{className:"mono",style:{fontSize:8,color:D.muted}},day.d));})),e("div",{style:{display:"flex",justifyContent:"center",gap:12,marginTop:10}},[["LOW",D.safe],["MED",D.warn],["HIGH",D.doom]].map(function(lc){return e("div",{key:lc[0],style:{display:"flex",alignItems:"center",gap:4}},e("div",{style:{width:8,height:8,borderRadius:2,background:lc[1]}}),e(Label,{style:{fontSize:9}},lc[0]));}))),e("div",{className:"card",style:{padding:"16px",marginBottom:12}},e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}},e(Label,null,"Capture Timeline"),e("div",{style:{display:"flex",gap:8,alignItems:"center"}},e("span",{className:"mono",style:{fontSize:10,color:cur.p>0.5?D.doom:D.safe}},"REEL "+(rc+1)+" · "+Math.round(cur.p*100)+"%"),cur.exit&&e("span",{className:"mono",style:{fontSize:9,color:D.doom}},"EXIT"),cur.back&&e("span",{className:"mono",style:{fontSize:9,color:D.warn}},"REWATCH"))),e("div",{style:{height:120,overflow:"hidden"}},e(AreaChartSVG,{data:RD,cursor:rc,height:110})),e("div",{style:{marginTop:8}},e("input",{type:"range",min:0,max:Math.max(0,RD.length-1),value:rc,onChange:function(ev){setRc(+ev.target.value);}}),e("div",{style:{display:"flex",justifyContent:"space-between",marginTop:2}},e(Label,{style:{fontSize:9}},"Reel 1"),e(Label,{style:{fontSize:9}},"Reel "+RD.length)))),e("div",{className:"card",style:{marginBottom:12,overflow:"hidden"}},e("button",{onClick:function(){tog("anatomy");},style:{width:"100%",padding:"14px 16px",background:"none",border:"none",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}},e("div",null,e(Label,null,"Doom Score Anatomy")),e("div",{style:{display:"flex",alignItems:"center",gap:8}},e("span",{className:"mono",style:{fontSize:16,color:D.doom}},Math.round(S.doom_score*100)),e(Ico,{name:exp==="anatomy"?"ChevronUp":"ChevronDown",size:14,color:D.muted}))),exp==="anatomy"&&e("div",{style:{padding:"0 16px 16px"}},e(Divider),e("div",{style:{marginTop:12,display:"flex",flexDirection:"column",gap:10}},[{k:"length",l:"Session Length",icon:"BarChart2"},{k:"volitional_conflict",l:"Exit Conflict",icon:"Lock"},{k:"rapid_reentry",l:"Rapid Re-entry",icon:"Zap"},{k:"automaticity",l:"Scroll Automaticity",icon:"Cpu"},{k:"dwell_collapse",l:"Dwell Collapse",icon:"TrendingDown"},{k:"rewatch",l:"Rewatch Compulsion",icon:"Radio"},{k:"environment",l:"Environment",icon:"Moon"}].map(function(it){var v=S.doom_components[it.k]||0.5,col=v>0.7?D.doom:v>0.45?D.warn:D.safe;return e("div",{key:it.k},e("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}},e("div",{style:{display:"flex",alignItems:"center",gap:6}},e(Ico,{name:it.icon,size:11,color:col}),e("span",{style:{fontSize:12,color:D.text}},it.l)),e("span",{className:"mono",style:{fontSize:11,color:col}},Math.round(v*100)+"%")),e("div",{style:{height:4,background:"rgba(255,255,255,0.05)",borderRadius:2,overflow:"hidden"}},e("div",{style:{height:"100%",width:(v*100)+"%",background:"linear-gradient(90deg,"+col+"88,"+col+")",borderRadius:2}})));})))),e("div",{style:{marginBottom:6}},e(Label,null,"Automated Behavioral Insights")),e("div",{style:{display:"flex",flexDirection:"column",gap:8}},[{icon:"AlertTriangle",col:D.doom,title:"Peak Vulnerability",body:"Late Night sessions average "+Math.round(S.S_t*100)+"% capture. Dark room amplifies doom state by ~"+S.doom_pull_index+"x."},{icon:"Brain",col:D.violet,title:"Cognitive Recovery Rate",body:"Doom episodes last ~"+Math.round(S.regime_stability)+" reels. After a break, capture probability halves."},{icon:"Lock",col:D.warn,title:"Scroll Inertia Model",body:"Passive state retention at "+Math.round(S.A[1][1]*100)+"%. Once captured, doom is "+S.doom_pull_index+"x harder to escape."},{icon:"Activity",col:D.safe,title:"Model Confidence",body:Math.round(S.model_confidence*100)+"% personalized confidence. Accuracy improves at 20+ sessions."}].map(function(it){return e("div",{key:it.title,className:"card",style:{padding:"14px"}},e("div",{style:{display:"flex",gap:12}},e("div",{style:{width:34,height:34,borderRadius:9,flexShrink:0,background:it.col+"15",border:"1px solid "+it.col+"30",display:"flex",alignItems:"center",justifyContent:"center"}},e(Ico,{name:it.icon,size:15,color:it.col})),e("div",null,e("div",{style:{fontSize:13,fontWeight:700,color:D.text,marginBottom:4}},it.title),e("div",{style:{fontSize:12,color:D.muted,lineHeight:1.5}},it.body))));})));}
+      function Ico(p) {
+        var d = ICONS[p.name] || "", sz = p.size || 16, col = p.color || "currentColor";
+        var segs = d.split(" M ").map(function (s, i) { return i === 0 ? s : "M " + s; });
+        return e("svg", {
+          width: sz, height: sz, viewBox: "0 0 24 24", fill: "none", stroke: col,
+          strokeWidth: p.sw || 2, strokeLinecap: "round", strokeLinejoin: "round",
+          style: Object.assign({ display: "inline-block", verticalAlign: "middle", flexShrink: 0 }, p.style || {})
+        },
+          segs.map(function (s, i) { return e("path", { key: i, d: s }); }));
+      }
 
-function SetupScreen(p){return e("div",{style:{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:D.bg,padding:32,gap:20}},e("div",{style:{width:64,height:64,borderRadius:"50%",background:D.safe+"15",border:"1px solid "+D.safe+"44",display:"flex",alignItems:"center",justifyContent:"center"}},e(Ico,{name:"Shield",size:28,color:D.safe})),e("div",{style:{fontSize:24,fontWeight:800,color:"#fff",textAlign:"center"}},"Reelio"),e("div",{className:"mono",style:{fontSize:10,color:D.safe,letterSpacing:"0.3em",textAlign:"center"}},"SETUP REQUIRED"),e("div",{className:"card",style:{width:"100%",padding:20}},e("div",{style:{fontSize:14,fontWeight:700,color:D.text,marginBottom:12}},"Getting Started"),["1. Settings \u2192 Accessibility \u2192 Installed Services","2. Enable \"Reelio Tracker\"","3. Open Instagram and scroll Reels","4. Return here to see your data"].map(function(s,i){return e("div",{key:i,style:{display:"flex",gap:10,marginBottom:10}},e("div",{className:"mono",style:{fontSize:11,color:D.safe,flexShrink:0}},s.slice(0,2)),e("div",{style:{fontSize:13,color:D.muted}},s.slice(3)));})),e("button",{className:"btn-primary",onClick:function(){window.Android&&window.Android.enableAccessibility&&window.Android.enableAccessibility();}},"Enable Accessibility Service"),p.message&&e("div",{style:{fontSize:12,color:D.muted,textAlign:"center",lineHeight:1.6,marginTop:4}},p.message));}
+      function Label(p) {
+        return e("span", { className: "mono", style: Object.assign({ fontSize: 10, letterSpacing: "0.18em", color: D.muted, textTransform: "uppercase" }, p.style || {}) }, p.children);
+      }
 
-function ReeliApp(){var ss=useState("home"),screen=ss[0],setScreen=ss[1];var ds=useState(null),rawData=ds[0],setRawData=ds[1];var ls=useState(true),loading=ls[0],setLoading=ls[1];var es=useState(null),errMsg=es[0],setErrMsg=es[1];var vs=useState(false),svcActive=vs[0],setSvcActive=vs[1];
-useEffect(function(){if(window.Android&&window.Android.isAccessibilityEnabled){try{setSvcActive(window.Android.isAccessibilityEnabled());}catch(x){}}window.updateServiceStatus=function(v){setSvcActive(v);};function handleData(parsed){try{if(parsed.error){setErrMsg(parsed.error);}else if(parsed.sessions&&parsed.sessions.length>0){setRawData(parsed);setErrMsg(null);}else{setErrMsg("No data yet. Scroll some Reels first!");}}catch(x){setErrMsg("Parse error: "+x.message);}setLoading(false);}window.reactDataCallback=handleData;if(window.injectedJsonData){handleData(window.injectedJsonData);return;}var t=setTimeout(function(){setLoading(false);},3000);return function(){clearTimeout(t);};},[]);
-if(loading){return e("div",{style:{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:D.bg,gap:16}},e("div",{style:{width:40,height:40,border:"3px solid rgba(0,229,200,0.15)",borderTopColor:D.safe,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}),e("div",{className:"mono",style:{color:D.muted,fontSize:11,letterSpacing:"0.2em"}},"REELIO"));}
-if(!rawData){return e(SetupScreen,{message:errMsg});}
-var mr=rawData.sessions[rawData.sessions.length-1];var allSt=rawData.sessions.map(function(s){return s.S_t;});var avgSt=allSt.reduce(function(a,b){return a+b;},0)/rawData.sessions.length;var A=(rawData.model_parameters&&rawData.model_parameters.transition_matrix)||[[0.8,0.2],[0.2,0.8]];
-var SESSION=Object.assign({},mr,{doom_label:mr.S_t>0.6?"DOOM":mr.S_t>0.35?"BORDERLINE":"CASUAL",doom_score:mr.S_t,model_confidence:Math.min(1.0,rawData.sessions.length/20),doom_pull_index:((A[0][1]/Math.max(0.01,A[1][0]))*1.5).toFixed(1),regime_stability:1.0/(1.0-A[1][1]+0.001),sessions_today:rawData.sessions.length,total_dwell_today_min:rawData.sessions.length*5,A:A,q_01:0.31,q_10:0.13,h:[0.156,0.037],doom_components:{length:Math.random()*0.5+0.4,volitional_conflict:Math.random()*0.5+0.4,rapid_reentry:Math.random()*0.5+0.4,automaticity:Math.random()*0.5+0.4,dwell_collapse:Math.random()*0.5+0.4,rewatch:Math.random()*0.5+0.4,environment:Math.random()*0.5+0.4}});
-var LIVE={duration:"LIVE",reels:rawData.timeline&&rawData.timeline.p_capture?rawData.timeline.p_capture.length:0,avg_dwell:3.5};
-var REELS_DATA=((rawData.timeline&&rawData.timeline.p_capture)||[]).map(function(p,i){return{r:i+1,p:p,exit:Math.random()>0.95,back:Math.random()>0.95};});
-var DAYS_14=Array.from({length:14},function(_,i){return{d:["M","T","W","T","F","S","S"][i%7],v:parseFloat((avgSt*0.7+Math.random()*0.3).toFixed(2))};});
-var tabs=[{id:"home",icon:"Eye",label:"Monitor"},{id:"dashboard",icon:"BarChart2",label:"Dashboard"},{id:"settings",icon:"Settings",label:"Settings"}];
-return e("div",{style:{display:"flex",justifyContent:"center",minHeight:"100vh",background:"#000",alignItems:"flex-start"}},e("div",{className:"app-shell",style:{position:"relative"}},e("div",{className:"scan"}),e("div",{style:{height:44,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",position:"sticky",top:0,zIndex:100,background:"rgba(6,8,16,0.85)",backdropFilter:"blur(20px)"}},screen==="dashboard"?e("button",{onClick:function(){setScreen("home");},style:{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4,color:D.safe,fontFamily:"inherit",fontSize:13}},e(Ico,{name:"ArrowLeft",size:16,color:D.safe})," Home"):e("div",{className:"mono",style:{fontSize:11,color:D.muted}},"v3.0"),e("div",{className:"mono",style:{fontSize:11,color:D.muted}},"SYNCED")),e("div",{style:{overflowY:"auto",maxHeight:"calc(100vh - 44px - 56px)"}},screen==="home"?e(HomeScreen,{onNav:setScreen,SESSION:SESSION,LIVE:LIVE,isServiceActive:svcActive}):e(DashboardScreen,{SESSION:SESSION,REELS_DATA:REELS_DATA,DAYS_14:DAYS_14})),e("div",{className:"tab-bar"},tabs.map(function(tab){return e("button",{key:tab.id,className:"tab-item"+(screen===tab.id?" active":""),onClick:function(){setScreen(tab.id==="settings"?"home":tab.id);}},e(Ico,{name:tab.icon,size:20,color:screen===tab.id?D.safe:D.muted}),e("span",null,tab.label));}))));}
+      function Tag(p) {
+        var c = p.label === "DOOM" ? D.doomMag : p.label === "BORDERLINE" ? D.warn : D.safe;
+        return e("span", { className: "mono", style: { fontSize: 10, padding: "3px 10px", borderRadius: 4, color: c, background: c + "22", border: "1px solid " + c + "55", letterSpacing: "0.12em", fontWeight: 700 } }, p.label);
+      }
 
-// Bridge: MainActivity calls injectDataB64(base64String)
-window.injectDataB64=function(b64){
-  try{
-    var json=atob(b64);
-    var parsed=JSON.parse(json);
-    window.injectedJsonData=parsed;
-    if(window.reactDataCallback)window.reactDataCallback(parsed);
-  }catch(ex){
-    if(window.reactDataCallback)window.reactDataCallback({error:"Parse error: "+ex.message});
-  }
-};
-// Legacy fallback
-window.injectData=function(jsonStr){
-  try{
-    var parsed=JSON.parse(jsonStr);
-    window.injectedJsonData=parsed;
-    if(window.reactDataCallback)window.reactDataCallback(parsed);
-  }catch(ex){
-    if(window.reactDataCallback)window.reactDataCallback({error:"JSON parse error: "+ex.message});
-  }
-};
+      function Divider() { return e("div", { style: { height: 1, background: D.border, margin: "0 -1px" } }); }
 
-var root=ReactDOM.createRoot(document.getElementById("root"));
-root.render(e(ReeliApp,null));
-})();
-</script>
+      /* ── Doom Gauge (SVG semicircle arc) ── */
+      function DoomGauge(p) {
+        var pct = Math.round((p.value || 0) * 100);
+        var col = pct > 60 ? D.doom : pct > 40 ? D.warn : D.safe;
+        var r = 50, cx = 70, cy = 68;
+        function toRad(deg) { return (deg - 180) * Math.PI / 180; }
+        function px(deg) { return cx + r * Math.cos(toRad(deg)); }
+        function py(deg) { return cy + r * Math.sin(toRad(deg)); }
+        var angle = (pct / 100) * 180;
+        var arcD = "M " + px(0).toFixed(1) + " " + py(0).toFixed(1) + " A " + r + " " + r + " 0 " + (angle > 180 ? 1 : 0) + " 1 " + px(angle).toFixed(1) + " " + py(angle).toFixed(1);
+        return e("div", { style: { display: "flex", flexDirection: "column", alignItems: "center" } },
+          e("svg", { width: 140, height: 82, viewBox: "0 0 140 82", style: { overflow: "visible" } },
+            e("path", {
+              d: "M " + px(0).toFixed(1) + " " + py(0).toFixed(1) + " A " + r + " " + r + " 0 1 1 " + px(180).toFixed(1) + " " + py(180).toFixed(1),
+              fill: "none", stroke: "rgba(255,255,255,0.06)", strokeWidth: 10, strokeLinecap: "round"
+            }),
+            pct > 0 && e("path", {
+              d: arcD, fill: "none", stroke: col, strokeWidth: 10, strokeLinecap: "round",
+              style: { filter: "drop-shadow(0 0 6px " + col + ")", transition: "all 1.5s ease" }
+            }),
+            e("text", {
+              x: "70", y: "60", textAnchor: "middle", fontFamily: "Space Mono", fontSize: "26", fontWeight: "700", fill: col,
+              style: { filter: "drop-shadow(0 0 10px " + col + ")" }
+            }, pct + "%")
+          ),
+          e(Label, { style: { color: col, marginTop: -2 } }, p.label || "")
+        );
+      }
+
+      /* ── Simple SVG area chart (no Recharts needed) ── */
+      function AreaChartSVG(p) {
+        var data = p.data || [], height = p.height || 100;
+        if (!data.length) return e("div", { style: { height: height, display: "flex", alignItems: "center", justifyContent: "center" } }, e(Label, null, "No data"));
+        var vals = data.map(function (d) { return d.p || 0; });
+        var maxV = Math.max.apply(null, vals) || 1;
+        var pad = { t: 8, r: 4, b: 20, l: 32 }, W = 340 - pad.l - pad.r, H = height - pad.t - pad.b;
+        var pts = vals.map(function (v, i) { return [pad.l + (i / Math.max(vals.length - 1, 1)) * W, pad.t + H - (v / maxV) * H]; });
+        var lp = pts.map(function (pt, i) { return (i === 0 ? "M" : "L") + pt[0].toFixed(1) + " " + pt[1].toFixed(1); }).join(" ");
+        var ap = lp + " L" + pts[pts.length - 1][0].toFixed(1) + " " + (pad.t + H) + " L" + pad.l + " " + (pad.t + H) + " Z";
+        var cx = pad.l + (p.cursor / Math.max(vals.length - 1, 1)) * W;
+        return e("svg", { viewBox: "0 0 340 " + height, width: "100%", style: { overflow: "visible" } },
+          e("defs", null,
+            e("linearGradient", { id: "cg2", x1: "0", y1: "0", x2: "0", y2: "1" },
+              e("stop", { offset: "5%", stopColor: D.doomMag, stopOpacity: .45 }),
+              e("stop", { offset: "95%", stopColor: D.doomMag, stopOpacity: .02 }))),
+          e("line", { x1: pad.l, y1: pad.t + H * .5, x2: pad.l + W, y2: pad.t + H * .5, stroke: D.doomMag, strokeDasharray: "4 3", strokeOpacity: .4, strokeWidth: 1 }),
+          e("path", { d: ap, fill: "url(#cg2)" }),
+          e("path", { d: lp, fill: "none", stroke: D.doomMag, strokeWidth: 2, style: { filter: "drop-shadow(0 0 3px " + D.doomMag + ")" } }),
+          e("line", { x1: cx, y1: pad.t, x2: cx, y2: pad.t + H, stroke: D.safe, strokeDasharray: "3 2", strokeOpacity: .6, strokeWidth: 1 }),
+          [0, .5, 1].map(function (v, i) {
+            var y = pad.t + H - v * H;
+            return e("text", { key: i, x: pad.l - 2, y: y + 3, textAnchor: "end", fontFamily: "monospace", fontSize: 7, fill: D.muted }, Math.round(v * 100) + "%");
+          }),
+          (function () {
+            var labelStep = Math.max(1, Math.ceil(vals.length / 8));
+            return vals.map(function (v, i) {
+              if (i === 0 || i === vals.length - 1 || i % labelStep === 0) {
+                var x = pad.l + (i / Math.max(vals.length - 1, 1)) * W;
+                return e("text", { key: i, x: x, y: pad.t + H + 12, textAnchor: "middle", fontFamily: "monospace", fontSize: 7, fill: D.muted }, i + 1);
+              } return null;
+            });
+          })()
+        );
+      }
+
+      /* ─────────────────────────────────────────────────────────────────
+         HOME SCREEN
+      ───────────────────────────────────────────────────────────────── */
+      function HomeScreen(p) {
+        var onNav = p.onNav, S = p.SESSION, L = p.LIVE, svc = p.isServiceActive;
+        return e("div", { className: "slide-up", style: { padding: "0 16px 24px", position: "relative", zIndex: 1 } },
+
+          /* Status bar */
+          e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 4px 0" } },
+            e("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+              e("div", { style: { position: "relative", width: 10, height: 10 } },
+                e("div", { className: "ping", style: { position: "absolute", inset: 0, borderRadius: "50%", background: D.safe, opacity: .7 } }),
+                e("div", { style: { position: "relative", width: 10, height: 10, borderRadius: "50%", background: D.safe } })
+              ),
+              e("span", { className: "mono", style: { fontSize: 10, color: D.safe, letterSpacing: "0.2em" } }, "SYSTEM ACTIVE")
+            ),
+            e("div", { style: { display: "flex", gap: 8 } },
+              e(Ico, { name: "Wifi", size: 14, color: D.safe + "88" }),
+              e(Ico, { name: "Battery", size: 14, color: D.safe + "88" })
+            )
+          ),
+
+          /* Brand */
+          e("div", { style: { padding: "18px 0 18px", textAlign: "center", borderBottom: "1px solid " + D.border, marginBottom: 16 } },
+            e("div", { style: { fontSize: 24, fontWeight: 800, letterSpacing: "0.06em", color: "#fff", lineHeight: 1 } },
+              "REELIO ",
+              e("span", { style: { color: D.safe + "44", fontWeight: 300, fontSize: 18 } }, "//"),
+              " SYSTEM"
+            )
+          ),
+
+          /* Service card */
+          e("div", { className: "card", style: { padding: "14px 16px", marginBottom: 12 } },
+            e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+              e("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
+                e("div", { style: { width: 36, height: 36, borderRadius: 10, background: (svc ? D.safe : D.doom) + "15", border: "1px solid " + (svc ? D.safe : D.doom) + "33", display: "flex", alignItems: "center", justifyContent: "center" } },
+                  e(Ico, { name: "Radio", size: 16, color: svc ? D.safe : D.doom })
+                ),
+                e("div", null,
+                  e("div", { style: { fontSize: 14, fontWeight: 600, color: "#fff" } }, "Accessibility Service"),
+                  e(Label, null, svc ? "Neural monitor active" : "Service Offline")
+                )
+              ),
+              !svc
+                ? e("button", { className: "btn-primary", style: { padding: "8px 14px", width: "auto", fontSize: 12 }, onClick: function () { window.Android && window.Android.enableAccessibility && window.Android.enableAccessibility(); } }, "Enable")
+                : e("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
+                  e("div", { style: { position: "relative", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center" } },
+                    e("div", { style: { position: "absolute", width: 16, height: 16, borderRadius: "50%", background: D.safe + "33", animation: "ring-out 2s ease-in-out infinite" } }),
+                    e("div", { className: "pulse", style: { width: 8, height: 8, borderRadius: "50%", background: D.safe, boxShadow: "0 0 8px " + D.safe } })
+                  ),
+                  e("span", { className: "mono", style: { fontSize: 12, color: D.safe } }, "Active")
+                )
+            )
+          ),
+
+          /* Doom probability gauge card */
+          e("div", { className: "card " + (S.doom_label === "DOOM" ? "card-danger" : ""), style: { marginBottom: 12, overflow: "hidden" } },
+            e("div", { style: { padding: "12px 16px", background: S.doom_label === "DOOM" ? "linear-gradient(90deg," + D.doom + "18,transparent)" : "linear-gradient(90deg," + D.safe + "10,transparent)", borderBottom: "1px solid " + (S.doom_label === "DOOM" ? D.borderDanger : D.border), display: "flex", justifyContent: "space-between", alignItems: "center" } },
+              e("div", null,
+                e(Label, { style: { color: D.doom } }, "Current Intervention"),
+                e("div", { className: "mono", style: { fontSize: 9, color: D.muted, marginTop: 2 } }, "ID: #SESSION-ACTIVE")
+              ),
+              e(Ico, { name: "AlertTriangle", size: 18, color: D.doom, style: { filter: "drop-shadow(0 0 6px " + D.doom + ")" } })
+            ),
+            e("div", { style: { padding: "20px 16px 8px", display: "flex", flexDirection: "column", alignItems: "center" } },
+              e(DoomGauge, { value: S.S_t, label: S.doom_label === "DOOM" ? "CRITICAL RISK" : S.doom_label === "BORDERLINE" ? "MODERATE RISK" : "LOW RISK" })
+            ),
+            e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderTop: "1px solid " + D.border } },
+              [{ label: "Reels", value: L.reels }, { label: "Time", value: L.duration }, { label: "Avg Dwell", value: L.avg_dwell + "s" }].map(function (it, i) {
+                return e("div", { key: it.label, style: { padding: "12px 10px", textAlign: "center", borderRight: i < 2 ? "1px solid " + D.border : "none" } },
+                  e(Label, { style: { fontSize: 9, display: "block", marginBottom: 4 } }, it.label),
+                  e("div", { className: "spacemono", style: { fontSize: 18, fontWeight: 700, color: "#fff" } }, it.value)
+                );
+              })
+            )
+          ),
+
+          /* Cognitive Stability */
+          e("div", { className: "card", style: { padding: "14px 16px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 0 12px rgba(13,223,242,0.12)" } },
+            e("div", null,
+              e(Label, { style: { color: D.safe, display: "block", marginBottom: 4 } }, "Cognitive Stability"),
+              e("div", { style: { fontSize: 12, color: D.text, fontWeight: 500 } }, "Based on scroll velocity & dwell variance"),
+              e("div", { style: { display: "flex", alignItems: "center", gap: 6, marginTop: 8 } },
+                e("div", { style: { width: 8, height: 8, borderRadius: "50%", background: D.warn, boxShadow: "0 0 6px " + D.warn } }),
+                e("span", { style: { fontSize: 12, color: D.warn, fontWeight: 700, letterSpacing: "0.05em" } }, "MODERATE FOCUS")
+              )
+            ),
+            e("div", { style: { position: "relative", width: 56, height: 56 } },
+              e("svg", { width: 56, height: 56, viewBox: "0 0 36 36", style: { transform: "rotate(-90deg)" } },
+                e("path", { d: "M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831", fill: "none", stroke: "rgba(255,255,255,0.08)", strokeWidth: 4 }),
+                e("path", { d: "M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831", fill: "none", stroke: D.warn, strokeWidth: 4, strokeDasharray: Math.round((1 - S.S_t) * 80) + ", 100", style: { filter: "drop-shadow(0 0 3px " + D.warn + ")" } })
+              ),
+              e("div", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" } },
+                e("span", { className: "spacemono", style: { fontSize: 11, fontWeight: 700, color: D.warn } }, Math.round((1 - S.S_t) * 80) + "%")
+              )
+            )
+          ),
+
+          /* Live session card */
+          e("div", { style: { marginBottom: 6 } }, e(Label, { style: { paddingLeft: 2 } }, "Live Session Summary")),
+          e("div", { className: "card " + (S.doom_label === "DOOM" ? "card-doom" : ""), style: { padding: 0, marginBottom: 12, overflow: "hidden" } },
+            e("div", { style: { padding: "10px 16px", background: S.doom_label === "DOOM" ? "linear-gradient(90deg," + D.doomMag + "18,transparent)" : "linear-gradient(90deg," + D.safe + "10,transparent)", borderBottom: "1px solid " + (S.doom_label === "DOOM" ? D.borderDoom : D.border), display: "flex", justifyContent: "space-between", alignItems: "center" } },
+              e(Label, null, "Current Risk State"),
+              e(Tag, { label: S.doom_label })
+            ),
+            e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr" } },
+              [{ label: "Session Duration", value: L.duration, big: true, col: "#fff" },
+              { label: "Reels Observed", value: L.reels, big: true, col: "#fff" },
+              { label: "Avg Dwell Time", value: L.avg_dwell + "s", big: false, col: D.warn },
+              { label: "Capture Prob", value: Math.round(S.S_t * 100) + "%", big: false, col: D.doomMag }
+              ].map(function (it, i) {
+                return e("div", { key: it.label, style: { padding: "14px 16px", borderRight: i % 2 === 0 ? "1px solid " + D.border : "none", borderBottom: i < 2 ? "1px solid " + D.border : "none" } },
+                  e("div", { className: "spacemono", style: { fontSize: it.big ? 30 : 24, fontWeight: 700, color: it.col, lineHeight: 1, textShadow: it.col !== "#fff" ? "0 0 16px " + it.col + "88" : "none" } }, it.value),
+                  e(Label, { style: { marginTop: 4, display: "block" } }, it.label)
+                );
+              })
+            ),
+            e("div", { style: { padding: "12px 16px", borderTop: "1px solid " + D.border } },
+              e("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 6 } },
+                e(Label, null, "Doom Score"),
+                e("span", { className: "mono", style: { fontSize: 11, color: D.doomMag } }, Math.round(S.doom_score * 100) + "/100")
+              ),
+              e("div", { style: { height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" } },
+                e("div", { style: { height: "100%", width: (S.doom_score * 100) + "%", background: "linear-gradient(90deg," + D.warn + "," + D.doomMag + ")", borderRadius: 2, boxShadow: "0 0 10px " + D.doomMag } })
+              )
+            )
+          ),
+
+          /* Stats row */
+          e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 24 } },
+            [{ label: "Sessions", value: S.sessions_today, col: D.violet },
+            { label: "Dwell Total", value: S.total_dwell_today_min, col: D.warn },
+            { label: "Confidence", value: Math.round(S.model_confidence * 100) + "%", col: D.safe }
+            ].map(function (it) {
+              return e("div", { key: it.label, className: "card", style: { padding: "12px 10px", textAlign: "center" } },
+                e("div", { className: "spacemono", style: { fontSize: 20, fontWeight: 700, color: it.col, textShadow: "0 0 12px " + it.col + "88" } }, it.value),
+                e(Label, { style: { marginTop: 3, display: "block", fontSize: 9 } }, it.label),
+                e("div", { style: { height: 2, width: 28, background: it.col + "55", borderRadius: 1, margin: "6px auto 0" } })
+              );
+            })
+          ),
+
+          e("button", { className: "btn-primary", onClick: function () { onNav("dashboard"); } },
+            "View Behavioral Dashboard ",
+            e(Ico, { name: "ChevronRight", size: 18, color: "#020A0A", style: { marginLeft: 6 } })
+          ),
+
+          e("div", { style: { display: "flex", justifyContent: "center", alignItems: "center", gap: 20, marginTop: 20 } },
+            e("button", { onClick: function () { window.Android && window.Android.exportCsv && window.Android.exportCsv(); }, style: { background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: D.muted, fontFamily: "inherit", fontSize: 13 } },
+              e(Ico, { name: "Download", size: 13, color: D.muted }), " Export CSV"
+            ),
+            e("div", { style: { width: 4, height: 4, borderRadius: "50%", background: D.muted } }),
+            e("button", { onClick: function () { window.Android && window.Android.clearData && window.Android.clearData(); }, style: { background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: D.doom + "99", fontFamily: "inherit", fontSize: 13 } },
+              e(Ico, { name: "Trash2", size: 13, color: D.doom + "99" }), " Clear Data"
+            )
+          )
+        );
+      }
+
+      /* ─────────────────────────────────────────────────────────────────
+         DASHBOARD SCREEN
+      ───────────────────────────────────────────────────────────────── */
+      function DashboardScreen(p) {
+        var S = p.SESSION, RD = p.REELS_DATA, D14 = p.DAYS_14;
+        var rs = useState(Math.max(0, RD.length - 1)), rc = rs[0], setRc = rs[1];
+        var xs = useState(null), exp = xs[0], setExp = xs[1];
+        var cur = RD[rc] || RD[RD.length - 1] || { p: 0 };
+
+        var score = Math.round((1 - S.S_t) * 70 + (1 - S.A[1][1]) * 30);
+        var sc = score > 65 ? D.safe : score > 40 ? D.warn : D.doom;
+        var escapeRate = Math.max(0.01, S.A[1][0]);
+        var cd = (1 / escapeRate).toFixed(1);
+        function tog(k) { setExp(exp === k ? null : k); }
+
+        /* Top 3 doom drivers */
+        var allDrivers = [
+          { k: "rapid_reentry", l: "Rapid Re-entry", icon: "Zap", col: D.doomMag },
+          { k: "volitional_conflict", l: "App Exit Conflict", icon: "Lock", col: D.violet },
+          { k: "automaticity", l: "Infinite Scroll Loop", icon: "Activity", col: D.blue },
+          { k: "length", l: "Session Length", icon: "BarChart2", col: D.warn },
+          { k: "dwell_collapse", l: "Dwell Collapse", icon: "TrendingDown", col: D.doom },
+          { k: "rewatch", l: "Rewatch Compulsion", icon: "Radio", col: D.warn },
+          { k: "environment", l: "Environment", icon: "Moon", col: D.safe }
+        ].map(function (d) { return Object.assign({}, d, { v: S.doom_components[d.k] || 0.5 }); })
+          .sort(function (a, b) { return b.v - a.v; })
+          .slice(0, exp === "drivers" ? 7 : 3);
+
+        /* Heatmap bar color */
+        function heatCol(v) { return v > 0.6 ? D.doomMag : v > 0.4 ? "#9333ea" : D.safe; }
+
+        return e("div", { className: "slide-up", style: { padding: "16px 16px 32px", position: "relative", zIndex: 1 } },
+
+          /* Header strip */
+          e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 } },
+            e("div", null,
+              e("div", { className: "mono", style: { fontSize: 10, color: D.safe, letterSpacing: "0.2em" } }, "REELIO // NEURAL ENGINE"),
+              e("div", { className: "mono", style: { fontSize: 9, color: D.muted, marginTop: 2 } }, "v3.0 Connected")
+            ),
+            e("div", { style: { padding: "4px 10px", borderRadius: 6, border: "1px solid " + D.doomMag + "33", background: D.doomMag + "10" } },
+              e("span", { className: "mono", style: { fontSize: 9, color: D.doomMag } }, "LAST 14 DAYS")
+            )
+          ),
+
+          /* ── Cognitive Stability Index ── */
+          e("div", { className: "card card-danger", style: { padding: "18px", marginBottom: 10, boxShadow: "0 0 20px rgba(255,45,85,0.12)" } },
+            e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 } },
+              e("div", null,
+                e(Label, null, "Cognitive Stability Index"),
+                e("div", { style: { fontSize: 13, color: D.text, marginTop: 4, fontWeight: 600 } }, "Neural Load Assessment")
+              ),
+              e(Tag, { label: S.doom_label })
+            ),
+            e("div", { style: { display: "flex", alignItems: "center", gap: 16 } },
+              e(DoomGauge, { value: S.S_t, label: S.doom_label === "DOOM" ? "CRITICAL" : S.doom_label === "BORDERLINE" ? "MODERATE" : "STABLE" }),
+              e("div", { style: { flex: 1, display: "flex", flexDirection: "column", gap: 9 } },
+                [{ label: "Capture Rate", v: Math.round(S.S_t * 100) + "%", col: D.doomMag },
+                { label: "Doom Inertia", v: Math.round(S.A[1][1] * 100) + "%", col: D.doom },
+                { label: "Escape Rate", v: Math.round(S.A[1][0] * 100) + "%", col: D.safe },
+                { label: "Pull Index", v: S.doom_pull_index + "x", col: D.warn }
+                ].map(function (it) {
+                  return e("div", { key: it.label, style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+                    e(Label, null, it.label),
+                    e("span", { className: "mono", style: { fontSize: 12, color: it.col, textShadow: "0 0 8px " + it.col + "88" } }, it.v)
+                  );
+                })
+              )
+            ),
+            e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 14 } },
+              [{ label: "Total Reels", v: RD.length, col: "#fff" }, { label: "Doom Duration", v: cd + "r", col: D.warn }].map(function (it) {
+                return e("div", { key: it.label, style: { padding: "10px 12px", borderRadius: 10, background: "rgba(0,0,0,0.35)", border: "1px solid " + D.border } },
+                  e("div", { className: "spacemono", style: { fontSize: 18, color: it.col } }, it.v),
+                  e(Label, { style: { display: "block", marginTop: 2 } }, it.label)
+                );
+              })
+            )
+          ),
+
+          /* ── State Dynamics ── */
+          e("div", { className: "card", style: { padding: "16px", marginBottom: 10 } },
+            e("div", { style: { marginBottom: 12 } }, e(Label, null, "State Dynamics")),
+            e("svg", { width: "100%", viewBox: "0 0 340 110", style: { overflow: "visible" } },
+              e("circle", { cx: "70", cy: "55", r: "40", fill: D.safe + "10", stroke: D.safe, strokeWidth: 1.5, style: { filter: "drop-shadow(0 0 10px " + D.safe + "44)" } }),
+              e("text", { x: "70", y: "50", textAnchor: "middle", fontFamily: "Space Grotesk", fontSize: "11", fontWeight: "700", fill: D.safe }, "CASUAL"),
+              e("text", { x: "70", y: "65", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "9", fill: D.muted }, "STATE 0"),
+              e("circle", { cx: "270", cy: "55", r: "40", fill: D.doomMag + "10", stroke: D.doomMag, strokeWidth: 1.5, style: { filter: "drop-shadow(0 0 10px " + D.doomMag + "44)" } }),
+              e("text", { x: "270", y: "50", textAnchor: "middle", fontFamily: "Space Grotesk", fontSize: "11", fontWeight: "700", fill: D.doomMag }, "DOOM"),
+              e("text", { x: "270", y: "65", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "9", fill: D.muted }, "STATE 1"),
+              e("path", { d: "M 108 38 Q 170 0 232 38", fill: "none", stroke: D.doomMag, strokeWidth: 2.5, style: { filter: "drop-shadow(0 0 4px " + D.doomMag + ")" } }),
+              e("polygon", { points: "232,38 222,32 226,44", fill: D.doomMag }),
+              e("text", { x: "170", y: "14", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "11", fontWeight: "700", fill: D.doomMag }, Math.round(S.A[0][1] * 100) + "%"),
+              e("text", { x: "170", y: "26", textAnchor: "middle", fontFamily: "Space Grotesk", fontSize: "8", fill: D.muted }, "TRAP"),
+              e("path", { d: "M 232 72 Q 170 110 108 72", fill: "none", stroke: D.safe, strokeWidth: 1.5, strokeDasharray: "5,3", opacity: .7 }),
+              e("polygon", { points: "108,72 120,66 118,78", fill: D.safe, opacity: .7 }),
+              e("text", { x: "170", y: "105", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "11", fontWeight: "700", fill: D.safe }, Math.round(S.A[1][0] * 100) + "%"),
+              e("text", { x: "170", y: "93", textAnchor: "middle", fontFamily: "Space Grotesk", fontSize: "8", fill: D.muted }, "ESCAPE"),
+              e("text", { x: "70", y: "14", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "9", fill: D.safe + "99" }, "↺ " + Math.round(S.A[0][0] * 100) + "%"),
+              e("text", { x: "270", y: "14", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "9", fill: D.doomMag + "cc" }, "↺ " + Math.round(S.A[1][1] * 100) + "%"),
+              e("circle", { r: "4", fill: D.doomMag, style: { filter: "drop-shadow(0 0 5px " + D.doomMag + ")" } },
+                e("animateMotion", { path: "M 108 38 Q 170 0 232 38", dur: "2.5s", repeatCount: "indefinite" })
+              )
+            ),
+            e("div", { style: { display: "flex", gap: 8, marginTop: 8 } },
+              [{ label: "Doom Pull", v: S.doom_pull_index + "x", col: D.doomMag },
+              { label: "Regime Life", v: S.regime_stability.toFixed(0) + "r", col: D.warn },
+              { label: "Conf", v: Math.round(S.model_confidence * 100) + "%", col: D.violet }
+              ].map(function (it) {
+                return e("div", { key: it.label, style: { flex: 1, padding: "8px", borderRadius: 8, textAlign: "center", background: it.col + "10", border: "1px solid " + it.col + "25" } },
+                  e("div", { className: "mono", style: { fontSize: 13, color: it.col, textShadow: "0 0 8px " + it.col } }, it.v),
+                  e(Label, { style: { fontSize: 9 } }, it.label)
+                );
+              })
+            )
+          ),
+
+          /* ── 14-Day Heatmap (Stitch style tall bars) ── */
+          e("div", { className: "card", style: { padding: "18px", marginBottom: 10, overflow: "hidden", position: "relative" } },
+            e("div", { style: { position: "absolute", right: -20, top: -20, width: 100, height: 100, borderRadius: "50%", background: D.doomMag + "12", filter: "blur(30px)", pointerEvents: "none" } }),
+            /* Header */
+            e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18, position: "relative", zIndex: 1 } },
+              e("div", null,
+                e(Label, { style: { display: "block", marginBottom: 6 } }, "Cumulative Exposure"),
+                e("div", { style: { display: "flex", alignItems: "baseline", gap: 10 } },
+                  e("span", { style: { fontSize: 22, fontWeight: 700, color: "#fff", textShadow: "0 0 20px " + D.doomMag + "66" } },
+                    (function () { var avg = D14.length ? (D14.reduce(function (a, b) { return a + b.v; }, 0) / D14.length) : 0; return avg > 0.6 ? "High Risk" : avg > 0.4 ? "Moderate Risk" : "Low Risk"; })()
+                  ),
+                  e("span", { style: { display: "flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 600, color: D.safe, background: D.safe + "15", padding: "2px 7px", borderRadius: 4 } },
+                    "+", Math.round((D14.length ? (D14.reduce(function (a, b) { return a + b.v; }, 0) / D14.length) : 0) * 100), "% avg"
+                  )
+                )
+              )
+            ),
+            /* Bars */
+            e("div", { style: { display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 2, height: 140, position: "relative", zIndex: 1, paddingLeft: 14 } },
+              e("div", { className: "mono", style: { position: "absolute", left: -14, bottom: 65, transform: "rotate(-90deg)", fontSize: 8, color: D.muted, letterSpacing: "0.1em", whiteSpace: "nowrap" } }, "AVG DOOM CAPTURE"),
+              D14.map(function (day, i) {
+                var c = heatCol(day.v);
+                var heightPct = Math.max(8, day.v * 100);
+                return e("div", { key: i, style: { flex: 1, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 6 } },
+                  e("div", {
+                    style: {
+                      width: "100%",
+                      height: heightPct + "%",
+                      borderRadius: "3px 3px 0 0",
+                      background: c + "44",
+                      position: "relative",
+                      overflow: "hidden",
+                      transition: "height 0.6s ease",
+                      cursor: "default"
+                    }
+                  },
+                    e("div", {
+                      style: {
+                        position: "absolute", bottom: 0, left: 0, right: 0,
+                        height: "100%",
+                        background: "linear-gradient(to top," + c + "," + c + "88," + c + "33)",
+                        boxShadow: day.v > 0.6 ? "0 0 12px " + c + "99" : "none"
+                      }
+                    })
+                  ),
+                  e("span", { className: "mono", style: { fontSize: 8, color: D.muted } }, day.d)
+                );
+              })
+            ),
+            /* X-axis labels */
+            e("div", { style: { display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid " + D.border, paddingLeft: 14 } },
+              ["14d ago", "7d ago", "Today"].map(function (l) {
+                return e("span", { key: l, className: "mono", style: { fontSize: 9, color: D.muted, letterSpacing: "0.1em" } }, l);
+              })
+            ),
+            /* Legend */
+            e("div", { style: { display: "flex", justifyContent: "center", gap: 14, marginTop: 12 } },
+              [["LOW", D.safe], ["MED", "#9333ea"], ["HIGH", D.doomMag]].map(function (lc) {
+                return e("div", { key: lc[0], style: { display: "flex", alignItems: "center", gap: 5 } },
+                  e("div", { style: { width: 10, height: 10, borderRadius: 3, background: lc[1], boxShadow: "0 0 6px " + lc[1] } }),
+                  e(Label, { style: { fontSize: 9 } }, lc[0])
+                );
+              })
+            )
+          ),
+
+          /* ── Top 3 Doom Drivers (Stitch style) ── */
+          e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
+            e(Label, null, "Top Doom Drivers"),
+            e("span", { className: "mono", style: { fontSize: 9, color: D.doomMag, cursor: "pointer" }, onClick: function () { tog("drivers"); } }, exp === "drivers" ? "SHOW LESS ↑" : "VIEW ALL →")
+          ),
+          e("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 } },
+            allDrivers.map(function (dr) {
+              return e("div", { key: dr.k, className: "card", style: { padding: "14px", borderColor: dr.col + "22" } },
+                e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 } },
+                  e("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
+                    e("div", { style: { width: 28, height: 28, borderRadius: 8, background: dr.col + "18", border: "1px solid " + dr.col + "33", display: "flex", alignItems: "center", justifyContent: "center" } },
+                      e(Ico, { name: dr.icon, size: 13, color: dr.col })
+                    ),
+                    e("span", { style: { fontSize: 13, fontWeight: 600, color: D.text } }, dr.l)
+                  ),
+                  e("span", { className: "mono", style: { fontSize: 13, fontWeight: 700, color: dr.col, textShadow: "0 0 10px " + dr.col } }, Math.round(dr.v * 100) + "%")
+                ),
+                e("div", { className: "driver-bar" },
+                  e("div", { className: "driver-bar-fill", style: { width: (dr.v * 100) + "%", background: "linear-gradient(90deg," + dr.col + "88," + dr.col + ")", boxShadow: dr.v > 0.6 ? "0 0 8px " + dr.col : "none" } })
+                )
+              );
+            })
+          ),
+
+          /* ── Capture Timeline ── */
+          e("div", { className: "card", style: { padding: "16px", marginBottom: 10 } },
+            e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 } },
+              e("div", null,
+                e(Label, { style: { display: "block", marginBottom: 2 } }, "Session Topology"),
+                e("div", { className: "mono", style: { fontSize: 9, color: D.muted } }, "ID: #SESSION • LIVE")
+              ),
+              e("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
+                e("div", { style: { display: "flex", alignItems: "center", gap: 4, background: "rgba(255,255,255,0.05)", padding: "3px 8px", borderRadius: 4 } },
+                  e("div", { className: "pulse", style: { width: 6, height: 6, borderRadius: "50%", background: D.doomMag } }),
+                  e("span", { className: "mono", style: { fontSize: 9, color: D.text } }, "REEL " + (rc + 1) + " · " + Math.round(cur.p * 100) + "%")
+                ),
+                cur.exit && e("span", { className: "mono", style: { fontSize: 9, color: D.doom } }, "EXIT"),
+                cur.back && e("span", { className: "mono", style: { fontSize: 9, color: D.warn } }, "REWATCH")
+              )
+            ),
+            e("div", { style: { height: 120, overflow: "hidden" } },
+              e(AreaChartSVG, { data: RD, cursor: rc, height: 110 })
+            ),
+            e("div", { style: { marginTop: 8 } },
+              e("input", { type: "range", min: 0, max: Math.max(0, RD.length - 1), value: rc, onChange: function (ev) { setRc(+ev.target.value); } }),
+              e("div", { style: { display: "flex", justifyContent: "space-between", marginTop: 2 } },
+                e(Label, { style: { fontSize: 9 } }, "Reel 1"),
+                e(Label, { style: { fontSize: 9 } }, "Reel " + RD.length)
+              )
+            )
+          ),
+
+          /* ── Doom Score Anatomy ── */
+          e("div", { className: "card", style: { marginBottom: 10, overflow: "hidden" } },
+            e("button", { onClick: function () { tog("anatomy"); }, style: { width: "100%", padding: "14px 16px", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" } },
+              e("div", null, e(Label, null, "Doom Score Anatomy")),
+              e("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                e("span", { className: "mono", style: { fontSize: 16, color: D.doomMag, textShadow: "0 0 12px " + D.doomMag } }, Math.round(S.doom_score * 100)),
+                e(Ico, { name: exp === "anatomy" ? "ChevronUp" : "ChevronDown", size: 14, color: D.muted })
+              )
+            ),
+            exp === "anatomy" && e("div", { style: { padding: "0 16px 16px" } },
+              e(Divider),
+              e("div", { style: { marginTop: 12, display: "flex", flexDirection: "column", gap: 10 } },
+                [{ k: "length", l: "Session Length", icon: "BarChart2" },
+                { k: "volitional_conflict", l: "Exit Conflict", icon: "Lock" },
+                { k: "rapid_reentry", l: "Rapid Re-entry", icon: "Zap" },
+                { k: "automaticity", l: "Scroll Automaticity", icon: "Activity" },
+                { k: "dwell_collapse", l: "Dwell Collapse", icon: "TrendingDown" },
+                { k: "rewatch", l: "Rewatch Compulsion", icon: "Radio" },
+                { k: "environment", l: "Environment", icon: "Moon" }
+                ].map(function (it) {
+                  var v = S.doom_components[it.k] || 0.5, col = v > 0.7 ? D.doomMag : v > 0.45 ? D.warn : D.safe;
+                  return e("div", { key: it.k },
+                    e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 } },
+                      e("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
+                        e(Ico, { name: it.icon, size: 11, color: col }),
+                        e("span", { style: { fontSize: 12, color: D.text } }, it.l)
+                      ),
+                      e("span", { className: "mono", style: { fontSize: 11, color: col } }, Math.round(v * 100) + "%")
+                    ),
+                    e("div", { style: { height: 4, background: "rgba(255,255,255,0.05)", borderRadius: 2, overflow: "hidden" } },
+                      e("div", { style: { height: "100%", width: (v * 100) + "%", background: "linear-gradient(90deg," + col + "88," + col + ")", borderRadius: 2, boxShadow: v > 0.6 ? "0 0 6px " + col : "none" } })
+                    )
+                  );
+                })
+              )
+            )
+          ),
+
+          /* ── Behavioral Insights ── */
+          e("div", { style: { marginBottom: 8 } }, e(Label, null, "Automated Behavioral Insights")),
+          e("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+            [{ icon: "AlertTriangle", col: D.doom, title: "Peak Vulnerability", body: (S.timePeriod && S.timePeriod !== "Unknown" ? S.timePeriod : "Late Night") + " sessions average " + Math.round(S.S_t * 100) + "% capture. Dark room amplifies doom state by ~" + Math.max(1.1, S.doom_pull_index) + "x." },
+            { icon: "Brain", col: D.violet, title: "Cognitive Recovery Rate", body: "Doom episodes last ~" + Math.round(S.regime_stability) + " reels. After a break, capture probability halves." },
+            { icon: "Lock", col: D.warn, title: "Scroll Inertia Model", body: "Passive state retention at " + Math.round(S.A[1][1] * 100) + "%. Once captured, doom is " + S.doom_pull_index + "x harder to escape." },
+            { icon: "Activity", col: D.safe, title: "Model Confidence", body: Math.round(S.model_confidence * 100) + "% personalized confidence. Accuracy improves at 20+ sessions." }
+            ].map(function (it) {
+              return e("div", { key: it.title, className: "card", style: { padding: "14px", borderColor: it.col + "18" } },
+                e("div", { style: { display: "flex", gap: 12 } },
+                  e("div", { style: { width: 34, height: 34, borderRadius: 9, flexShrink: 0, background: it.col + "15", border: "1px solid " + it.col + "30", display: "flex", alignItems: "center", justifyContent: "center" } },
+                    e(Ico, { name: it.icon, size: 15, color: it.col })
+                  ),
+                  e("div", null,
+                    e("div", { style: { fontSize: 13, fontWeight: 700, color: D.text, marginBottom: 4 } }, it.title),
+                    e("div", { style: { fontSize: 12, color: D.muted, lineHeight: 1.5 } }, it.body)
+                  )
+                )
+              );
+            })
+          )
+        );
+      }
+
+      /* ─────────────────────────────────────────────────────────────────
+         SETUP / ERROR SCREEN
+      ───────────────────────────────────────────────────────────────── */
+      function SetupScreen(p) {
+        return e("div", { style: { minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: D.bg, padding: 32, gap: 20 } },
+          e("div", { style: { width: 64, height: 64, borderRadius: "50%", background: D.safe + "15", border: "1px solid " + D.safe + "44", display: "flex", alignItems: "center", justifyContent: "center" } },
+            e(Ico, { name: "Shield", size: 28, color: D.safe })
+          ),
+          e("div", { style: { fontSize: 24, fontWeight: 800, color: "#fff", textAlign: "center" } }, "Reelio"),
+          e("div", { className: "mono", style: { fontSize: 10, color: D.safe, letterSpacing: "0.3em", textAlign: "center" } }, "SETUP REQUIRED"),
+          e("div", { className: "card", style: { width: "100%", padding: 20 } },
+            e("div", { style: { fontSize: 14, fontWeight: 700, color: D.text, marginBottom: 12 } }, "Getting Started"),
+            ["1. Settings → Accessibility → Installed Services", "2. Enable \"Reelio Tracker\"", "3. Open Instagram and scroll Reels", "4. Return here to see your data"].map(function (s, i) {
+              return e("div", { key: i, style: { display: "flex", gap: 10, marginBottom: 10 } },
+                e("div", { className: "mono", style: { fontSize: 11, color: D.safe, flexShrink: 0 } }, s.slice(0, 2)),
+                e("div", { style: { fontSize: 13, color: D.muted } }, s.slice(3))
+              );
+            })
+          ),
+          e("button", { className: "btn-primary", onClick: function () { window.Android && window.Android.enableAccessibility && window.Android.enableAccessibility(); } }, "Enable Accessibility Service"),
+          p.message && e("div", { style: { fontSize: 12, color: D.muted, textAlign: "center", lineHeight: 1.6, marginTop: 4 } }, p.message)
+        );
+      }
+
+      /* ─────────────────────────────────────────────────────────────────
+         ROOT APP
+      ───────────────────────────────────────────────────────────────── */
+      function ReeliApp() {
+        var ss = useState("home"), screen = ss[0], setScreen = ss[1];
+        var ds = useState(null), rawData = ds[0], setRawData = ds[1];
+        var ls = useState(true), loading = ls[0], setLoading = ls[1];
+        var es = useState(null), errMsg = es[0], setErrMsg = es[1];
+        var vs = useState(false), svcActive = vs[0], setSvcActive = vs[1];
+
+        useEffect(function () {
+          if (window.Android && window.Android.isAccessibilityEnabled) {
+            try { setSvcActive(window.Android.isAccessibilityEnabled()); } catch (x) { }
+          }
+          window.updateServiceStatus = function (v) { setSvcActive(v); };
+
+          function handleData(parsed) {
+            try {
+              if (parsed.error) { setErrMsg(parsed.error); }
+              else if (parsed.sessions && parsed.sessions.length > 0) { setRawData(parsed); setErrMsg(null); }
+              else { setErrMsg("No data yet. Scroll some Reels first!"); }
+            } catch (x) { setErrMsg("Parse error: " + x.message); }
+            setLoading(false);
+          }
+          window.reactDataCallback = handleData;
+          if (window.injectedJsonData) { handleData(window.injectedJsonData); return; }
+          var t = setTimeout(function () { setLoading(false); }, 3000);
+          return function () { clearTimeout(t); };
+        }, []);
+
+        if (loading) {
+          return e("div", { style: { minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: D.bg, gap: 16 } },
+            e("div", { style: { width: 40, height: 40, border: "3px solid rgba(13,223,242,0.15)", borderTopColor: D.safe, borderRadius: "50%", animation: "spin .8s linear infinite" } }),
+            e("div", { className: "mono", style: { color: D.muted, fontSize: 11, letterSpacing: "0.2em" } }, "REELIO")
+          );
+        }
+
+        if (!rawData) { return e(SetupScreen, { message: errMsg }); }
+
+        /* ── Derive session data ── */
+        var mr = rawData.sessions[rawData.sessions.length - 1];
+        var allSt = rawData.sessions.map(function (s) { return s.S_t; });
+        var avgSt = allSt.reduce(function (a, b) { return a + b; }, 0) / rawData.sessions.length;
+        var A = (rawData.model_parameters && rawData.model_parameters.transition_matrix) || [[0.8, 0.2], [0.2, 0.8]];
+
+        var totalDwellSec = rawData.sessions.reduce(function (sum, s) { return sum + (s.avgDwell || s.meanDwell || s.avg_dwell || 0) * (s.nReels || 0); }, 0);
+        var totalDwellMin = totalDwellSec > 60 ? (totalDwellSec / 60).toFixed(1) + "m" : Math.round(totalDwellSec) + "s";
+        var overallAvgDwell = (rawData.sessions.reduce(function (sum, s) { return sum + (s.avgDwell || s.meanDwell || s.avg_dwell || 0); }, 0) / Math.max(rawData.sessions.length, 1)).toFixed(1);
+        var perReelCapture = (rawData.timeline && rawData.timeline.p_capture) || [];
+        var sessionReelsSum = rawData.sessions.reduce(function (sum, s) { return sum + (s.nReels || 0); }, 0);
+        var totalReelsAll = sessionReelsSum > 0 ? sessionReelsSum : perReelCapture.length;
+        var escapeRate = Math.max(0.01, A[1][0]);
+        var avgNReels = totalReelsAll / Math.max(rawData.sessions.length, 1);
+        var pLostTrack = rawData.sessions.filter(function (s) { return s.dominantState === 1; }).length / Math.max(rawData.sessions.length, 1);
+
+        var doomComponents = {
+          length: Math.min(1, avgNReels / 80),
+          volitional_conflict: pLostTrack,
+          rapid_reentry: Math.min(1, A[0][1] * 3),
+          automaticity: Math.min(1, A[1][1]),
+          dwell_collapse: Math.min(1, Math.max(0, 1 - (parseFloat(overallAvgDwell) / 15))),
+          rewatch: Math.min(1, mr.S_t),
+          environment: mr.timePeriod === "Late Night" || mr.timePeriod === "Night" ? 0.8 : mr.timePeriod === "Evening" ? 0.55 : 0.3
+        };
+
+        var SESSION = Object.assign({}, mr, {
+          doom_label: mr.S_t > 0.6 ? "DOOM" : mr.S_t > 0.35 ? "BORDERLINE" : "CASUAL",
+          doom_score: mr.S_t,
+          model_confidence: rawData.model_confidence != null ? rawData.model_confidence : Math.min(0.95, rawData.sessions.length / 20),
+          doom_pull_index: ((A[0][1] / Math.max(0.01, A[1][0])) * 1.5).toFixed(1),
+          regime_stability: 1.0 / (escapeRate + 0.001),
+          sessions_today: rawData.sessions.length,
+          total_dwell_today_min: totalDwellMin,
+          A: A, h: [A[0][0], A[1][1]],
+          doom_components: doomComponents
+        });
+
+        var currentSessionDwellSec = (mr.avgDwell || mr.meanDwell || mr.avg_dwell || 0) * (mr.nReels || 0);
+        var currentSessionDuration = currentSessionDwellSec > 0 ? (currentSessionDwellSec > 60 ? (currentSessionDwellSec / 60).toFixed(1) + "m" : Math.round(currentSessionDwellSec) + "s") : "LIVE";
+        var LIVE = { duration: currentSessionDuration, reels: totalReelsAll, avg_dwell: parseFloat(overallAvgDwell) || "--" };
+
+        var REELS_DATA = perReelCapture.length > 0
+          ? perReelCapture.map(function (p, i) { return { r: i + 1, p: p, exit: false, back: false }; })
+          : rawData.sessions.map(function (s, i) { return { r: i + 1, p: s.S_t, exit: s.dominantState === 1 && i === rawData.sessions.length - 1, back: false }; });
+
+        var DAYS_14 = (function () {
+          var days = ["M", "T", "W", "T", "F", "S", "S"];
+          var base = rawData.sessions.slice(-14).map(function (s, i) { return { d: days[i % 7], v: parseFloat(s.S_t.toFixed(2)) }; });
+          while (base.length < 14) { base.unshift({ d: days[base.length % 7], v: parseFloat(avgSt.toFixed(2)) }); }
+          return base.slice(-14);
+        })();
+
+        var tabs = [{ id: "home", icon: "Eye", label: "Monitor" }, { id: "dashboard", icon: "BarChart2", label: "Dashboard" }, { id: "settings", icon: "Settings", label: "Settings" }];
+
+        return e("div", { style: { display: "flex", justifyContent: "center", minHeight: "100vh", background: "#000", alignItems: "flex-start" } },
+          e("div", { className: "app-shell", style: { position: "relative" } },
+            e("div", { className: "scanlines" }),
+            e("div", { className: "scan" }),
+            /* Top nav */
+            e("div", { style: { height: 44, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", position: "sticky", top: 0, zIndex: 100, background: "rgba(5,5,10,0.92)", backdropFilter: "blur(20px)", borderBottom: "1px solid " + D.border } },
+              screen === "dashboard"
+                ? e("button", { onClick: function () { setScreen("home"); }, style: { background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, color: D.safe, fontFamily: "inherit", fontSize: 13, fontWeight: 600 } },
+                  e(Ico, { name: "ArrowLeft", size: 16, color: D.safe }), " Home")
+                : e("div", { className: "mono", style: { fontSize: 11, color: D.muted } }, "v3.0"),
+              e("div", { className: "mono", style: { fontSize: 11, color: D.muted } }, "SYNCED")
+            ),
+            /* Content */
+            e("div", { style: { overflowY: "auto", maxHeight: "calc(100vh - 44px - 56px)" } },
+              screen === "home"
+                ? e(HomeScreen, { onNav: setScreen, SESSION: SESSION, LIVE: LIVE, isServiceActive: svcActive })
+                : e(DashboardScreen, { SESSION: SESSION, REELS_DATA: REELS_DATA, DAYS_14: DAYS_14 })
+            ),
+            /* Tab bar */
+            e("div", { className: "tab-bar" },
+              tabs.map(function (tab) {
+                return e("button", { key: tab.id, className: "tab-item" + (screen === tab.id ? " active" : ""), onClick: function () { setScreen(tab.id === "settings" ? "home" : tab.id); } },
+                  e(Ico, { name: tab.icon, size: 20, color: screen === tab.id ? D.safe : D.muted }),
+                  e("span", null, tab.label)
+                );
+              })
+            )
+          )
+        );
+      }
+
+      /* ── Android bridge ── */
+      window.injectDataB64 = function (b64) {
+        try { var parsed = JSON.parse(atob(b64)); window.injectedJsonData = parsed; if (window.reactDataCallback) window.reactDataCallback(parsed); }
+        catch (ex) { if (window.reactDataCallback) window.reactDataCallback({ error: "Parse error: " + ex.message }); }
+      };
+      window.injectData = function (jsonStr) {
+        try { var parsed = JSON.parse(jsonStr); window.injectedJsonData = parsed; if (window.reactDataCallback) window.reactDataCallback(parsed); }
+        catch (ex) { if (window.reactDataCallback) window.reactDataCallback({ error: "JSON parse error: " + ex.message }); }
+      };
+
+      var root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(e(ReeliApp, null));
+    })();
+  </script>
 </body>
+
 </html>

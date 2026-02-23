@@ -38,6 +38,15 @@ def initialize_parameters():
     
     return A, pi, p, mu, sigma
 
+def _schema_skip(path, encoding):
+    """Return 1 if the first line is a SCHEMA_VERSION metadata line, else 0."""
+    try:
+        with open(path, 'r', encoding=encoding) as f:
+            first = f.readline().strip().lstrip('\ufeff')
+        return 1 if first.startswith('SCHEMA_VERSION') else 0
+    except Exception:
+        return 0
+
 def load_and_preprocess_data(csv_input):
     """
     Loads telemetry, normalizes dwellSec via log transform.
@@ -48,9 +57,9 @@ def load_and_preprocess_data(csv_input):
         df = pd.read_csv(io.StringIO(csv_input))
     else:
         try:
-            df = pd.read_csv(csv_input, encoding='utf-8')
+            df = pd.read_csv(csv_input, encoding='utf-8', skiprows=_schema_skip(csv_input, 'utf-8'))
         except UnicodeDecodeError:
-            df = pd.read_csv(csv_input, encoding='utf-16')
+            df = pd.read_csv(csv_input, encoding='utf-16', skiprows=_schema_skip(csv_input, 'utf-16'))
         
     # Required columns: SessionNum, ReelIndex, startTime, Continue, dwellSec, timePeriod, ...
     
@@ -306,7 +315,10 @@ if __name__ == "__main__":
                 "gaussian_mu": mu.tolist(),
                 "gaussian_sigma": sigma.tolist()
             },
-            "sessions": decoded_sessions
+            "sessions": decoded_sessions,
+            "timeline": {
+                "p_capture": np.concatenate([g[1, :] for g in gammas]).round(3).tolist()
+            }
         }
         
         with open(args.output, 'w') as f:
