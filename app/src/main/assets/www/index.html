@@ -845,7 +845,7 @@
               e("text", { x: "70", y: "14", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "9", fill: D.safe + "99" }, "↺ " + Math.round(S.A[0][0] * 100) + "%"),
               e("text", { x: "270", y: "14", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "9", fill: D.doomMag + "cc" }, "↺ " + Math.round(S.A[1][1] * 100) + "%"),
               e("circle", { r: "4", fill: D.doomMag, style: { filter: "drop-shadow(0 0 5px " + D.doomMag + ")" } },
-                e("animateMotion", { path: "M 108 38 Q 170 0 232 38", dur: "2.5s", repeatCount: "indefinite" })
+                e("animateMotion", { path: "M 108 38 Q 170 0 232 38", dur: "3.2s", repeatCount: "indefinite" })
               ),
               e("circle", { r: "4", fill: D.safe, opacity: .8, style: { filter: "drop-shadow(0 0 5px " + D.safe + ")" } },
                 e("animateMotion", { path: "M 232 72 Q 170 110 108 72", dur: "3.2s", repeatCount: "indefinite" })
@@ -1043,7 +1043,7 @@
                 var actL = names[maxK] || "Session Length";
                 var actP = Math.round(maxV * 100);
                 return e("div", { style: { marginTop: 6, padding: "10px 14px", background: "rgba(236,72,153,0.04)", borderRadius: 10, borderLeft: "2px solid rgba(236,72,153,0.3)", fontSize: 11, color: "rgba(248,250,252,0.55)", lineHeight: 1.7 } },
-                  "💡 ", e("strong", { style: { color: "rgba(236,72,153,0.7)" } }, "What this means: "), actL + " is your single biggest lever (" + actP + "% weight). Tap any driver to see the exact behavioral signal behind the score."
+                  e("strong", { style: { color: "rgba(236,72,153,0.7)" } }, "What this means: "), actL + " is your single biggest lever (" + actP + "% weight). Tap any driver to see the exact behavioral signal behind the score."
                 );
               })()
             )
@@ -1085,7 +1085,7 @@
               e("div", { className: "card", style: { padding: "6px 10px", background: "rgba(251,191,36,0.08)", borderColor: "rgba(251,191,36,0.2)", color: "rgba(251,191,36,0.8)", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" } }, escText)
             ),
             e("div", { style: { padding: "10px 14px", background: "rgba(34,211,238,0.04)", borderRadius: 10, borderLeft: "2px solid rgba(34,211,238,0.3)", fontSize: 11, color: "rgba(248,250,252,0.55)", lineHeight: 1.7 } },
-              "💡 ", e("strong", { style: { color: "rgba(34,211,238,0.8)" } }, "What this means: "), whatMeansDesc
+              e("strong", { style: { color: "rgba(34,211,238,0.8)" } }, "What this means: "), whatMeansDesc
             )
           )
         );
