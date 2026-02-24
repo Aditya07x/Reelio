@@ -13,20 +13,20 @@ const {
 
 /* ─── DESIGN SYSTEM ────────────────────────────────────────────── */
 const D = {
-    bg:          "#05050A",
-    surface:     "rgba(10,17,20,0.95)",
-    card:        "rgba(10,17,20,0.80)",
-    doom:        "#FF2D55",
-    doomMag:     "#f20da6",
-    safe:        "#0ddff2",
-    warn:        "#FFB340",
-    violet:      "#BF5AF2",
-    blue:        "#0A84FF",
-    text:        "#D0DCF0",
-    muted:       "#3D4F6B",
-    border:      "rgba(13,223,242,0.12)",
-    borderDoom:  "rgba(242,13,166,0.35)",
-    borderDanger:"rgba(255,45,85,0.35)",
+    bg: "#05050A",
+    surface: "rgba(10,17,20,0.95)",
+    card: "rgba(10,17,20,0.80)",
+    doom: "#FF2D55",
+    doomMag: "#f20da6",
+    safe: "#0ddff2",
+    warn: "#FFB340",
+    violet: "#BF5AF2",
+    blue: "#0A84FF",
+    text: "#D0DCF0",
+    muted: "#3D4F6B",
+    border: "rgba(13,223,242,0.12)",
+    borderDoom: "rgba(242,13,166,0.35)",
+    borderDanger: "rgba(255,45,85,0.35)",
 };
 
 /* ─── INJECTED STYLES ──────────────────────────────────────────── */
@@ -292,7 +292,7 @@ const HomeScreen = ({ onNav, SESSION, LIVE, isServiceActive }) => {
             {/* ── Brand title ── */}
             <div style={{ padding: "20px 0 20px", textAlign: "center", borderBottom: `1px solid ${D.border}`, marginBottom: 20 }}>
                 <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "0.06em", color: "#fff", lineHeight: 1 }}>
-                    REELIO <span style={{ color: D.safe + "55", fontWeight: 300, fontSize: 20 }}>//</span> SYSTEM
+                    REELIO <span style={{ color: D.safe + "55", fontWeight: 300, fontSize: 20 }}>//</span> ALSE
                 </div>
             </div>
 
@@ -414,9 +414,9 @@ const HomeScreen = ({ onNav, SESSION, LIVE, isServiceActive }) => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
                     {[
                         { label: "Session Duration", value: LIVE.duration, col: "#fff" },
-                        { label: "Reels Observed",   value: LIVE.reels,    col: "#fff" },
-                        { label: "Avg Dwell Time",   value: `${LIVE.avg_dwell}s`, col: D.warn },
-                        { label: "Capture Prob",     value: `${Math.round(SESSION.S_t * 100)}%`, col: D.doomMag },
+                        { label: "Reels Observed", value: LIVE.reels, col: "#fff" },
+                        { label: "Avg Dwell Time", value: `${LIVE.avg_dwell}s`, col: D.warn },
+                        { label: "Capture Prob", value: `${Math.round(SESSION.S_t * 100)}%`, col: D.doomMag },
                     ].map(({ label, value, col }, i) => (
                         <div key={label} style={{
                             padding: "14px 16px",
@@ -534,16 +534,16 @@ const DashboardScreen = ({ SESSION, REELS_DATA, DAYS_14 }) => {
 
     // Top 3 doom drivers sorted by value
     const doomDrivers = [
-        { k: "rapid_reentry",       l: "Rapid Re-entry",     icon: Zap },
-        { k: "volitional_conflict", l: "Exit Conflict",       icon: Lock },
-        { k: "automaticity",        l: "Scroll Automaticity", icon: Cpu },
-        { k: "length",              l: "Session Length",      icon: BarChart2 },
-        { k: "dwell_collapse",      l: "Dwell Collapse",      icon: TrendingDown },
-        { k: "rewatch",             l: "Rewatch Compulsion",  icon: Radio },
-        { k: "environment",         l: "Environment",         icon: Moon },
+        { k: "rapid_reentry", l: "Rapid Re-entry", icon: Zap },
+        { k: "volitional_conflict", l: "Exit Conflict", icon: Lock },
+        { k: "automaticity", l: "Scroll Automaticity", icon: Cpu },
+        { k: "length", l: "Session Length", icon: BarChart2 },
+        { k: "dwell_collapse", l: "Dwell Collapse", icon: TrendingDown },
+        { k: "rewatch", l: "Rewatch Compulsion", icon: Radio },
+        { k: "environment", l: "Environment", icon: Moon },
     ].map(d => ({ ...d, value: SESSION.doom_components[d.k] || 0.5 }))
-     .sort((a, b) => b.value - a.value)
-     .slice(0, 3);
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 3);
 
     const driverColors = [D.doomMag, D.violet, D.blue];
 
@@ -578,9 +578,9 @@ const DashboardScreen = ({ SESSION, REELS_DATA, DAYS_14 }) => {
                     <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9 }}>
                         {[
                             { label: "Capture Rate", v: `${Math.round(SESSION.S_t * 100)}%`, col: D.doomMag },
-                            { label: "Doom Inertia",  v: `${Math.round(SESSION.A[1][1] * 100)}%`, col: D.doom },
-                            { label: "Escape Rate",   v: `${Math.round(SESSION.A[1][0] * 100)}%`, col: D.safe },
-                            { label: "Pull Index",    v: `${SESSION.doom_pull_index}×`, col: D.warn },
+                            { label: "Doom Inertia", v: `${Math.round(SESSION.A[1][1] * 100)}%`, col: D.doom },
+                            { label: "Escape Rate", v: `${Math.round(SESSION.A[1][0] * 100)}%`, col: D.safe },
+                            { label: "Pull Index", v: `${SESSION.doom_pull_index}×`, col: D.warn },
                         ].map(({ label, v, col }) => (
                             <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                 <Label>{label}</Label>
@@ -728,7 +728,7 @@ const DashboardScreen = ({ SESSION, REELS_DATA, DAYS_14 }) => {
                         <AreaChart data={REELS_DATA.map(r => ({ r: r.r, p: r.p }))} margin={{ top: 5, right: 0, bottom: 0, left: -30 }}>
                             <defs>
                                 <linearGradient id="capGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%"  stopColor={D.doomMag} stopOpacity={0.45} />
+                                    <stop offset="5%" stopColor={D.doomMag} stopOpacity={0.45} />
                                     <stop offset="95%" stopColor={D.doomMag} stopOpacity={0.02} />
                                 </linearGradient>
                             </defs>
@@ -775,13 +775,13 @@ const DashboardScreen = ({ SESSION, REELS_DATA, DAYS_14 }) => {
                         <Divider />
                         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
                             {[
-                                { k: "length",              l: "Session Length",      icon: BarChart2 },
-                                { k: "volitional_conflict", l: "Exit Conflict",        icon: Lock },
-                                { k: "rapid_reentry",       l: "Rapid Re-entry",      icon: Zap },
-                                { k: "automaticity",        l: "Scroll Automaticity",  icon: Cpu },
-                                { k: "dwell_collapse",      l: "Dwell Collapse",       icon: TrendingDown },
-                                { k: "rewatch",             l: "Rewatch Compulsion",   icon: Radio },
-                                { k: "environment",         l: "Environment",          icon: Moon },
+                                { k: "length", l: "Session Length", icon: BarChart2 },
+                                { k: "volitional_conflict", l: "Exit Conflict", icon: Lock },
+                                { k: "rapid_reentry", l: "Rapid Re-entry", icon: Zap },
+                                { k: "automaticity", l: "Scroll Automaticity", icon: Cpu },
+                                { k: "dwell_collapse", l: "Dwell Collapse", icon: TrendingDown },
+                                { k: "rewatch", l: "Rewatch Compulsion", icon: Radio },
+                                { k: "environment", l: "Environment", icon: Moon },
                             ].map(({ k, l, icon: Icon }) => {
                                 const v = SESSION.doom_components[k] || 0.5;
                                 const col = v > 0.7 ? D.doomMag : v > 0.45 ? D.warn : D.safe;
@@ -814,10 +814,10 @@ const DashboardScreen = ({ SESSION, REELS_DATA, DAYS_14 }) => {
             <div style={{ marginBottom: 8 }}><Label>Automated Behavioral Insights</Label></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {[
-                    { icon: AlertTriangle, col: D.doom,   title: "Peak Vulnerability",      body: `Late Night sessions average ${Math.round(SESSION.S_t * 100)}% capture. Dark room + charging amplifies doom state by ~${SESSION.doom_pull_index}×.` },
-                    { icon: Brain,         col: D.violet, title: "Cognitive Recovery Rate",  body: `Doom episodes last ~${Math.round(SESSION.regime_stability)} reels. After a ${Math.round(Math.log(2) / (SESSION.q_01 + SESSION.q_10) * 60)}min break, capture probability halves.` },
-                    { icon: Lock,          col: D.warn,   title: "Scroll Inertia Model",     body: `Passive state retention at ${Math.round(SESSION.A[1][1] * 100)}%. Once captured, doom is ${SESSION.doom_pull_index}× harder to escape.` },
-                    { icon: Activity,      col: D.safe,   title: "Model Confidence",         body: `${Math.round(SESSION.model_confidence * 100)}% personalized confidence. Significant accuracy gains expected at 20+ sessions.` },
+                    { icon: AlertTriangle, col: D.doom, title: "Peak Vulnerability", body: `Late Night sessions average ${Math.round(SESSION.S_t * 100)}% capture. Dark room + charging amplifies doom state by ~${SESSION.doom_pull_index}×.` },
+                    { icon: Brain, col: D.violet, title: "Cognitive Recovery Rate", body: `Doom episodes last ~${Math.round(SESSION.regime_stability)} reels. After a ${Math.round(Math.log(2) / (SESSION.q_01 + SESSION.q_10) * 60)}min break, capture probability halves.` },
+                    { icon: Lock, col: D.warn, title: "Scroll Inertia Model", body: `Passive state retention at ${Math.round(SESSION.A[1][1] * 100)}%. Once captured, doom is ${SESSION.doom_pull_index}× harder to escape.` },
+                    { icon: Activity, col: D.safe, title: "Model Confidence", body: `${Math.round(SESSION.model_confidence * 100)}% personalized confidence. Significant accuracy gains expected at 20+ sessions.` },
                 ].map(({ icon: Icon, col, title, body }) => (
                     <div key={title} className="card" style={{ padding: "14px", borderColor: col + "18" }}>
                         <div style={{ display: "flex", gap: 12 }}>
@@ -910,13 +910,13 @@ export default function ReeliApp() {
         A: A,
         q_01: 0.31, q_10: 0.13, h: [0.156, 0.037],
         doom_components: {
-            length:              Math.random() * 0.5 + 0.4,
+            length: Math.random() * 0.5 + 0.4,
             volitional_conflict: Math.random() * 0.5 + 0.4,
-            rapid_reentry:       Math.random() * 0.5 + 0.4,
-            automaticity:        Math.random() * 0.5 + 0.4,
-            dwell_collapse:      Math.random() * 0.5 + 0.4,
-            rewatch:             Math.random() * 0.5 + 0.4,
-            environment:         Math.random() * 0.5 + 0.4,
+            rapid_reentry: Math.random() * 0.5 + 0.4,
+            automaticity: Math.random() * 0.5 + 0.4,
+            dwell_collapse: Math.random() * 0.5 + 0.4,
+            rewatch: Math.random() * 0.5 + 0.4,
+            environment: Math.random() * 0.5 + 0.4,
         },
     };
 
@@ -933,7 +933,7 @@ export default function ReeliApp() {
     }));
 
     const mockDays = Array.from({ length: 14 }, (_, i) => ({
-        d: ["M","T","W","T","F","S","S"][i % 7],
+        d: ["M", "T", "W", "T", "F", "S", "S"][i % 7],
         n: i + 8,
         v: parseFloat((avgSt * 0.7 + Math.random() * 0.3).toFixed(2)),
         s: Math.floor(2 + Math.random() * 5),
@@ -978,9 +978,9 @@ export default function ReeliApp() {
                 {/* Tab bar */}
                 <div className="tab-bar">
                     {[
-                        { id: "home",      icon: Eye,      label: "Monitor" },
+                        { id: "home", icon: Eye, label: "Monitor" },
                         { id: "dashboard", icon: BarChart2, label: "Dashboard" },
-                        { id: "settings",  icon: Settings,  label: "Settings" },
+                        { id: "settings", icon: Settings, label: "Settings" },
                     ].map(({ id, icon: Icon, label }) => (
                         <button key={id} className={`tab-item ${screen === id ? "active" : ""}`}
                             onClick={() => setScreen(id === "settings" ? "home" : id)}>

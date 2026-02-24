@@ -46,6 +46,10 @@ android {
 chaquopy {
     defaultConfig {
         version = "3.8"
+        pyc {
+            src = false
+            pip = false
+        }
         pip {
             install("numpy")
             install("pandas")

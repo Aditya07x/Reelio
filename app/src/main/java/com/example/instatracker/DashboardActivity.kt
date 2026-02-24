@@ -105,8 +105,8 @@ class DashboardActivity : ComponentActivity() {
                             }
                             val csvContent = csvFile.readText()
                             val py = Python.getInstance()
-                            val hmmModule = py.getModule("hmm")
-                            val result = hmmModule.callAttr("run_hmm_from_string", csvContent).toString()
+                            val hmmModule = py.getModule("reelio_alse")
+                            val result = hmmModule.callAttr("run_dashboard_payload", csvContent).toString()
                             // Cache it for next time
                             hmmFile.writeText(result)
                             result

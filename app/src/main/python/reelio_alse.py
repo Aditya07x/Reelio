@@ -1141,6 +1141,7 @@ def run_dashboard_payload(csv_data: str, state_path: str = None) -> str:
     
     results = []
     p_capture_timeline = []
+    session_circadian = []
     
     for sess_id, s_df in sessions:
         try:
@@ -1174,11 +1175,33 @@ def run_dashboard_payload(csv_data: str, state_path: str = None) -> str:
             })
             
             p_capture_timeline.extend(gamma[:, 1].round(3).tolist())
+            
+            # Extract hour to build physiological circadian mapping for the frontend 24h graph
+            try:
+                hour = pd.to_datetime(s_df['StartTime'].iloc[0]).hour if 'StartTime' in s_df.columns else 12
+            except:
+                hour = 12
+            session_circadian.append({'h': hour, 'doom': mean_gamma_1})
+            
         except Exception as e:
             continue
             
     regime_stability = 1.0 / (1.0 - model.A[1, 1]) if (1.0 - model.A[1, 1]) > 1e-5 else 999.0
     
+    # Aggregate actuals into the 12 2-hour buckets expected by the React CircadianMap frontend
+    df_circ = pd.DataFrame(session_circadian) if session_circadian else pd.DataFrame(columns=['h', 'doom'])
+    circadian_map = []
+    baseline_curve = [0.72, 0.75, 0.81, 0.7, 0.62, 0.4, 0.21, 0.19, 0.18, 0.2, 0.24, 0.3, 0.38, 0.4, 0.44, 0.4, 0.35, 0.45, 0.58, 0.65, 0.76, 0.82, 0.89, 0.8]
+    
+    for h in range(0, 24, 2):
+        # We merge the hour and the next hour natively to smooth the 12-point AreaChart graph curve 
+        mask = df_circ['h'].isin([h, h+1])
+        if len(df_circ) > 0 and mask.any():
+            val = float(df_circ[mask]['doom'].mean())
+        else:
+            val = baseline_curve[h]
+        circadian_map.append({'h': f"{h:02d}", 'doom': round(val, 2)})
+        
     output_payload = {
         "model_parameters": {
             "transition_matrix": model.A.tolist(),
@@ -1188,6 +1211,7 @@ def run_dashboard_payload(csv_data: str, state_path: str = None) -> str:
         "timeline": {
             "p_capture": p_capture_timeline
         },
+        "circadian": circadian_map,
         "model_confidence": float(model.compute_model_confidence())
     }
     return json.dumps(output_payload)
