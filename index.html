@@ -2267,6 +2267,178 @@
       border-color: rgba(236, 72, 153, 0.2);
       color: rgba(236, 72, 153, 0.8);
     }
+
+    /* ─── LIVELY WRAPPED THEME OVERRIDES ───────────────────────── */
+    :root {
+      --doom: #ff4f9f;
+      --doom-glow: rgba(255, 79, 159, 0.34);
+      --doom-dim: rgba(255, 79, 159, 0.14);
+      --casual: #2dd4ff;
+      --casual-glow: rgba(45, 212, 255, 0.36);
+      --casual-dim: rgba(45, 212, 255, 0.14);
+      --amber: #fbbf24;
+      --amber-glow: rgba(251, 191, 36, 0.32);
+      --bg: #160b3b;
+      --bg2: #2b1761;
+      --bg3: #4e1f86;
+      --border: rgba(255, 255, 255, 0.2);
+      --border-bright: rgba(255, 255, 255, 0.34);
+      --text: #fff8ff;
+      --text-dim: #d7d0ff;
+      --text-muted: #b9adef;
+      --mint: #34d399;
+      --lavender: #a78bfa;
+    }
+
+    body {
+      background:
+        radial-gradient(circle at 15% 16%, rgba(251, 191, 36, 0.24), transparent 34%),
+        radial-gradient(circle at 82% 20%, rgba(45, 212, 255, 0.24), transparent 35%),
+        radial-gradient(circle at 28% 80%, rgba(244, 114, 182, 0.24), transparent 44%),
+        linear-gradient(130deg, #1d0d4b 0%, #4d1f85 42%, #8f246d 74%, #fb7185 100%);
+      background-attachment: fixed;
+    }
+
+    body::before {
+      background:
+        repeating-linear-gradient(0deg,
+          transparent,
+          transparent 3px,
+          rgba(255, 255, 255, 0.015) 3px,
+          rgba(255, 255, 255, 0.015) 6px);
+      mix-blend-mode: soft-light;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      background:
+        radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 28%);
+    }
+
+    .wrapper {
+      position: relative;
+    }
+
+    .wrapper::before {
+      content: '';
+      position: absolute;
+      inset: -20px -40px;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(255, 255, 255, 0.06), transparent 32%),
+        radial-gradient(circle at 80% 80%, rgba(52, 211, 153, 0.1), transparent 36%);
+      filter: blur(20px);
+      z-index: -1;
+      pointer-events: none;
+      animation: float-wrap 13s ease-in-out infinite alternate;
+    }
+
+    nav {
+      background: rgba(56, 28, 120, 0.72);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.28);
+      box-shadow: 0 10px 24px rgba(18, 6, 52, 0.35);
+    }
+
+    .nav-logo {
+      color: #7dd3fc;
+      text-shadow: 0 0 18px rgba(125, 211, 252, 0.5), 0 0 30px rgba(244, 114, 182, 0.25);
+    }
+
+    .hero-title .glitch {
+      color: #67e8f9;
+      text-shadow: 0 0 26px rgba(103, 232, 249, 0.5), 0 0 48px rgba(251, 191, 36, 0.3);
+    }
+
+    .hero-subtitle {
+      color: rgba(243, 232, 255, 0.9);
+      letter-spacing: 7px;
+    }
+
+    .stat-pill,
+    .arch-node,
+    .layer-item,
+    .hmm-diagram-wrap,
+    .reelio-card,
+    .glass-card {
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05)) !important;
+      border: 1px solid rgba(255, 255, 255, 0.3) !important;
+      box-shadow: 0 12px 32px rgba(22, 9, 56, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
+    }
+
+    .stat-pill:hover,
+    .arch-node:hover,
+    .layer-item:hover,
+    .reelio-card:hover,
+    .glass-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 18px 36px rgba(22, 9, 56, 0.5), 0 0 22px rgba(167, 139, 250, 0.24);
+      border-color: rgba(255, 255, 255, 0.42) !important;
+    }
+
+    .btn-primary {
+      background: linear-gradient(95deg, #22d3ee, #818cf8, #f472b6);
+      color: #160b3b;
+      border: none;
+      box-shadow: 0 12px 28px rgba(129, 140, 248, 0.45);
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.07);
+      transform: translateY(-2px);
+    }
+
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.34);
+      color: #fff;
+    }
+
+    .btn-ghost:hover {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(255, 255, 255, 0.48);
+    }
+
+    .section-title span,
+    .section-label,
+    .node-icon,
+    .layer-num {
+      color: #fde047 !important;
+      text-shadow: 0 0 16px rgba(253, 224, 71, 0.35);
+    }
+
+    .hero,
+    section {
+      position: relative;
+      isolation: isolate;
+    }
+
+    .hero::after,
+    section::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(125deg, rgba(255, 255, 255, 0.03), transparent 46%, rgba(255, 255, 255, 0.06));
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .reveal.visible {
+      filter: saturate(1.12);
+    }
+
+    @keyframes float-wrap {
+      0% {
+        transform: translateY(6px) scale(1);
+      }
+
+      100% {
+        transform: translateY(-8px) scale(1.03);
+      }
+    }
   </style>
 </head>
 
@@ -4115,7 +4287,7 @@
           if (dist < 120) {
             const alpha = (1 - dist / 120) * 0.3;
             const bothDoom = nodes[i].doom && nodes[j].doom;
-            const color = bothDoom ? `rgba(255,45,45,${alpha})` : `rgba(0,229,255,${alpha * 0.7})`;
+            const color = bothDoom ? `rgba(255,102,163,${alpha})` : `rgba(34,211,238,${alpha * 0.9})`;
             ctx.beginPath();
             ctx.moveTo(nodes[i].x, nodes[i].y);
             ctx.lineTo(nodes[j].x, nodes[j].y);
@@ -4129,7 +4301,10 @@
       nodes.forEach(n => {
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-        ctx.fillStyle = n.doom ? 'rgba(255,45,45,0.6)' : 'rgba(0,229,255,0.5)';
+        const pulse = (Math.sin((frame + n.x + n.y) * 0.02) + 1) / 2;
+        ctx.fillStyle = n.doom
+          ? `rgba(255,102,163,${0.4 + pulse * 0.4})`
+          : `rgba(45,212,191,${0.35 + pulse * 0.35})`;
         ctx.fill();
       });
 
@@ -4140,6 +4315,26 @@
     initNodes();
     drawNeural();
     window.addEventListener('resize', () => { resize(); initNodes(); });
+
+    // ─── POINTER GLOW + LIGHT PARALLAX ────────────────────
+    document.addEventListener('mousemove', e => {
+      const x = (e.clientX / window.innerWidth) * 100;
+      const y = (e.clientY / window.innerHeight) * 100;
+      document.body.style.setProperty('--mx', `${x}%`);
+      document.body.style.setProperty('--my', `${y}%`);
+    });
+
+    document.querySelectorAll('.stat-pill, .arch-node, .layer-item').forEach(card => {
+      card.addEventListener('mousemove', e => {
+        const rect = card.getBoundingClientRect();
+        const px = ((e.clientX - rect.left) / rect.width - 0.5) * 10;
+        const py = ((e.clientY - rect.top) / rect.height - 0.5) * 10;
+        card.style.boxShadow = `${-px}px ${-py}px 26px rgba(255,255,255,0.08), 0 16px 34px rgba(22,9,56,0.45)`;
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.boxShadow = '';
+      });
+    });
 
     // ─── LAYER ACCORDION ─────────────────────────────
     function toggleLayer(el) {
