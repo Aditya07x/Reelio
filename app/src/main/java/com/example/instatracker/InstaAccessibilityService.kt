@@ -192,7 +192,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             "ScrollIntervalCV,ScrollBurstDuration,InterBurstRestDuration,ScrollRhythmEntropy," +
             "UniqueAudioCount,RepeatContentFlag,ContentRepeatRate," +
             "CircadianPhase,SleepProxyScore,EstimatedSleepDurationH,ConsistencyScore,IsWeekend," +
-            "PostSessionRating,IntendedAction,ActualVsIntendedMatch,RegretScore,MoodBefore,MoodAfter,MoodDelta\n"
+            "PostSessionRating,IntendedAction,ActualVsIntendedMatch,RegretScore,MoodBefore,MoodAfter,MoodDelta,SleepStart,SleepEnd\n"
     }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
@@ -505,7 +505,11 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         batteryLevelEnd = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val batteryDelta = if (batteryLevelStart != -1 && batteryLevelEnd != -1) batteryLevelStart - batteryLevelEnd else 0
 
-            val line = listOf(
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val sleepStart = prefs.getInt("sleep_start_hour", 23)
+        val sleepEnd = prefs.getInt("sleep_end_hour", 7)
+
+        val line = listOf(
             currentSessionNumber, reelCount, formStart, formEnd,
             String.format("%.2f", dwellSec), getTimePeriod(),
             String.format("%.2f", avgSpeed), String.format("%.2f", maxSpeed),
@@ -531,7 +535,8 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             String.format("%.4f", scrollIntervalCV), scrollBurstDuration, interBurstRestDuration, String.format("%.4f", scrollRhythmEntropy),
             uniqueAudioTracks.size, 0, 0f, // Repeat content placeholders
             String.format("%.4f", circadianPhase), String.format("%.2f", sleepProxyScore), String.format("%.1f", estimatedSleepDurationH), String.format("%.2f", consistencyScore), if (isWeekend) 1 else 0,
-            microprobeResults.joinToString(",")
+            microprobeResults.joinToString(","),
+            sleepStart, sleepEnd
         ).joinToString(",")
         
         appendToCsv(line)

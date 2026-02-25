@@ -51,8 +51,9 @@ REQUIRED_COLUMNS = [
     "InteractionRate", "InteractionBurstiness", "LikeStreakLength", "InteractionDropoff", "SavedWithoutLike", "CommentAbandoned",
     "ScrollIntervalCV", "ScrollBurstDuration", "InterBurstRestDuration", "ScrollRhythmEntropy",
     "UniqueAudioCount", "RepeatContentFlag", "ContentRepeatRate",
-    "CircadianPhase", "SleepProxyScore", "ConsistencyScore", "IsWeekend",
-    "PostSessionRating", "IntendedAction", "ActualVsIntendedMatch", "RegretScore", "MoodBefore", "MoodAfter", "MoodDelta"
+    "CircadianPhase", "SleepProxyScore", "EstimatedSleepDurationH", "ConsistencyScore", "IsWeekend",
+    "PostSessionRating", "IntendedAction", "ActualVsIntendedMatch", "RegretScore", "MoodBefore", "MoodAfter", "MoodDelta",
+    "SleepStart", "SleepEnd"
 ]
 
 class SchemaError(Exception):
@@ -79,7 +80,9 @@ def preprocess_session(df):
         'MoodDelta': 0.0,
         'TimeSinceLastSessionMin': 60.0,
         'DayOfWeek': 0.0,
-        'StartTime': '2026-01-01T12:00:00Z'
+        'StartTime': '2026-01-01T12:00:00Z',
+        'SleepStart': 23,
+        'SleepEnd': 7
     }
     for col, val in defaults.items():
         if col not in df.columns:
@@ -98,7 +101,10 @@ def preprocess_session(df):
     if 'swipe_incomplete' not in df.columns:
         df['swipe_incomplete'] = 1.0 - (df['SwipeCompletionRatio'] if 'SwipeCompletionRatio' in df.columns else 1.0)
         
-    df.fillna(0, inplace=True)
+    num_cols = df.select_dtypes(include=[np.number]).columns
+    df[num_cols] = df[num_cols].fillna(0)
+    str_cols = df.select_dtypes(include=['object', 'string']).columns
+    df[str_cols] = df[str_cols].fillna("")
     return df
 
 class UserBaseline:
@@ -332,8 +338,22 @@ class DoomScorer:
         chrge = session_df['IsCharging'].iloc[0] if 'IsCharging' in session_df else 0
         phase = session_df['CircadianPhase'].iloc[0] if 'CircadianPhase' in session_df else 0.5
         
+        sleep_start = int(session_df['SleepStart'].iloc[0]) if 'SleepStart' in session_df.columns else 23
+        sleep_end   = int(session_df['SleepEnd'].iloc[0])   if 'SleepEnd'   in session_df.columns else 7
+
+        try:
+            hour = pd.to_datetime(session_df['StartTime'].iloc[0]).hour
+        except:
+            hour = 12
+
+        if sleep_start > sleep_end:
+            in_sleep_window = (hour >= sleep_start) or (hour < sleep_end)
+        else:
+            in_sleep_window = (sleep_start <= hour < sleep_end)
+
         is_dark_rm = 1.0 if (lux < 15 and (phase > 0.75 or phase < 0.25)) else 0.0
-        c_env = 0.4 * is_dark_rm + 0.4 * chrge + 0.2 * (lux < 5)
+        sleep_penalty = 1.0 if in_sleep_window else 0.0
+        c_env = 0.25 * is_dark_rm + 0.25 * float(chrge) + 0.10 * float(lux < 5) + 0.40 * sleep_penalty
         
         ds = (
             0.25 * c_length +
@@ -1090,7 +1110,17 @@ def run_dashboard_payload(csv_data: str, state_path: str = None) -> str:
     try:
         lines = csv_data.split('\n')
         if lines and lines[0].startswith("SCHEMA_VERSION="):
-            csv_data = '\n'.join(lines[1:])
+            lines = lines[1:]
+            
+        # Dynamically fix schema mismatches (e.g., 94 columns vs 96 columns)
+        # by forcing the header to always be the REQUIRED_COLUMNS.
+        # Pandas will automatically pad older, shorter rows with NaN.
+        if lines:
+            header_cols = lines[0].split(',')
+            if len(header_cols) < len(REQUIRED_COLUMNS):
+                lines[0] = ','.join(REQUIRED_COLUMNS)
+                
+        csv_data = '\n'.join(lines)
         df = pd.read_csv(io.StringIO(csv_data))
     except Exception as e:
         return json.dumps({"error": f"CSV parse error: {str(e)}", "sessions": []})
@@ -1123,13 +1153,15 @@ def run_dashboard_payload(csv_data: str, state_path: str = None) -> str:
             prev_gamma = gamma
             
             mean_gamma_1 = float(np.mean(gamma[:, 1]))
-            dom_state = 1 if mean_gamma_1 > 0.5 else 0
+            doom_reel_fraction = float(np.mean(gamma[:, 1] > 0.5))
+            dom_state = 1 if doom_reel_fraction > 0.20 else 0
+            S_t_reported = doom_reel_fraction
             
             time_period = s_df['TimePeriod'].iloc[0] if 'TimePeriod' in s_df.columns else "Unknown"
             
-            if 'SessionStart' in s_df.columns:
-                date_str = pd.to_datetime(s_df['SessionStart'], unit='ms').dt.strftime('%m-%d').iloc[0]
-            else:
+            try:
+                date_str = pd.to_datetime(s_df['StartTime'].iloc[0]).strftime('%m-%d')
+            except:
                 date_str = "Unknown"
             
             avg_dwell = float(s_df['DwellTime'].mean()) if 'DwellTime' in s_df.columns else float(np.exp(s_df['log_dwell']).mean())
@@ -1145,7 +1177,7 @@ def run_dashboard_payload(csv_data: str, state_path: str = None) -> str:
             
             results.append({
                 "sessionNum":          str(sess_id),
-                "S_t":                 mean_gamma_1,
+                "S_t":                 S_t_reported,
                 "dominantState":       dom_state,
                 "nReels":              len(s_df),
                 "avgDwell":            avg_dwell,

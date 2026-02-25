@@ -358,7 +358,7 @@ const HomeScreen = ({ onNav, SESSION, LIVE, isServiceActive }) => {
                     {[
                         { label: "Total Sessions", value: SESSION.sessions_today },
                         { label: "Doom Sessions", value: SESSION.total_doom_sessions },
-                        { label: "Interactions", value: SESSION.total_interactions }
+                        { label: "Interactions · Today", value: SESSION.total_interactions }
                     ].map((item, i) => (
                         <div key={item.label} style={{ padding: "12px 10px", textAlign: "center", borderRight: i < 2 ? `1px solid ${D.border}` : "none" }}>
                             <Label style={{ fontSize: 9, display: "block", marginBottom: 4 }}>{item.label}</Label>
@@ -547,7 +547,7 @@ const DashboardScreen = ({ SESSION, REELS_DATA, DAYS_14 }) => {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
                     <div>
                         <Label>Cognitive Stability Index</Label>
-                        <div style={{ fontSize: 13, color: D.text, marginTop: 4, fontWeight: 600 }}>Neural Load Assessment</div>
+                        <div style={{ fontSize: 13, color: D.text, marginTop: 4, fontWeight: 600 }}>Neural Load Assessment · Last Session</div>
                     </div>
                     <Tag label={SESSION.doom_label} />
                 </div>
@@ -555,7 +555,7 @@ const DashboardScreen = ({ SESSION, REELS_DATA, DAYS_14 }) => {
                     <DoomGauge value={SESSION.S_t} label={SESSION.doom_label === "DOOM" ? "CRITICAL" : SESSION.doom_label === "BORDERLINE" ? "MODERATE" : "STABLE"} />
                     <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9 }}>
                         {[
-                            { label: "Capture Rate", v: `${Math.round(SESSION.S_t * 100)}%`, col: D.doomMag },
+                            { label: "Capture Rate · All-Time", v: `${Math.round(SESSION.S_t * 100)}%`, col: D.doomMag },
                             { label: "Doom Inertia", v: `${Math.round(SESSION.A[1][1] * 100)}%`, col: D.doom },
                             { label: "Escape Rate", v: `${Math.round(SESSION.A[1][0] * 100)}%`, col: D.safe },
                             { label: "Pull Index", v: `${SESSION.doom_pull_index}×`, col: D.warn },
@@ -735,7 +735,7 @@ const DashboardScreen = ({ SESSION, REELS_DATA, DAYS_14 }) => {
 
             {/* ── Doom Score Anatomy ── */}
             <div className="card" style={{ marginBottom: 10, overflow: "hidden" }}>
-                <button onClick={() => toggle("anatomy")} style={{
+                <button className="ripple-surface" onClick={() => toggle("anatomy")} style={{
                     width: "100%", padding: "14px 16px",
                     background: "none", border: "none", cursor: "pointer",
                     display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1075,7 +1075,7 @@ export default function ReeliApp() {
                         { id: "dashboard", icon: BarChart2, label: "Dashboard" },
                         { id: "settings", icon: Settings, label: "Settings" },
                     ].map(({ id, icon: Icon, label }) => (
-                        <button key={id} className={`tab-item ${screen === id ? "active" : ""}`}
+                        <button key={id} className={`tab-item ripple-surface ${screen === id ? "active" : ""}`}
                             onClick={() => setScreen(id)}>
                             <Icon size={20} />
                             <span>{label}</span>

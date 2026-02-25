@@ -350,6 +350,38 @@
       border-radius: 3px;
       transition: width 1s ease
     }
+
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .ripple-surface {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ripple-surface::after {
+      content: "";
+      display: block;
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      background-image: radial-gradient(circle, rgba(255, 255, 255, 0.4) 10%, transparent 10.01%);
+      background-repeat: no-repeat;
+      background-position: 50%;
+      transform: scale(10, 10);
+      opacity: 0;
+      transition: transform .5s, opacity 1s;
+    }
+
+    .ripple-surface:active::after {
+      transform: scale(0, 0);
+      opacity: 1;
+      transition: 0s;
+    }
   </style>
 </head>
 
@@ -664,7 +696,7 @@
               e(DoomGauge, { value: S.intervention_score, label: riskText(S.intervention_score) })
             ),
             e("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderTop: "1px solid " + D.border } },
-              [{ label: "Total Sessions", value: S.sessions_today }, { label: "Doom Sessions", value: S.total_doom_sessions }, { label: "Interactions", value: S.total_interactions }].map(function (it, i) {
+              [{ label: "Total Sessions", value: S.sessions_today }, { label: "Doom Sessions", value: S.total_doom_sessions }, { label: "Interactions · Today", value: S.total_interactions }].map(function (it, i) {
                 return e("div", { key: it.label, style: { padding: "12px 10px", textAlign: "center", borderRight: i < 2 ? "1px solid " + D.border : "none" } },
                   e(Label, { style: { fontSize: 9, display: "block", marginBottom: 4 } }, it.label),
                   e("div", { className: "spacemono", style: { fontSize: 18, fontWeight: 700, color: "#fff" } }, it.value)
@@ -795,14 +827,14 @@
             e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 } },
               e("div", null,
                 e(Label, null, "Cognitive Stability Index"),
-                e("div", { style: { fontSize: 13, color: D.text, marginTop: 4, fontWeight: 600 } }, "Neural Load Assessment")
+                e("div", { style: { fontSize: 13, color: D.text, marginTop: 4, fontWeight: 600 } }, "Neural Load Assessment · Last Session")
               ),
               e(Tag, { label: S.doom_label })
             ),
             e("div", { style: { display: "flex", alignItems: "center", gap: 16 } },
               e(DoomGauge, { value: 1.0 - S.S_t, customColor: riskColor(S.S_t), label: riskText(S.S_t) }),
               e("div", { style: { flex: 1, display: "flex", flexDirection: "column", gap: 9 } },
-                [{ label: "Capture Rate", v: Math.round(S.capture_rate * 100) + "%", col: D.doomMag },
+                [{ label: "Capture Rate · All-Time", v: Math.round(S.capture_rate * 100) + "%", col: D.doomMag },
                 { label: "Doom Inertia", v: Math.round(S.A[1][1] * 100) + "%", col: D.doom },
                 { label: "Escape Rate", v: Math.round(S.A[1][0] * 100) + "%", col: D.safe },
                 { label: "Pull Index", v: S.doom_pull_index + "x", col: D.warn }
@@ -1000,6 +1032,7 @@
                 var isExpanded = exp === "anatomy_" + it.k;
                 return e("div", {
                   key: it.k,
+                  className: "ripple-surface",
                   onClick: function () { tog(isExpanded ? null : "anatomy_" + it.k); },
                   style: { marginBottom: 14, cursor: "pointer" }
                 },
@@ -1198,23 +1231,88 @@
          SETUP / ERROR SCREEN
       ───────────────────────────────────────────────────────────────── */
       function SetupScreen(p) {
-        return e("div", { style: { minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: D.bg, padding: 32, gap: 20 } },
-          e("div", { style: { width: 64, height: 64, borderRadius: "50%", background: D.safe + "15", border: "1px solid " + D.safe + "44", display: "flex", alignItems: "center", justifyContent: "center" } },
-            e(Ico, { name: "Shield", size: 28, color: D.safe })
-          ),
-          e("div", { style: { fontSize: 24, fontWeight: 800, color: "#fff", textAlign: "center" } }, "Reelio"),
-          e("div", { className: "mono", style: { fontSize: 10, color: D.safe, letterSpacing: "0.3em", textAlign: "center" } }, "SETUP REQUIRED"),
-          e("div", { className: "card", style: { width: "100%", padding: 20 } },
-            e("div", { style: { fontSize: 14, fontWeight: 700, color: D.text, marginBottom: 12 } }, "Getting Started"),
-            ["1. Settings → Accessibility → Installed Services", "2. Enable \"Reelio Tracker\"", "3. Open Instagram and scroll Reels", "4. Return here to see your data"].map(function (s, i) {
-              return e("div", { key: i, style: { display: "flex", gap: 10, marginBottom: 10 } },
-                e("div", { className: "mono", style: { fontSize: 11, color: D.safe, flexShrink: 0 } }, s.slice(0, 2)),
-                e("div", { style: { fontSize: 13, color: D.muted } }, s.slice(3))
-              );
+        var ps = useState({ x: -80, y: 20, r: 0, s: 1 }), pos = ps[0], setPos = ps[1];
+        var sps = useState(false), spark = sps[0], setSpark = sps[1];
+        var opS = useState(0), opacity = opS[0], setOpacity = opS[1];
+        var puls = useState(false), gridPulse = puls[0], setGridPulse = puls[1];
+
+        useEffect(function () {
+          var t0 = setTimeout(function () { setOpacity(0.35); setPos({ x: -30, y: 0, r: 0, s: 1 }); }, 100);
+          var t1 = setTimeout(function () { setPos({ x: -10, y: -4, r: 3, s: 1 }); }, 1500);
+          var t2 = setTimeout(function () { setPos({ x: -10, y: 0, r: 4, s: 0.95 }); }, 2200);
+          var t3 = setTimeout(function () {
+            setPos({ x: -35, y: -2, r: -4, s: 1 });
+            setSpark(true);
+            setGridPulse(true);
+          }, 2500);
+          var t4 = setTimeout(function () {
+            setSpark(false);
+            setGridPulse(false);
+            setPos({ x: -15, y: 0, r: 0, s: 1 });
+          }, 2650);
+          var t5 = setTimeout(function () { setPos({ x: 20, y: 30, r: 6, s: 1 }); }, 3200);
+          var t6 = setTimeout(function () { setOpacity(0); }, 4000);
+
+          return function () { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); clearTimeout(t6); };
+        }, []);
+
+        var transDur = pos.x === -35 ? "0.1s" : "1.2s";
+
+        return e("div", { style: { minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: gridPulse ? "#06141a" : D.bg, padding: 32, gap: 20, position: "relative", overflow: "hidden", transition: "background 0.3s ease" } },
+
+          /* Background Grid */
+          e("div", {
+            style: {
+              position: "absolute", inset: 0, pointerEvents: "none",
+              backgroundImage: "linear-gradient(" + D.safe + "15 1px, transparent 1px), linear-gradient(90deg, " + D.safe + "15 1px, transparent 1px)",
+              backgroundSize: "30px 30px",
+              opacity: gridPulse ? 0.6 : 0.15,
+              transition: "opacity 0.2s ease"
+            }
+          }),
+
+          /* Primitive Dinosaur */
+          e("div", {
+            style: {
+              position: "absolute", left: "20%", top: "40%", pointerEvents: "none", zIndex: 0,
+              transform: "translate(" + pos.x + "px, " + pos.y + "px) rotate(" + pos.r + "deg) scaleY(" + pos.s + ")",
+              opacity: opacity,
+              filter: "drop-shadow(0 0 6px " + D.safe + ")",
+              transitionProperty: "transform, opacity",
+              transitionDuration: transDur + ", 1.5s",
+              transitionTimingFunction: pos.x === -35 ? "cubic-bezier(0.1, 0.9, 0.2, 1)" : "ease-out"
+            }
+          },
+            e("svg", { width: 30, height: 30, viewBox: "0 0 24 24", fill: "none", stroke: D.safe, strokeWidth: 1.5, strokeLinejoin: "miter", style: { display: "block" } },
+              e("path", { d: "M2 18h2v-2h2v-2h2v-4h2v-2h2v-2h4v2h2v2h2v4h-2v2h-2v2h-2v2M8 18v4M12 18v4M16 10h2" })
+            ),
+            spark && e("div", {
+              style: {
+                position: "absolute", left: -8, top: 4, width: 14, height: 14, borderRadius: "50%",
+                background: D.safe, filter: "blur(4px)", animation: "ping-slow 0.3s ease-out forwards"
+              }
             })
           ),
-          e("button", { className: "btn-primary", onClick: function () { window.Android && window.Android.enableAccessibility && window.Android.enableAccessibility(); } }, "Enable Accessibility Service"),
-          p.message && e("div", { style: { fontSize: 12, color: D.muted, textAlign: "center", lineHeight: 1.6, marginTop: 4 } }, p.message)
+
+          e("div", { style: { position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 20, width: "100%" } },
+            e("div", { style: { width: 64, height: 64, borderRadius: "50%", background: D.safe + "15", border: "1px solid " + D.safe + "44", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: gridPulse ? "0 0 20px " + D.safe + "44" : "none", transition: "box-shadow 0.3s ease" } },
+              e(Ico, { name: "Shield", size: 28, color: D.safe })
+            ),
+            e("div", { style: { fontSize: 24, fontWeight: 800, color: "#fff", textAlign: "center" } }, "Reelio"),
+            e("div", { className: "mono", style: { fontSize: 10, color: D.safe, letterSpacing: "0.3em", textAlign: "center" } }, "SETUP REQUIRED"),
+            e("div", { className: "card", style: { width: "100%", padding: 20, position: "relative" } },
+              e("div", { style: { position: "absolute", left: -1, top: 0, bottom: 0, width: 2, background: gridPulse ? D.safe : "transparent", transition: "background 0.1s" } }),
+              e("div", { style: { fontSize: 14, fontWeight: 700, color: D.text, marginBottom: 12 } }, "Getting Started"),
+              ["1. Settings → Accessibility → Installed Services", "2. Enable \"Reelio Tracker\"", "3. Open Instagram and scroll Reels", "4. Return here to see your data"].map(function (s, i) {
+                return e("div", { key: i, style: { display: "flex", gap: 10, marginBottom: 10 } },
+                  e("div", { className: "mono", style: { fontSize: 11, color: D.safe, flexShrink: 0 } }, s.slice(0, 2)),
+                  e("div", { style: { fontSize: 13, color: D.muted } }, s.slice(3))
+                );
+              })
+            ),
+            e("button", { className: "btn-primary ripple-surface", onClick: function () { window.Android && window.Android.enableAccessibility && window.Android.enableAccessibility(); } }, "Enable Accessibility Service"),
+            p.message && e("div", { style: { fontSize: 12, color: D.muted, textAlign: "center", lineHeight: 1.6, marginTop: 4 } }, p.message)
+          )
         );
       }
 
@@ -1392,7 +1490,7 @@
             /* Tab bar */
             e("div", { className: "tab-bar" },
               tabs.map(function (tab) {
-                return e("button", { key: tab.id, className: "tab-item" + (screen === tab.id ? " active" : ""), onClick: function () { setScreen(tab.id); } },
+                return e("button", { key: tab.id, className: "tab-item ripple-surface" + (screen === tab.id ? " active" : ""), onClick: function () { setScreen(tab.id); } },
                   e(Ico, { name: tab.icon, size: 20, color: screen === tab.id ? D.safe : D.muted }),
                   e("span", null, tab.label)
                 );
