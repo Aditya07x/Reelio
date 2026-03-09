@@ -51,6 +51,22 @@
       margin: 0 auto;
     }
 
+    /* Prevent Android long-press text selection on display UI */
+    .app-shell,
+    .app-shell * {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    .app-shell input,
+    .app-shell textarea,
+    .app-shell select {
+      -webkit-user-select: text;
+      user-select: text;
+      -webkit-touch-callout: default;
+    }
+
     /* Cyber grid */
     .app-shell::before {
       content: '';
@@ -418,6 +434,14 @@
         borderDanger: "rgba(255, 45, 85, 0.35)"
       };
 
+      var RH = {
+        screenHome: "0 16px 24px",
+        screenStandard: "16px 16px 32px",
+        section: 16,
+        card: 12,
+        cardHeader: 12
+      };
+
       class AppErrorBoundary extends React.Component {
         constructor(props) { super(props); this.state = { error: null }; }
         componentDidCatch(err) { this.setState({ error: err.toString() + "\n" + err.stack }); }
@@ -442,23 +466,23 @@
       };
 
       function riskLabel(st) {
-        return st > THRESHOLDS.doom ? "DOOM"
-          : st > THRESHOLDS.moderate ? "BORDERLINE"
+        return st >= THRESHOLDS.doom ? "DOOM"
+          : st >= THRESHOLDS.moderate ? "BORDERLINE"
             : "CASUAL";
       }
       function riskText(st) {
-        return st > THRESHOLDS.doom ? "CRITICAL RISK"
-          : st > THRESHOLDS.moderate ? "MODERATE RISK"
+        return st >= THRESHOLDS.doom ? "CRITICAL RISK"
+          : st >= THRESHOLDS.moderate ? "MODERATE RISK"
             : "LOW RISK";
       }
       function focusText(st) {
-        return st > THRESHOLDS.doom ? "LOW FOCUS"
-          : st > THRESHOLDS.moderate ? "MODERATE FOCUS"
+        return st >= THRESHOLDS.doom ? "LOW FOCUS"
+          : st >= THRESHOLDS.moderate ? "MODERATE FOCUS"
             : "HIGH FOCUS";
       }
       function riskColor(st) {
-        return st > THRESHOLDS.doom ? D.doom
-          : st > THRESHOLDS.moderate ? D.warn
+        return st >= THRESHOLDS.doom ? D.doom
+          : st >= THRESHOLDS.moderate ? D.warn
             : D.safe;
       }
 
@@ -482,7 +506,9 @@
         Moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z",
         Shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
         Wifi: "M5 12.55a11 11 0 0 1 14.08 0 M1.42 9a16 16 0 0 1 21.16 0 M8.53 16.11a6 6 0 0 1 6.95 0 M12 20h.01",
-        Battery: "M23 7h-2v10h2V7z M1 7h16v10H1V7z"
+        Battery: "M23 7h-2v10h2V7z M1 7h16v10H1V7z",
+        Bug: "M8 2l1.88 1.88M14.12 3.88L16 2M9 7.13v-1a3 3 0 1 1 6 0v1M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4",
+        Check: "M20 6L9 17l-5-5"
       };
 
       function Ico(p) {
@@ -602,11 +628,22 @@
       function SessionTopologyCanvas(p) {
         var data = p.data || [], height = p.height || 160;
         var cursor = p.cursor, setCursor = p.setCursor;
+        var sessionBoundaries = p.sessionBoundaries || [];
         var canvasRef = React.useRef(null);
         var [smoothWin, setSmoothWin] = React.useState(5);
 
-        var raw = data.map(function (d) { return d.p || 0; });
+        var raw = (data.length > 0 ? data : [{ p: 0 }]).map(function (d) {
+          var v = (d && typeof d.p === "number") ? d.p : 0;
+          return Math.max(0, Math.min(1, v));
+        });
         var smoothed = solveSmooth(raw, smoothWin);
+        var reelCount = raw.length;
+        var safeCursor = Math.max(0, Math.min(cursor || 0, Math.max(0, reelCount - 1)));
+        var topologyMode = sessionBoundaries.length > 0 ? "Cross-Session Reel Dynamics" : "Per-Reel Capture Dynamics";
+
+        React.useEffect(function () {
+          if (safeCursor !== (cursor || 0) && setCursor) setCursor(safeCursor);
+        }, [safeCursor, cursor, setCursor]);
 
         var momentum = "Stable";
         if (smoothed.length >= 5) {
@@ -634,6 +671,23 @@
             ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(PAD.l + gW, y); ctx.stroke();
           }
 
+          // Session boundary markers prevent cross-session smoothing from being misread as one long session.
+          if (smoothed.length > 1 && sessionBoundaries.length > 0) {
+            var sx = function (i) { return PAD.l + (i / (smoothed.length - 1)) * gW; };
+            ctx.strokeStyle = "rgba(13,223,242,0.25)";
+            ctx.setLineDash([3, 4]);
+            sessionBoundaries.forEach(function (b) {
+              var bi = Math.max(0, Math.min(smoothed.length - 1, b));
+              if (bi <= 0 || bi >= smoothed.length - 1) return;
+              var x = sx(bi);
+              ctx.beginPath();
+              ctx.moveTo(x, PAD.t);
+              ctx.lineTo(x, PAD.t + gH);
+              ctx.stroke();
+            });
+            ctx.setLineDash([]);
+          }
+
           // Area & Line
           if (smoothed.length > 1) {
             var getX = function (i) { return PAD.l + (i / (smoothed.length - 1)) * gW; };
@@ -658,16 +712,16 @@
             });
 
             // Cursor
-            var cx = getX(cursor), cy = getY(smoothed[cursor]);
+            var cx = getX(safeCursor), cy = getY(smoothed[safeCursor]);
             ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5;
             ctx.beginPath(); ctx.moveTo(cx, PAD.t); ctx.lineTo(cx, PAD.t + gH); ctx.stroke();
-            ctx.fillStyle = advRiskColor(smoothed[cursor], 1);
-            ctx.shadowBlur = 10; ctx.shadowColor = advRiskColor(smoothed[cursor], 0.6);
+            ctx.fillStyle = advRiskColor(smoothed[safeCursor], 1);
+            ctx.shadowBlur = 10; ctx.shadowColor = advRiskColor(smoothed[safeCursor], 0.6);
             ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill();
             ctx.shadowBlur = 0;
             ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
           }
-        }, [smoothed, cursor, smoothWin]);
+        }, [smoothed, safeCursor, smoothWin, sessionBoundaries]);
 
         var handleMove = function (e) {
           var c = canvasRef.current; if (!c) return;
@@ -675,33 +729,37 @@
           var x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
           var PAD_L = 30; var gW = rect.width - PAD_L - 10;
           var frac = Math.max(0, Math.min(1, (x - PAD_L) / gW));
-          setCursor(Math.round(frac * (data.length - 1)));
+          setCursor(Math.round(frac * (reelCount - 1)));
         };
 
         var low = smoothed.filter(function (v) { return v < MODEL_THRESHOLDS.moderateLabel; }).length;
-        var mid = smoothed.filter(function (v) { return v >= MODEL_THRESHOLDS.moderateLabel && v < MODEL_THRESHOLDS.circadianHigh; }).length;
+        var mid = smoothed.filter(function (v) { return v >= MODEL_THRESHOLDS.moderateLabel && v < THRESHOLDS.doom; }).length;
         var hi = smoothed.length - low - mid;
-        var pct = function (v) { return Math.round((v / smoothed.length) * 100); };
+        var pct = function (v) { return smoothed.length > 0 ? Math.round((v / smoothed.length) * 100) : 0; };
 
         return e("div", { className: "card", style: { padding: 16, background: "rgba(10,17,20,0.9)", border: "1px solid " + D.border, borderRadius: 16 } },
           e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 } },
             e("div", null,
               e(Label, { style: { fontSize: 9, display: "block" } }, "Session Topology"),
               e("div", { style: { display: "flex", alignItems: "center", gap: 6, marginTop: 2 } },
-                e("div", { className: "mono", style: { fontSize: 9, color: D.muted } }, "Per-Reel Capture Dynamics · " + data.length + " reels"),
+                e("div", { className: "mono", style: { fontSize: 9, color: D.muted } }, topologyMode + " · " + reelCount + " reels" + (sessionBoundaries.length > 0 ? " · " + (sessionBoundaries.length + 1) + " sessions" : "")),
                 e("div", {
                   className: "mono", style: {
-                    fontSize: 8, padding: "1px 6px", borderRadius: 4,
+                    fontSize: 8, padding: "2px 6px", borderRadius: 4,
+                    display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", lineHeight: 1,
                     background: momentum === "Rising" ? D.doom + "18" : momentum === "Falling" ? D.safe + "18" : D.muted + "18",
                     color: momentum === "Rising" ? D.doom : momentum === "Falling" ? D.safe : D.muted,
                     border: "1px solid " + (momentum === "Rising" ? D.doom + "33" : momentum === "Falling" ? D.safe + "33" : D.muted + "33")
                   }
-                }, momentum === "Rising" ? "▲ Rising" : momentum === "Falling" ? "▼ Falling" : "● Stable")
+                },
+                  e("span", { style: { lineHeight: 1 } }, momentum === "Rising" ? "▲" : momentum === "Falling" ? "▼" : "●"),
+                  e("span", { style: { lineHeight: 1 } }, momentum === "Rising" ? "Rising" : momentum === "Falling" ? "Falling" : "Stable")
+                )
               )
             ),
             e("div", { className: "mono", style: { textAlign: "right" } },
-              e("div", { style: { fontSize: 16, fontWeight: 700, color: advRiskColorHex(smoothed[cursor]) } }, Math.round(smoothed[cursor] * 100) + "%"),
-              e("div", { style: { fontSize: 8, color: D.muted } }, "REEL #" + (cursor + 1))
+              e("div", { style: { fontSize: 16, fontWeight: 700, color: advRiskColorHex(smoothed[safeCursor]) } }, Math.round(smoothed[safeCursor] * 100) + "%"),
+              e("div", { style: { fontSize: 8, color: D.muted } }, "REEL #" + (safeCursor + 1))
             )
           ),
           e("div", { style: { position: "relative", height: height } },
@@ -848,6 +906,7 @@
       ───────────────────────────────────────────────────────────────── */
       function HomeScreen(p) {
         var onNav = p.onNav, S = p.session, L = p.live, svc = p.isServiceActive;
+        var onEnableAccessibility = p.onEnableAccessibility;
 
         var timeSinceStr = "--:--:--";
         var ts1 = useState(Date.now()), now = ts1[0], setNow = ts1[1];
@@ -886,7 +945,7 @@
           }
         }
 
-        return e("div", { className: "slide-up", style: { padding: "0 16px 24px", position: "relative", zIndex: 1 } },
+        return e("div", { className: "slide-up", style: { padding: RH.screenHome, position: "relative", zIndex: 1 } },
 
           /* Status bar */
           e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 4px 0" } },
@@ -904,7 +963,7 @@
           ),
 
           /* Brand */
-          e("div", { style: { padding: "18px 0 18px", textAlign: "center", borderBottom: "1px solid " + D.border, marginBottom: 16 } },
+          e("div", { style: { padding: "18px 0 18px", textAlign: "center", borderBottom: "1px solid " + D.border, marginBottom: RH.section } },
             e("div", { style: { fontSize: 24, fontWeight: 800, letterSpacing: "0.06em", color: "#fff", lineHeight: 1 } },
               "REELIO ",
               e("span", { style: { color: D.safe + "44", fontWeight: 300, fontSize: 18 } }, "//"),
@@ -913,7 +972,7 @@
           ),
 
           /* Service card */
-          e("div", { className: "card", style: { padding: "14px 16px", marginBottom: 12 } },
+          e("div", { className: "card", style: { padding: "14px 16px", marginBottom: RH.card } },
             e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
               e("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
                 e("div", { style: { width: 36, height: 36, borderRadius: 10, background: (svc ? D.safe : D.doom) + "15", border: "1px solid " + (svc ? D.safe : D.doom) + "33", display: "flex", alignItems: "center", justifyContent: "center" } },
@@ -925,7 +984,14 @@
                 )
               ),
               !svc
-                ? e("button", { className: "btn-primary", style: { padding: "8px 14px", width: "auto", fontSize: 12 }, onClick: function () { window.Android && window.Android.enableAccessibility && window.Android.enableAccessibility(); } }, "Enable")
+                ? e("button", {
+                  className: "btn-primary",
+                  style: { padding: "8px 14px", width: "auto", fontSize: 12 },
+                  onClick: function () {
+                    if (onEnableAccessibility) onEnableAccessibility();
+                    else if (window.Android && window.Android.enableAccessibility) window.Android.enableAccessibility();
+                  }
+                }, "Enable")
                 : e("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
                   e("div", { style: { position: "relative", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center" } },
                     e("div", { style: { position: "absolute", width: 16, height: 16, borderRadius: "50%", background: D.safe + "33", animation: "ring-out 2s ease-in-out infinite" } }),
@@ -937,7 +1003,7 @@
           ),
 
           /* Doom probability gauge card */
-          e("div", { className: "card " + (S.doom_label === "DOOM" ? "card-danger" : ""), style: { marginBottom: 12, overflow: "hidden" } },
+          e("div", { className: "card " + (S.doom_label === "DOOM" ? "card-danger" : ""), style: { marginBottom: RH.card, overflow: "hidden" } },
             e("div", { style: { padding: "12px 16px", background: S.doom_label === "DOOM" ? "linear-gradient(90deg," + D.doom + "18,transparent)" : "linear-gradient(90deg," + D.safe + "10,transparent)", borderBottom: "1px solid " + (S.doom_label === "DOOM" ? D.borderDanger : D.border), display: "flex", justifyContent: "space-between", alignItems: "center" } },
               e("div", null,
                 e(Label, { style: { color: D.doom } }, "Capture Risk Score"),
@@ -960,7 +1026,7 @@
 
           /* Stats summary card (Last 10) */
           e("div", { style: { marginBottom: 6 } }, e(Label, { style: { paddingLeft: 2 } }, "10-Session Averages")),
-          e("div", { className: "card " + (S.doom_label === "DOOM" ? "card-doom" : ""), style: { padding: 0, marginBottom: 12, overflow: "hidden" } },
+          e("div", { className: "card " + (S.doom_label === "DOOM" ? "card-doom" : ""), style: { padding: 0, marginBottom: RH.card, overflow: "hidden" } },
             e("div", { style: { padding: "10px 16px", background: S.doom_label === "DOOM" ? "linear-gradient(90deg," + D.doomMag + "18,transparent)" : "linear-gradient(90deg," + D.safe + "10,transparent)", borderBottom: "1px solid " + (S.doom_label === "DOOM" ? D.borderDoom : D.border), display: "flex", justifyContent: "space-between", alignItems: "center" } },
               e(Label, null, "LATEST TRENDS"),
               e(Tag, { label: S.doom_label })
@@ -987,16 +1053,11 @@
             ].map(function (it) {
               return e("div", { key: it.label, className: "card", style: { padding: "12px 10px", textAlign: "center" } },
                 e("div", { className: "spacemono", style: { fontSize: 20, fontWeight: 700, color: it.col, textShadow: "0 0 12px " + it.col + "88" } }, it.value),
-                it.label === "Pull Index" && e("div", { className: "mono", style: { fontSize: 7, color: D.muted, marginTop: 2, lineHeight: 1.4, textAlign: "center" } }, "harder to escape\nthan enter"),
+                it.label === "Pull Index" && e("div", { className: "mono", style: { fontSize: 7, color: D.muted, marginTop: 2, lineHeight: 1.4, textAlign: "center" } }, "trap pressure vs\nrecovery"),
                 e(Label, { style: { marginTop: 3, display: "block", fontSize: 9 } }, it.label),
                 e("div", { style: { height: 2, width: 28, background: it.col + "55", borderRadius: 1, margin: "6px auto 0" } })
               );
             })
-          ),
-
-          e("button", { className: "btn-primary", onClick: function () { onNav("dashboard"); } },
-            "View Behavioral Dashboard ",
-            e(Ico, { name: "ChevronRight", size: 18, color: "#020A0A", style: { marginLeft: 6 } })
           )
         );
       }
@@ -1012,14 +1073,27 @@
         var cs = useState(null), cc = cs[0], setCc = cs[1];
         var cur = RD[rc] || RD[RD.length - 1] || { p: 0 };
 
-        var escapeRate = Math.max(0.01, S.A[1][0]);
+        // BUG FIX: Use session-level escape rate (sessA), not within-reel rate (A)
+        // A[1][0] is per-reel doom->casual transitions (mostly 1->1 within sessions, so very low)
+        // sessA[1][0] is session-level doom->casual transitions (what user actually cares about)
+        var escapeRate = Math.max(0.01, (S.sessA && S.sessA[1] ? S.sessA[1][0] : S.A[1][0]));
         var cd = (1 / escapeRate).toFixed(1);
         function tog(k) { setExp(exp === k ? null : k); }
 
         var avgRls = p.avgNReels ? Math.round(p.avgNReels) : 420;
 
+        // Derive exposure headline from observed days only (no zero-padding bias).
+        var observedD14 = D14.filter(function (d) { return d && d.hasData; });
+        var exposureAvg = observedD14.length
+          ? (observedD14.reduce(function (a, b) { return a + b.v; }, 0) / observedD14.length)
+          : 0;
+        var exposureRiskLabel = observedD14.length === 0
+          ? "Insufficient Data"
+          : (exposureAvg >= THRESHOLDS.doom ? "High Risk" : exposureAvg >= THRESHOLDS.moderate ? "Moderate Risk" : "Low Risk");
+        var exposureAvgPct = Math.round(exposureAvg * 100);
+
         /* Heatmap bar color */
-        function heatCol(v) { return v > 0.6 ? D.doomMag : v > 0.4 ? "#9333ea" : D.safe; }
+        function heatCol(v) { return v > 0.6 ? D.doomMag : v > 0.4 ? D.warn : D.safe; }
 
         /* Circadian Stats Computation (Global Historical Model) */
         var circData = (p && Array.isArray(p.circadian)) ? p.circadian : [];
@@ -1049,22 +1123,22 @@
         var actualCc = cc !== null ? cc : peakCc;
         var curCirc = circData[actualCc] || circData[0] || { h: "00", doom: 0 };
 
-        return e("div", { className: "slide-up", style: { padding: "16px 16px 32px", position: "relative", zIndex: 1 } },
+        return e("div", { className: "slide-up", style: { padding: RH.screenStandard, position: "relative", zIndex: 1 } },
 
           /* Header strip */
-          e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 } },
+          e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: RH.section } },
             e("div", null,
               e("div", { className: "mono", style: { fontSize: 10, color: D.safe, letterSpacing: "0.2em" } }, "REELIO // NEURAL ENGINE"),
               e("div", { className: "mono", style: { fontSize: 9, color: D.muted, marginTop: 2 } }, "v3.0 Connected")
             ),
             e("div", { style: { padding: "4px 10px", borderRadius: 6, border: "1px solid " + D.doomMag + "33", background: D.doomMag + "10" } },
-              e("span", { className: "mono", style: { fontSize: 9, color: D.doomMag } }, "LAST 14 DAYS")
+              e("span", { className: "mono", style: { fontSize: 9, color: D.doomMag } }, "14D + ALL-TIME")
             )
           ),
 
           /* ── Cognitive Stability Index ── */
-          e("div", { className: "card card-danger", style: { padding: "18px", marginBottom: 10, boxShadow: "0 0 20px rgba(255,45,85,0.12)" } },
-            e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 } },
+          e("div", { className: "card card-danger", style: { padding: "16px", marginBottom: RH.card, boxShadow: "0 0 20px rgba(255,45,85,0.12)" } },
+            e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: RH.cardHeader } },
               e("div", null,
                 e(Label, null, "Cognitive Stability Index"),
                 e("div", { style: { fontSize: 13, color: D.text, marginTop: 4, fontWeight: 600 } }, "Global Behavioral Baseline · All Sessions")
@@ -1074,8 +1148,8 @@
             e("div", { style: { display: "flex", alignItems: "center", gap: 16 } },
               e("div", { style: { flex: 1, display: "flex", flexDirection: "column", gap: 9 } },
                 [{ label: "Capture Rate · All-Time", v: Math.round((S ? S.capture_rate : 0) * 100) + "%", col: D.doomMag },
-                { label: "Doom Inertia", v: Math.round((S && S.A ? S.A[1][1] : 0) * 100) + "%", col: D.doom },
-                { label: "Escape Rate", v: Math.round((S && S.A ? S.A[1][0] : 0) * 100) + "%", col: D.safe },
+                { label: "Session Doom Persistence", v: Math.round((S && S.sessA ? S.sessA[1][1] : 0) * 100) + "%", col: D.doom },
+                { label: "Escape Rate", v: Math.round((S && S.sessA ? S.sessA[1][0] : 0) * 100) + "%", col: D.safe },
                 { label: "Pull Index", v: (S ? S.doom_pull_index : 0) + "x", col: D.warn }
                 ].map(function (it) {
                   return e("div", { key: it.label, style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
@@ -1096,18 +1170,18 @@
           ),
 
           /* ── 14-Day Heatmap (Stitch style tall bars) ── */
-          e("div", { className: "card", style: { padding: "18px", marginBottom: 10, overflow: "hidden", position: "relative" } },
+          e("div", { className: "card", style: { padding: "16px", marginBottom: RH.card, overflow: "hidden", position: "relative" } },
             e("div", { style: { position: "absolute", right: -20, top: -20, width: 100, height: 100, borderRadius: "50%", background: D.doomMag + "12", filter: "blur(30px)", pointerEvents: "none" } }),
             /* Header */
-            e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18, position: "relative", zIndex: 1 } },
+            e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, position: "relative", zIndex: 1 } },
               e("div", null,
                 e(Label, { style: { display: "block", marginBottom: 6 } }, "Cumulative Exposure"),
                 e("div", { style: { display: "flex", alignItems: "baseline", gap: 10 } },
                   e("span", { style: { fontSize: 22, fontWeight: 700, color: "#fff", textShadow: "0 0 20px " + D.doomMag + "66" } },
-                    (function () { var avg = D14.length ? (D14.reduce(function (a, b) { return a + b.v; }, 0) / D14.length) : 0; return avg > 0.6 ? "High Risk" : avg > 0.4 ? "Moderate Risk" : "Low Risk"; })()
+                    exposureRiskLabel
                   ),
                   e("span", { style: { display: "flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 600, color: D.safe, background: D.safe + "15", padding: "2px 7px", borderRadius: 4 } },
-                    "+", Math.round((D14.length ? (D14.reduce(function (a, b) { return a + b.v; }, 0) / D14.length) : 0) * 100), "% avg"
+                    observedD14.length ? (exposureAvgPct + "% avg capture") : "No observed days"
                   )
                 )
               )
@@ -1123,7 +1197,7 @@
                   e("span", { className: "mono", style: { position: "absolute", right: "100%", marginRight: 6, top: -5, fontSize: 8, color: D.muted } }, "0.5")
                 )
               ),
-              e("div", { className: "mono", style: { position: "absolute", left: -16, bottom: 65, transform: "rotate(-90deg)", fontSize: 8, color: D.muted, letterSpacing: "0.1em", whiteSpace: "nowrap" } }, "AVG DOOM CAPTURE"),
+              e("div", { className: "mono", style: { position: "absolute", left: -24, bottom: 65, transform: "rotate(-90deg)", fontSize: 8, color: D.muted, letterSpacing: "0.1em", whiteSpace: "nowrap" } }, "AVG DOOM CAPTURE"),
               D14.map(function (day, i) {
                 var c = heatCol(day.v);
                 var heightPct = Math.max(8, day.v * 100);
@@ -1161,7 +1235,7 @@
             ),
             /* Legend */
             e("div", { style: { display: "flex", justifyContent: "center", gap: 14, marginTop: 12 } },
-              [["LOW", D.safe], ["MED", "#9333ea"], ["HIGH", D.doomMag]].map(function (lc) {
+              [["LOW", D.safe], ["MED", D.warn], ["HIGH", D.doomMag]].map(function (lc) {
                 return e("div", { key: lc[0], style: { display: "flex", alignItems: "center", gap: 5 } },
                   e("div", { style: { width: 10, height: 10, borderRadius: 3, background: lc[1], boxShadow: "0 0 6px " + lc[1] } }),
                   e(Label, { style: { fontSize: 9 } }, lc[0])
@@ -1173,7 +1247,7 @@
           /* ── Removed Top Doom Drivers (Stitch style) per requirements ── */
 
           /* ── Circadian Doom Profile (24h Pattern) ── */
-          e("div", { className: "card", style: { padding: "16px", marginBottom: 10 } },
+          e("div", { className: "card", style: { padding: "16px", marginBottom: RH.card } },
 
             e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 } },
               e(Label, null, "Circadian Doom Profile · 24h Pattern"),
@@ -1229,7 +1303,7 @@
           ),
 
           /* ── Doom Score Anatomy (Interactive) ── */
-          e("div", { className: "card", style: { marginBottom: 10, overflow: "hidden" } },
+          e("div", { className: "card", style: { marginBottom: RH.card, overflow: "hidden" } },
             e("div", { style: { padding: "16px" } },
               e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 } },
                 e(Label, null, "Top Doom Drivers · Doom Score Anatomy")
@@ -1338,12 +1412,12 @@
           ),
 
           /* ── Capture Timeline ── */
-          e(SessionTopologyCanvas, { data: RD, cursor: rc, setCursor: setRc, height: 160 }),
+          e(SessionTopologyCanvas, { data: RD, cursor: rc, setCursor: setRc, sessionBoundaries: p.sessionBoundaries || [], height: 160 }),
 
 
           /* ── State Dynamics ── */
-          e("div", { className: "card", style: { padding: "16px", marginBottom: 10 } },
-            e("div", { style: { marginBottom: 12 } }, e(Label, null, "State Dynamics")),
+          e("div", { className: "card", style: { padding: "16px", marginBottom: RH.card } },
+            e("div", { style: { marginBottom: 12 } }, e(Label, null, "State Dynamics (Session-Level)")),
             e("svg", { width: "100%", viewBox: "0 0 340 110", style: { overflow: "visible" } },
               e("circle", { cx: "70", cy: "55", r: "40", fill: D.safe + "10", stroke: D.safe, strokeWidth: 1.5, style: { filter: "drop-shadow(0 0 10px " + D.safe + "44)" } }),
               e("text", { x: "70", y: "50", textAnchor: "middle", fontFamily: "Space Grotesk", fontSize: "11", fontWeight: "700", fill: D.safe }, "CASUAL"),
@@ -1353,12 +1427,12 @@
               e("text", { x: "270", y: "65", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "9", fill: D.muted }, "STATE 1"),
               e("path", { d: "M 108 38 Q 170 0 232 38", fill: "none", stroke: D.doomMag, strokeWidth: 2.5, style: { filter: "drop-shadow(0 0 4px " + D.doomMag + ")" } }),
               e("polygon", { points: "232,38 222,32 226,44", fill: D.doomMag }),
-              e("text", { x: "170", y: "20", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "11", fontWeight: "700", fill: D.doomMag }, Math.round((S ? S.A[0][1] : 0) * 100) + "%"),
+              e("text", { x: "170", y: "16", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "11", fontWeight: "700", fill: D.doomMag }, Math.round((S ? S.sessA[0][1] : 0) * 100) + "%"),
               e("path", { d: "M 232 72 Q 170 110 108 72", fill: "none", stroke: D.safe, strokeWidth: 1.5, strokeDasharray: "5,3", opacity: .7 }),
               e("polygon", { points: "108,72 120,66 118,78", fill: D.safe, opacity: .7 }),
-              e("text", { x: "170", y: "100", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "11", fontWeight: "700", fill: D.safe }, Math.round((S ? S.A[1][0] : 0) * 100) + "%"),
-              e("text", { x: "70", y: "14", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "9", fill: D.safe + "99" }, "↺ " + Math.round((S ? S.A[0][0] : 0) * 100) + "%"),
-              e("text", { x: "270", y: "14", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "9", fill: D.doomMag + "cc" }, "↺ " + Math.round((S ? S.A[1][1] : 0) * 100) + "%"),
+              e("text", { x: "170", y: "100", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "11", fontWeight: "700", fill: D.safe }, Math.round((S ? S.sessA[1][0] : 0) * 100) + "%"),
+              e("text", { x: "70", y: "14", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "9", fill: D.safe + "99" }, "↺ " + Math.round((S ? S.sessA[0][0] : 0) * 100) + "%"),
+              e("text", { x: "270", y: "14", textAnchor: "middle", fontFamily: "Share Tech Mono", fontSize: "9", fill: D.doomMag + "cc" }, "↺ " + Math.round((S ? S.sessA[1][1] : 0) * 100) + "%"),
               e("circle", { r: "4", fill: D.doomMag, style: { filter: "drop-shadow(0 0 5px " + D.doomMag + ")" } },
                 e("animateMotion", { path: "M 108 38 Q 170 0 232 38", dur: "4.5s", repeatCount: "indefinite" })
               ),
@@ -1367,7 +1441,7 @@
               )
             ),
             e("div", { style: { display: "flex", gap: 8, marginTop: 8 } },
-              [{ label: "Recovery Window", v: cd + " reels", col: D.safe },
+              [{ label: "Recovery Window", v: cd + " sessions", col: D.safe },
               { label: "Model Confidence", v: Math.round(S.model_confidence * 100) + "%", col: D.violet }
               ].map(function (it) {
                 return e("div", { key: it.label, style: { flex: 1, padding: "8px", borderRadius: 8, textAlign: "center", background: it.col + "10", border: "1px solid " + it.col + "25" } },
@@ -1379,7 +1453,7 @@
           ),
 
           /* ── PDF Export ── */
-          e("div", { style: { display: "flex", justifyContent: "center", alignItems: "center", marginTop: 32, marginBottom: 16 } },
+          e("div", { style: { display: "flex", justifyContent: "center", alignItems: "center", marginTop: 28, marginBottom: 12 } },
             e("button", { onClick: function () { window.Android && window.Android.generateReport && window.Android.generateReport(); }, className: "ripple-surface", style: { background: "none", border: "1px solid " + D.safe, borderRadius: 8, padding: "14px 24px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, color: D.safe, fontFamily: "inherit", fontSize: 13, fontWeight: 700, letterSpacing: "0.05em", boxShadow: "0 0 16px " + D.safe + "33" } },
               e(Ico, { name: "Download", size: 18, color: D.safe }), " GENERATE INTELLIGENCE REPORT"
             )
@@ -1423,14 +1497,14 @@
           }
         }
 
-        return e("div", { className: "slide-up", style: { padding: "16px 16px 32px", position: "relative", zIndex: 1 } },
-          e("div", { style: { display: "flex", alignItems: "center", marginBottom: 20, padding: "14px 4px 0" } },
+        return e("div", { className: "slide-up", style: { padding: RH.screenStandard, position: "relative", zIndex: 1 } },
+          e("div", { style: { display: "flex", alignItems: "center", marginBottom: RH.section, padding: "14px 4px 0" } },
             e(Ico, { name: "Settings", size: 20, color: D.safe, style: { filter: "drop-shadow(0 0 6px " + D.safe + ")", marginRight: 10 } }),
             e("div", { style: { fontSize: 16, fontWeight: 700, color: "#fff", letterSpacing: "0.05em" } }, "SYSTEM PREFERENCES")
           ),
 
           /* ── Metrics Documentation (New) ── */
-          e("div", { className: "card", style: { padding: "16px", marginBottom: 16 } },
+          e("div", { className: "card", style: { padding: "16px", marginBottom: RH.card } },
             e("div", {
               style: { display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }, onClick: function () {
                 var el = document.getElementById("metrics-doc-content-idx");
@@ -1446,63 +1520,58 @@
               e("div", { className: "mono", style: { fontSize: 9, color: D.safe, letterSpacing: "0.15em", marginBottom: 10 } }, "— CORE SCORES —"),
 
               e("div", { style: { marginBottom: 14 } },
-                e("strong", { style: { color: "#fff" } }, "Cognitive Stability Index"), e("br", null),
-                e("span", { style: { color: D.safe } }, "The Math: "), "Displays (1 − S_t) as a gauge, where S_t is the HMM's posterior probability of the 'Doom' latent state, averaged over your last 10 sessions.", e("br", null),
-                e("span", { style: { color: D.safe } }, "The Value: "), "Your real-time 'mental health reading' — how likely you are in deliberate control based on your 10-session moving average."
+                e("strong", { style: { color: "#fff" } }, "Cognitive Stability Index (CSI)"), e("br", null),
+                e("span", { style: { color: D.safe } }, "The Math: "), "CSI = 1 − Doom Rate. We first mark each robust session (>= 5 reels) as Doom or Casual, then compute how often Doom happened. If Doom Rate is 38%, CSI is 62%.", e("br", null),
+                e("span", { style: { color: D.safe } }, "The Value: "), "Higher CSI means better control. It is designed to be simple: percent of sessions where you stayed intentional."
               ),
               e("div", { style: { marginBottom: 14 } },
                 e("strong", { style: { color: "#fff" } }, "Current Intervention Score"), e("br", null),
-                e("span", { style: { color: D.safe } }, "The Math: "), "The DoomScorer's weighted composite of 7 heuristic penalties for the current session, normalized 0–1.", e("br", null),
-                e("span", { style: { color: D.safe } }, "The Value: "), "How urgently the session needs intervention. Above 0.6 triggers a DOOM label."
-              ),
-              e("div", { style: { marginBottom: 14 } },
-                e("strong", { style: { color: "#fff" } }, "Capture Rate · All-Time"), e("br", null),
-                e("span", { style: { color: D.safe } }, "The Math: "), "Percentage of all historic reels where the HMM calculated your Doom State probability at >50%.", e("br", null),
-                e("span", { style: { color: D.safe } }, "The Value: "), "Your long-term vulnerability. A rising capture rate means the algorithm is winning more often."
+                e("span", { style: { color: D.safe } }, "The Math: "), "A 7-signal weighted score (0 to 1) for the latest behavior pattern, including session length, exit conflict, rapid re-entry, automaticity, dwell collapse, rewatch, and environment.", e("br", null),
+                e("span", { style: { color: D.safe } }, "The Value: "), "How risky the current pattern looks right now. Think of it as an intervention urgency signal, not a diagnosis."
               ),
               e("div", { style: { marginBottom: 14 } },
                 e("strong", { style: { color: "#fff" } }, "Model Confidence"), e("br", null),
-                e("span", { style: { color: D.safe } }, "The Math: "), "Derived from the HMM's Baum-Welch convergence quality and state separation. Starts low, grows with sessions.", e("br", null),
-                e("span", { style: { color: D.safe } }, "The Value: "), "How 'personal' the model is. Below 40% = initializing (using priors). Above 70% = fully calibrated to your patterns."
+                e("span", { style: { color: D.safe } }, "The Math: "), "A weighted blend of four parts: data volume, state separation, behavioral stability, and supervision quality. The app also stores a component breakdown so the score is explainable.", e("br", null),
+                e("span", { style: { color: D.safe } }, "The Value: "), "How trustworthy and personalized your model is today. Higher means the model has enough data and clearer behavioral structure."
               ),
 
               /* ── MARKOV MODEL METRICS ── */
-              e("div", { className: "mono", style: { fontSize: 9, color: D.doomMag, letterSpacing: "0.15em", marginTop: 16, marginBottom: 10 } }, "— MARKOV MODEL —"),
+              e("div", { className: "mono", style: { fontSize: 9, color: D.doomMag, letterSpacing: "0.15em", marginTop: 16, marginBottom: 10 } }, "— MARKOV MODEL (SESSION-LEVEL) —"),
 
               e("div", { style: { marginBottom: 14 } },
-                e("strong", { style: { color: "#fff" } }, "Trap Rate (A[0][1])"), e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Math: "), "Transition probability from Casual → Doom in the learned Markov matrix. e.g. 18% means each casual reel has an 18% chance of flipping you into doom.", e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Value: "), "How easily the algorithm hooks you. Lower is better."
+                e("strong", { style: { color: "#fff" } }, "Trap Rate (sessA[0][1])"), e("br", null),
+                e("span", { style: { color: D.doomMag } }, "The Math: "), "Among sessions that start Casual, how often the next session flips to Doom.", e("br", null),
+                e("span", { style: { color: D.doomMag } }, "The Value: "), "How easily the system pulls you in across sessions. Lower is better."
               ),
               e("div", { style: { marginBottom: 14 } },
-                e("strong", { style: { color: "#fff" } }, "Escape Rate (A[1][0])"), e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Math: "), "Transition probability from Doom → Casual. e.g. 6% means once hooked, you only have a 6% per-reel chance of breaking free.", e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Value: "), "How hard it is to snap out of autopilot. Higher is better."
-              ),
-              e("div", { style: { marginBottom: 14 } },
-                e("strong", { style: { color: "#fff" } }, "Doom Inertia (A[1][1])"), e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Math: "), "Self-transition probability of the Doom state = 1 − Escape Rate. e.g. 94% means once captured, 94 out of 100 reels keep you locked in.", e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Value: "), "The 'stickiness' of the doom state. This is the scariest number on the dashboard."
+                e("strong", { style: { color: "#fff" } }, "Escape Rate (sessA[1][0])"), e("br", null),
+                e("span", { style: { color: D.doomMag } }, "The Math: "), "Among sessions that start Doom, how often the next session returns to Casual.", e("br", null),
+                e("span", { style: { color: D.doomMag } }, "The Value: "), "How often you break the loop between sessions. Higher is better."
               ),
               e("div", { style: { marginBottom: 14 } },
                 e("strong", { style: { color: "#fff" } }, "Pull Index"), e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Math: "), "Doom Inertia ÷ Trap Rate. e.g. if inertia = 94% and trap = 18%, pull index = 5.2x.", e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Value: "), "You are 5.2× more likely to keep scrolling once hooked than you were to start. The asymmetry of addiction."
+                e("span", { style: { color: D.doomMag } }, "The Math: "), "Pull Index = Trap Rate ÷ Escape Rate. Example: Trap 20% and Escape 5% gives 4.0x.", e("br", null),
+                e("span", { style: { color: D.doomMag } }, "The Value: "), "How many times faster you get pulled in than you get out. Above 1.0x means capture pressure is stronger than recovery."
+              ),
+              e("div", { style: { marginBottom: 14 } },
+                e("strong", { style: { color: "#fff" } }, "Doom Rate"), e("br", null),
+                e("span", { style: { color: D.doomMag } }, "The Math: "), "Doom sessions ÷ all robust sessions (>= 5 reels), where Doom means dominant state = 1.", e("br", null),
+                e("span", { style: { color: D.doomMag } }, "The Value: "), "Your practical prevalence metric: in what percent of meaningful sessions did doom dominate."
               ),
               e("div", { style: { marginBottom: 14 } },
                 e("strong", { style: { color: "#fff" } }, "Recovery Window"), e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Math: "), "1 ÷ Escape Rate. The expected number of reels you need to scroll through in the doom state before statistically breaking free.", e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Value: "), "If 16.7r, you typically need to scroll past ~17 reels before your brain disengages."
+                e("span", { style: { color: D.doomMag } }, "The Math: "), "Recovery Window (sessions) = 1 ÷ Escape Rate.", e("br", null),
+                e("span", { style: { color: D.doomMag } }, "The Value: "), "Roughly how many sessions it takes, on average, to return to Casual once a Doom streak starts."
               ),
               e("div", { style: { marginBottom: 14 } },
-                e("strong", { style: { color: "#fff" } }, "Regime Stability"), e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Math: "), "Average expected dwell time in the current dominant state before a regime switch, computed from the Markov eigenvalues.", e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Value: "), "How many reels your current behavioral 'mode' tends to persist before flipping."
+                e("strong", { style: { color: "#fff" } }, "Per-Reel Inertia (A[1][1])"), e("br", null),
+                e("span", { style: { color: D.doomMag } }, "The Math: "), "Within-session persistence: probability that Doom stays Doom from one reel to the next.", e("br", null),
+                e("span", { style: { color: D.doomMag } }, "The Value: "), "Useful for reel-level stickiness, but less intuitive for daily habit change than session-level metrics above."
               ),
               e("div", { style: { marginBottom: 14 } },
                 e("strong", { style: { color: "#fff" } }, "State Dynamics Diagram"), e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Math: "), "Visual representation of the 2×2 Markov transition matrix. Arrows show transition probabilities; self-loops show retention.", e("br", null),
-                e("span", { style: { color: D.doomMag } }, "The Value: "), "An intuitive map of how your brain moves between intentional and compulsive scrolling."
+                e("span", { style: { color: D.doomMag } }, "The Math: "), "A 2x2 transition map. Off-diagonal arrows are flips (trap/escape). Diagonal arrows are persistence.", e("br", null),
+                e("span", { style: { color: D.doomMag } }, "The Value: "), "A visual summary of whether your pattern is recovery-dominant or capture-dominant."
               ),
 
               /* ── DASHBOARD CHARTS ── */
@@ -1548,7 +1617,7 @@
               ),
               e("div", { style: { marginBottom: 14 } },
                 e("strong", { style: { color: "#fff" } }, "Sessions Today · Doom Sessions · Interactions"), e("br", null),
-                e("span", { style: { color: D.violet } }, "The Math: "), "Sessions Today = count of sessions detected on the current calendar day. Doom = sessions where S_t ≥ 0.50. Interactions = sum of likes + comments + shares + saves.", e("br", null),
+                e("span", { style: { color: D.violet } }, "The Math: "), "Sessions Today = count of sessions detected on the current calendar day. Doom = sessions where S_t ≥ 0.55. Interactions = sum of likes + comments + shares + saves.", e("br", null),
                 e("span", { style: { color: D.violet } }, "The Value: "), "Zero-interaction sessions are 'passive consumption' — content flowing past with no volitional response. A high passive ratio is an early automaticity signal."
               ),
 
@@ -1584,8 +1653,8 @@
             )
           ),
 
-          e("div", { className: "card", style: { padding: "16px", marginBottom: 16 } },
-            e(Label, { style: { display: "block", marginBottom: 16, color: D.safe } }, "Micro-Probe Calibration"),
+          e("div", { className: "card", style: { padding: "16px", marginBottom: RH.card } },
+            e(Label, { style: { display: "block", marginBottom: RH.cardHeader, color: D.safe } }, "Micro-Probe Calibration"),
             e("div", { style: { fontSize: 12, color: D.text, marginBottom: 16, lineHeight: 1.5 } },
               "Adjust the frequency of active psychological surveys deployed during sessions. Lower frequencies may reduce model confidence accuracy."
             ),
@@ -1599,8 +1668,8 @@
             })
           ),
 
-          e("div", { className: "card", style: { padding: "16px", marginBottom: 16 } },
-            e(Label, { style: { display: "block", marginBottom: 16, color: D.violet } }, "Sleep Proximity Model"),
+          e("div", { className: "card", style: { padding: "16px", marginBottom: RH.card } },
+            e(Label, { style: { display: "block", marginBottom: RH.cardHeader, color: D.violet } }, "Sleep Proximity Model"),
             e("div", { style: { fontSize: 12, color: D.text, marginBottom: 16, lineHeight: 1.5 } },
               "Define typical sleep boundaries to calibrate ALSE circadian capture penalties. Activity inside these boundaries aggressively flags as 'Doom'."
             ),
@@ -1626,14 +1695,18 @@
             )
           ),
 
-          e("div", { className: "card card-danger", style: { padding: "16px", marginBottom: 16 } },
-            e(Label, { style: { display: "block", marginBottom: 16, color: D.doom } }, "Data Management"),
+          e("div", { className: "card", style: { padding: "16px", marginBottom: RH.card, borderColor: D.borderDanger } },
+            e(Label, { style: { display: "block", marginBottom: 8, color: D.doom } }, "Data Management"),
+            e("div", { className: "mono", style: { fontSize: 10, color: D.muted, marginBottom: 14, letterSpacing: "0.08em" } }, "EXPORT IS SAFE. FLUSH IS IRREVERSIBLE."),
             e("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
-              e("button", { className: "btn-primary", onClick: function () { if (window.Android) window.Android.exportCsv(); }, style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "linear-gradient(135deg, " + D.muted + ", #1a2436)", color: "#fff", padding: "14px" } },
+              e("button", { className: "btn-primary", onClick: function () { if (window.Android) window.Android.exportCsv(); }, style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "transparent", color: D.violet, padding: "14px", border: "1.5px solid " + D.violet, borderRadius: 8, fontWeight: 700, letterSpacing: "0.03em" } },
                 e(Ico, { name: "Download", size: 15 }), " Export Behavioral Baseline"
               ),
-              e("button", { className: "btn-primary", onClick: function () { if (window.Android) window.Android.clearData(); }, style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "linear-gradient(135deg, " + D.doomMag + ", #7a0854)", color: "#fff", padding: "14px", boxShadow: "0 8px 32px " + D.doomMag + "33" } },
+              e("button", { className: "btn-primary", onClick: function () { if (window.Android) window.Android.clearData(); }, style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "linear-gradient(135deg, " + D.doom + ", #8a0f35)", color: "#fff", padding: "14px", boxShadow: "0 10px 32px " + D.doom + "44", border: "1px solid " + D.doom + "66" } },
                 e(Ico, { name: "Trash2", size: 15 }), " Flush Tracking Data"
+              ),
+              e("div", { className: "mono", style: { fontSize: 9, color: D.doom + "cc", letterSpacing: "0.07em", textAlign: "center", paddingTop: 2 } },
+                "This permanently clears local history and resets model calibration."
               )
             )
           ),
@@ -1650,6 +1723,7 @@
       ───────────────────────────────────────────────────────────────── */
       function SetupScreen(p) {
         var on = p.svcActive;
+        var transitioning = !!p.isTransition;
 
         var progressValue = (function () {
           var totalSessions = (p.rawData && p.rawData.sessions) ? p.rawData.sessions.length : 0;
@@ -1751,16 +1825,27 @@
                 "ALSE ENGINE ACTIVE"
               )
               :
-              e("button", {
-                className: "btn-primary",
-                onClick: function () { window.Android && window.Android.enableAccessibility && window.Android.enableAccessibility(); }
-              },
-                e(Ico, { name: "Shield", size: 16, style: { marginRight: 8 } }),
-                "ENABLE ALSE ENGINE"
-              ),
+              (transitioning
+                ? e("button", {
+                  className: "btn-primary",
+                  style: { background: "transparent", border: "1px solid " + D.safe + "66", color: D.safe }
+                },
+                  e("div", { style: { width: 14, height: 14, border: "2px solid " + D.safe + "44", borderTopColor: D.safe, borderRadius: "50%", animation: "spin .8s linear infinite", marginRight: 8 } }),
+                  "SYNCING REELIO ENGINE..."
+                )
+                : e("button", {
+                  className: "btn-primary",
+                  onClick: function () {
+                    if (p.onEnableAccessibility) p.onEnableAccessibility();
+                    else if (window.Android && window.Android.enableAccessibility) window.Android.enableAccessibility();
+                  }
+                },
+                  e(Ico, { name: "Shield", size: 16, style: { marginRight: 8 } }),
+                  "ENABLE ALSE ENGINE"
+                )),
 
-            /* Progress Bar Section (Only show if actually building data) */
-            p.rawData && e("div", { style: { marginTop: 8 } },
+            /* Progress Bar Section */
+            e("div", { style: { marginTop: 8 } },
               e("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 6 } },
                 e(Label, { style: { color: isCalibrated ? D.safe : D.muted } }, isCalibrated ? "ALSE CALIBRATED" : "NEURAL CALIBRATION"),
                 e("span", { className: "mono", style: { fontSize: 10, color: isCalibrated ? D.safe : D.text } }, pPct + "%")
@@ -1778,16 +1863,209 @@
         );
       }
 
+      function LaunchQuoteScreen() {
+        var QUOTES = [
+          "The algorithm knows you better than your therapist. We're fixing that.",
+          "Somewhere, a recommendation engine is disappointed in you. Good.",
+          "Your attention is a product. REELIO is the refund.",
+          "You opened Instagram. ALSE noticed. No judgment. Some judgment.",
+          "Dopamine is a liar. - Your Prefrontal Cortex",
+          "Variable reward schedules: also how slot machines work. Coincidence?",
+          "Your brain's default mode network called. It wants its bandwidth back.",
+          "Attention is the only currency that can't be printed. Spend carefully.",
+          "We are what we repeatedly scroll. - Aristotle (probably)",
+          "The unexamined feed is not worth watching. - Socrates, if he had WiFi",
+          "In the middle of difficulty lies opportunity. Also, 47 more reels.",
+          "Know thyself. ALSE is helping. - Delphi Oracle, v3.0",
+          "Current session: unmonitored. Historical pattern: concerning.",
+          "This screen is the least addictive part of your phone. Enjoy it.",
+          "Boredom is a skill. Relearn it.",
+          "The best reel you'll watch today hasn't been made yet. Log off.",
+          "Your future self is watching your screen time report. Wave hi."
+        ];
+        var qi = useState(function () { return Math.floor(Math.random() * QUOTES.length); })[0];
+        var randomQuote = QUOTES[qi];
+
+        return e("div", {
+          className: "slide-up",
+          style: {
+            minHeight: "100vh",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background: D.bg,
+            padding: "24px 20px",
+            gap: 18
+          }
+        },
+          e("div", { style: { width: 64, height: 64, borderRadius: "50%", border: "1px solid " + D.safe + "55", boxShadow: "0 0 28px " + D.safe + "22", display: "flex", alignItems: "center", justifyContent: "center" } },
+            e(Ico, { name: "Radio", size: 26, color: D.safe })
+          ),
+          e("div", { style: { fontSize: 40, fontWeight: 800, color: D.safe, letterSpacing: "0.05em", lineHeight: 1, textShadow: "0 0 18px " + D.safe + "44" } }, "REELIO"),
+          e("div", { style: { width: 36, height: 3, background: D.doomMag, borderRadius: 2 } }),
+          e("div", { className: "mono", style: { fontSize: 10, color: D.text, letterSpacing: "0.1em" } }, "YOUR BRAIN HAS A FIREWALL."),
+          e("div", { className: "mono", style: { fontSize: 11, color: D.muted, textAlign: "center", maxWidth: 320, lineHeight: 1.6, fontStyle: "italic", marginTop: 6 } },
+            '"' + randomQuote + '"'
+          )
+        );
+      }
+
       /* ─────────────────────────────────────────────────────────────────
          ROOT APP
       ───────────────────────────────────────────────────────────────── */
       function ReeliApp() {
+        function shouldShowIntroSplash() {
+          try {
+            if (window.localStorage && window.localStorage.getItem("reelio_skip_intro_once") === "1") {
+              window.localStorage.removeItem("reelio_skip_intro_once");
+              return false;
+            }
+          } catch (x) { }
+          return true;
+        }
+
         var ss = useState("home"), screen = ss[0], setScreen = ss[1];
         var ds = useState(null), rawData = ds[0], setRawData = ds[1];
+        var isv = useState(function () { return shouldShowIntroSplash(); }), showIntroSplash = isv[0], setShowIntroSplash = isv[1];
         var ls = useState(true), loading = ls[0], setLoading = ls[1];
         var es = useState(null), errMsg = es[0], setErrMsg = es[1];
         var vs = useState(false), svcActive = vs[0], setSvcActive = vs[1];
         var rls = useState(false), showReportLoading = rls[0], setShowReportLoading = rls[1];
+        var ars = useState(false), awaitingAccessibilityReturn = ars[0], setAwaitingAccessibilityReturn = ars[1];
+        var trs = useState(false), accessibilityTransition = trs[0], setAccessibilityTransition = trs[1];
+        var accessibilityFlowStartRef = React.useRef(0);
+        var accessibilityResumeSeenRef = React.useRef(false);
+        var accessibilityFinishGuardRef = React.useRef(false);
+        var swipeStartRef = React.useRef(null);
+
+        function onContentTouchStart(ev) {
+          if (!ev.touches || ev.touches.length !== 1) return;
+          swipeStartRef.current = { x: ev.touches[0].clientX, y: ev.touches[0].clientY };
+        }
+
+        function onContentTouchEnd(ev) {
+          if (!swipeStartRef.current || !ev.changedTouches || ev.changedTouches.length !== 1) return;
+          var endX = ev.changedTouches[0].clientX;
+          var endY = ev.changedTouches[0].clientY;
+          var dx = endX - swipeStartRef.current.x;
+          var dy = endY - swipeStartRef.current.y;
+          swipeStartRef.current = null;
+
+          var absX = Math.abs(dx);
+          var absY = Math.abs(dy);
+          var minSwipePx = 56;
+          if (absX < minSwipePx || absX < absY * 1.2) return;
+
+          var order = ["home", "dashboard", "settings"];
+          var idx = order.indexOf(screen);
+          if (idx < 0) return;
+          if (dx < 0 && idx < order.length - 1) setScreen(order[idx + 1]);
+          if (dx > 0 && idx > 0) setScreen(order[idx - 1]);
+        }
+
+        function beginAccessibilityEnableFlow() {
+          try {
+            if (window.localStorage) window.localStorage.setItem("reelio_skip_intro_once", "1");
+          } catch (x) { }
+          accessibilityFlowStartRef.current = Date.now();
+          accessibilityResumeSeenRef.current = false;
+          accessibilityFinishGuardRef.current = false;
+          setAwaitingAccessibilityReturn(true);
+          setAccessibilityTransition(true);
+          setScreen("home");
+          if (window.Android && window.Android.enableAccessibility) {
+            // Let the transition screen paint before OS settings take over.
+            setTimeout(function () {
+              try { window.Android.enableAccessibility(); } catch (x) { }
+            }, 140);
+          }
+        }
+
+        useEffect(function () {
+          if (!showIntroSplash) return;
+          var splashTimer = setTimeout(function () {
+            setShowIntroSplash(false);
+          }, 5000);
+          return function () { clearTimeout(splashTimer); };
+        }, [showIntroSplash]);
+
+        useEffect(function () {
+          if (!awaitingAccessibilityReturn) return;
+
+          var finishTimer = null;
+          var resumeFallbackTimer = null;
+          var statusPoll = null;
+          // Tuned for slower OEM handoffs: prioritize smoothness over immediacy.
+          var hardTimeout = 32000;
+          var minHoldMs = 2600;
+          var postResumeHoldMs = 2200;
+
+          function finishTransition(minExtraMs) {
+            if (accessibilityFinishGuardRef.current) return;
+            accessibilityFinishGuardRef.current = true;
+            if (statusPoll) clearInterval(statusPoll);
+            if (resumeFallbackTimer) clearTimeout(resumeFallbackTimer);
+            var elapsed = Date.now() - Math.max(0, accessibilityFlowStartRef.current || Date.now());
+            var waitMs = Math.max(minExtraMs || 0, minHoldMs - elapsed, 0);
+            finishTimer = setTimeout(function () {
+              setAccessibilityTransition(false);
+              setAwaitingAccessibilityReturn(false);
+            }, waitMs);
+          }
+
+          var failSafeTimer = setTimeout(function () {
+            finishTransition(0);
+          }, hardTimeout);
+
+          function startResumeTransition() {
+            if (accessibilityResumeSeenRef.current) return;
+            accessibilityResumeSeenRef.current = true;
+            setAccessibilityTransition(true);
+
+            // Poll quickly for service activation so we can end the transition
+            // once the OS handoff settles on different OEM builds.
+            statusPoll = setInterval(function () {
+              try {
+                if (window.Android && window.Android.isAccessibilityEnabled && window.Android.isAccessibilityEnabled()) {
+                  setSvcActive(true);
+                  finishTransition(1300);
+                }
+              } catch (x) { }
+            }, 250);
+
+            // Fallback in case status callback is delayed.
+            resumeFallbackTimer = setTimeout(function () {
+              finishTransition(postResumeHoldMs);
+            }, 3200);
+          }
+
+          function onVisibilityChange() {
+            if (!document.hidden) startResumeTransition();
+          }
+
+          function onFocus() {
+            startResumeTransition();
+          }
+
+          function onPageShow() {
+            startResumeTransition();
+          }
+
+          document.addEventListener("visibilitychange", onVisibilityChange);
+          window.addEventListener("focus", onFocus);
+          window.addEventListener("pageshow", onPageShow);
+
+          return function () {
+            if (finishTimer) clearTimeout(finishTimer);
+            if (resumeFallbackTimer) clearTimeout(resumeFallbackTimer);
+            if (statusPoll) clearInterval(statusPoll);
+            clearTimeout(failSafeTimer);
+            document.removeEventListener("visibilitychange", onVisibilityChange);
+            window.removeEventListener("focus", onFocus);
+            window.removeEventListener("pageshow", onPageShow);
+          };
+        }, [awaitingAccessibilityReturn]);
 
         useEffect(function () {
           if (window.Android && window.Android.isAccessibilityEnabled) {
@@ -1841,6 +2119,26 @@
           };
         }, []);
 
+        if (showIntroSplash) {
+          return e(SetupScreen, {
+            message: "Initializing REELIO engine...",
+            rawData: rawData,
+            svcActive: svcActive,
+            isTransition: true,
+            onEnableAccessibility: beginAccessibilityEnableFlow
+          });
+        }
+
+        if (accessibilityTransition) {
+          return e(SetupScreen, {
+            message: svcActive ? "Reelio engine enabled. Syncing session monitor..." : "Returning from Accessibility settings...",
+            rawData: rawData,
+            svcActive: svcActive,
+            isTransition: true,
+            onEnableAccessibility: beginAccessibilityEnableFlow
+          });
+        }
+
         if (loading) {
           return e("div", { style: { minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: D.bg, gap: 16 } },
             e("div", { style: { width: 40, height: 40, border: "3px solid rgba(13,223,242,0.15)", borderTopColor: D.safe, borderRadius: "50%", animation: "spin .8s linear infinite" } }),
@@ -1859,7 +2157,8 @@
           return e(SetupScreen, {
             message: errMsg,
             rawData: rawData,
-            svcActive: svcActive
+            svcActive: svcActive,
+            onEnableAccessibility: beginAccessibilityEnableFlow
           });
         }
 
@@ -1892,6 +2191,7 @@
         var avgNReels = sessionReelsSum / Math.max(rawData.sessions.length, 1);
 
         var A = (rawData.model_parameters && rawData.model_parameters.transition_matrix) ? rawData.model_parameters.transition_matrix : [[0.95, 0.05], [0.1, 0.9]];
+        var sessA = (rawData.model_parameters && rawData.model_parameters.session_transition_matrix) ? rawData.model_parameters.session_transition_matrix : A;
 
         var mostRecentComponents = (function () {
           for (var i = rawData.sessions.length - 1; i >= 0; i--) {
@@ -1927,6 +2227,14 @@
         var perReelCapture = ((rawData.timeline && rawData.timeline.p_capture) || [])
           .filter(function (v) { return typeof v === 'number' && isFinite(v); })
           .map(function (v) { return Math.max(0, Math.min(1, v)); });
+        var sessionBoundaries = [];
+        if (perReelCapture.length > 0) {
+          var runningReel = 0;
+          rawData.sessions.forEach(function (s) {
+            runningReel += Math.max(0, parseInt(s.nReels || 0, 10));
+            if (runningReel > 0 && runningReel < perReelCapture.length) sessionBoundaries.push(runningReel);
+          });
+        }
         var totalReelsAll = sessionReelsSum > 0 ? sessionReelsSum : perReelCapture.length;
 
         var todayActual = (function () {
@@ -1949,13 +2257,20 @@
           intervention_score: neuralLoad, // Maps to main home gauge
           capture_rate: pLostTrack,
           A: A,
-          regime_stability: (rawData.model_parameters && rawData.model_parameters.regime_stability_score) || 99,
+          sessA: sessA,  // Session-level transition matrix (BUG FIX: now used for recovery window)
+          regime_stability: (rawData.model_parameters && rawData.model_parameters.doom_persistence_score_per_reel) || 99,
           model_confidence: rawData.model_confidence || 0,
           doom_label: neuralLoad >= THRESHOLDS.doom ? "DOOM" : neuralLoad > THRESHOLDS.moderate ? "BORDERLINE" : "CASUAL",
-          doom_pull_index: (A[1][1] / Math.max(0.001, A[0][1])).toFixed(1),
+          // Pull Index = trap rate / escape rate (session-level):
+          // how much faster you are pulled in than you break out.
+          doom_pull_index: (
+            Math.max(0.001, (sessA && sessA[0] ? sessA[0][1] : A[0][1])) /
+            Math.max(0.001, (sessA && sessA[1] ? sessA[1][0] : A[1][0]))
+          ).toFixed(1),
           sessions_today: sessionsToday.length,
-          doom_dominance: rawData.sessions.length > 0
-            ? Math.round(rawData.sessions.filter(function (s) { return s.S_t >= MODEL_THRESHOLDS.doomLabel; }).length / rawData.sessions.length * 100) + "%"
+          // Doom Rate uses robust sessions (>=5 reels) and final session state label.
+          doom_dominance: qualifyingSessions.length > 0
+            ? Math.round(qualifyingSessions.filter(function (s) { return s.dominantState === 1; }).length / qualifyingSessions.length * 100) + "%"
             : "0%",
           total_interactions_today: sessionsToday.reduce(function (a, b) { return a + (b.totalInteractions || 0); }, 0),
           active_time_today: activeTimeTodayStr,
@@ -1993,7 +2308,7 @@
             var dayIdx = d.getDay();
             var vals = byDate[dateKey];
             var avg = vals ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : 0;
-            result.push({ d: names[dayIdx], v: parseFloat(avg.toFixed(2)) });
+            result.push({ d: names[dayIdx], v: parseFloat(avg.toFixed(2)), hasData: !!(vals && vals.length) });
           }
           return result;
         })();
@@ -2013,11 +2328,22 @@
               e("div", { className: "mono", style: { fontSize: 11, color: D.muted } }, "SYNCED")
             ),
             /* Content */
-            e("div", { style: { overflowY: "auto", height: "calc(100vh - 44px - 56px)" } },
+            e("div", {
+              style: { overflowY: "auto", height: "calc(100vh - 44px - 56px)" },
+              onTouchStart: onContentTouchStart,
+              onTouchEnd: onContentTouchEnd
+            },
               screen === "home"
-                ? e(HomeScreen, { onNav: setScreen, session: session, live: live, isServiceActive: svcActive, totalReelsAll: totalReelsAll })
+                ? e(HomeScreen, {
+                  onNav: setScreen,
+                  session: session,
+                  live: live,
+                  isServiceActive: svcActive,
+                  totalReelsAll: totalReelsAll,
+                  onEnableAccessibility: beginAccessibilityEnableFlow
+                })
                 : screen === "dashboard"
-                  ? e(DashboardScreen, { session: session, reelsData: reelsData, days14: days14, circadian: rawData.circadian || [], totalReelsAll: totalReelsAll, avgNReels: avgNReels, featureWeights: rawData.feature_weights, scorerComponentWeights: rawData.scorer_component_weights || null })
+                  ? e(DashboardScreen, { session: session, reelsData: reelsData, sessionBoundaries: sessionBoundaries, days14: days14, circadian: rawData.circadian || [], totalReelsAll: totalReelsAll, avgNReels: avgNReels, featureWeights: rawData.feature_weights, scorerComponentWeights: rawData.scorer_component_weights || null })
                   : e(SettingsScreen, { onNav: setScreen })
             ),
             /* Tab bar */

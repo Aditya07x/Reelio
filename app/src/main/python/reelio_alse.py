@@ -414,7 +414,12 @@ class DoomScorer:
         c_collapse = float(np.clip(-trend / 2.0, 0.0, 1.0))
         
         rewatch_sum = session_df['BackScrollCount'].sum() / n_reels
-        c_rewatch = min(rewatch_sum / max(0.01, baseline.rewatch_rate_base + 0.01), 1.0)
+        # FIX (Bug 10): If no back-scrolls in session, rewatch_compulsion must be exactly 0, not clipped
+        # Otherwise normalization amplifies it as placeholder when other drivers are also low
+        if rewatch_sum <= 0:
+            c_rewatch = 0.0
+        else:
+            c_rewatch = min(rewatch_sum / max(0.01, baseline.rewatch_rate_base + 0.01), 1.0)
         
         lux = session_df['AmbientLuxStart'].iloc[0] if 'AmbientLuxStart' in session_df else 50.0
         chrge = session_df['IsCharging'].iloc[0] if 'IsCharging' in session_df else 0
@@ -816,27 +821,62 @@ class ReelioCLSE:
         
         return path, raw_mean_doom, gamma
 
-    def compute_model_confidence(self) -> float:
-        C_volume = min(self.n_sessions_seen / 20.0, 1.0)
+    def compute_model_confidence_breakdown(self) -> dict:
+        """
+        Interpretable confidence decomposition for UI/debugging.
+        Each component is normalized to [0, 1] and combined with fixed weights.
+        """
+        # Data quantity confidence: saturates at ~20 sessions.
+        C_volume = float(np.clip(self.n_sessions_seen / 20.0, 0.0, 1.0))
 
-        mu_doom   = self.mu[0, 1]
-        mu_casual = self.mu[0, 0]
-        sigma_avg = (self.sigma[0, 0] + self.sigma[0, 1]) / 2
-
-        if sigma_avg > 0:
-            separation = (mu_casual - mu_doom) / sigma_avg
+        # State separation confidence from dwell feature overlap.
+        mu_doom = float(self.mu[0, 1])
+        mu_casual = float(self.mu[0, 0])
+        sigma_avg = float((self.sigma[0, 0] + self.sigma[0, 1]) / 2.0)
+        if sigma_avg > 1e-9:
+            separation = abs(mu_casual - mu_doom) / sigma_avg
             C_separation = float(np.clip(separation / 2.0, 0.0, 1.0))
         else:
             C_separation = 0.0
 
+        # Stability confidence from regime alert frequency.
         if self.n_sessions_seen > 0:
             alert_rate = self.n_regime_alerts / self.n_sessions_seen
             C_stability = float(np.clip(1.0 - alert_rate, 0.0, 1.0))
         else:
             C_stability = 1.0
 
-        # Pillar 7: Sparse Data Guard
-        return float(np.clip(C_volume * C_separation * C_stability, 0.0, 1.0))
+        # Supervision confidence from label coverage + agreement drift.
+        if self.n_sessions_seen > 0:
+            label_coverage = float(np.clip(self.labeled_sessions / self.n_sessions_seen, 0.0, 1.0))
+        else:
+            label_coverage = 0.0
+        disagreement_penalty = float(np.clip(abs(self.running_disagreement) / 0.25, 0.0, 1.0))
+        agreement_quality = 1.0 - disagreement_penalty
+        # Neutral when no labels; rises as labels accumulate and agree.
+        C_supervision = 0.5 if self.labeled_sessions == 0 else (0.6 * label_coverage + 0.4 * agreement_quality)
+
+        # Weighted blend is easier to interpret than multiplicative collapse.
+        overall = (
+            0.35 * C_volume +
+            0.35 * C_separation +
+            0.20 * C_stability +
+            0.10 * C_supervision
+        )
+
+        return {
+            'overall': float(np.clip(overall, 0.0, 1.0)),
+            'volume': float(C_volume),
+            'separation': float(C_separation),
+            'stability': float(C_stability),
+            'supervision': float(np.clip(C_supervision, 0.0, 1.0)),
+            'label_coverage': float(label_coverage),
+            'agreement_quality': float(np.clip(agreement_quality, 0.0, 1.0))
+        }
+
+    def compute_model_confidence(self) -> float:
+        # Keep legacy API while routing through the interpretable breakdown.
+        return float(self.compute_model_confidence_breakdown()['overall'])
 
     def _compute_label_confidence(self, df: pd.DataFrame) -> float:
         """
@@ -1192,9 +1232,9 @@ def load_full_state(state_path: str):
     # Without this guard, _compute_contextual_pi() crashes with a shape mismatch
     # the first time a user with a saved model state runs a session after the update.
     if hasattr(model, 'logistic_weights') and len(model.logistic_weights) == 7:
-        model.logistic_weights = np.append(model.logistic_weights, [0.9, 0.7])
+        model.logistic_weights = np.append(model.logistic_weights, [0.0, 0.0])
     elif hasattr(model, 'logistic_weights') and len(model.logistic_weights) == 8:
-        model.logistic_weights = np.append(model.logistic_weights, 0.7)
+        model.logistic_weights = np.append(model.logistic_weights, 0.0)
     
     if 'n_sessions_seen' not in model._checkpoint_dict:
         model.n_sessions_seen = data.get('model_state', {}).get('n_sessions_seen', 0)
@@ -1328,18 +1368,20 @@ def run_inference_on_latest(csv_data: str, model_state_path: str, survey_data: d
         return {"doom_score": 0.0, "doom_label": "UNSCORED", "model_confidence": 0.0}
         
     latest_sess_id, session_df = session_list[-1]
+
+    # Inject live survey data before preprocessing so supervised_doom is
+    # recomputed from the latest labels in this inference pass.
+    if survey_data:
+        for k, v in survey_data.items():
+            if k in session_df.columns:
+                session_df.loc[:, k] = v
+
     session_df = preprocess_session(session_df)
     
     model, baseline, detector, scorer, prev_gamma = load_full_state(model_state_path)
     
     if len(session_df) < 2:
         return {"doom_score": 0.0, "doom_label": "UNSCORED", "model_confidence": 0.0}
-        
-    # Inject live survey data if provided for real-time amplification
-    if survey_data:
-        for k, v in survey_data.items():
-            if k in session_df.columns:
-                session_df.loc[:, k] = v
         
     gamma, blended_prob = model.process_session(session_df, baseline, detector, prev_gamma)
     doom_prob = blended_prob
@@ -1356,7 +1398,8 @@ def run_inference_on_latest(csv_data: str, model_state_path: str, survey_data: d
     
     save_full_state(model_state_path, model, baseline, detector, scorer, gamma)
     
-    confidence = float(model.compute_model_confidence())
+    confidence_breakdown = model.compute_model_confidence_breakdown()
+    confidence = float(confidence_breakdown['overall'])
     # S_t for dashboard uses raw continuous posterior mean
     label = "DOOMSCROLLING" if doom_prob >= DOOM_PROBABILITY_THRESHOLD else "CASUAL"
     
@@ -1364,6 +1407,7 @@ def run_inference_on_latest(csv_data: str, model_state_path: str, survey_data: d
         "doom_score": float(doom_prob),
         "doom_label": label,
         "model_confidence": confidence,
+        "model_confidence_breakdown": confidence_breakdown,
         "heuristic_score": scorer_result.get('doom_score', 0.0),
         "heuristic_label": scorer_result.get('label', 'CASUAL'),
         "heuristic_components": scorer_result.get('components', {})
@@ -1371,7 +1415,7 @@ def run_inference_on_latest(csv_data: str, model_state_path: str, survey_data: d
 
 def make_session_key(row):
     try:
-        date_part = str(row['StartTime']).split(' ')[0]
+        date_part = str(row['StartTime'])[:10]
     except:
         date_part = "unknown"
     return f"{date_part}__{row['SessionNum']}"
@@ -1431,6 +1475,7 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
         if lines:
             header_cols = lines[0].split(',')
             if len(header_cols) < len(REQUIRED_COLUMNS):
+                print(f"SCHEMA_REWRITE: CSV has {len(header_cols)} columns, forcing {len(REQUIRED_COLUMNS)} REQUIRED_COLUMNS. This may indicate upstream data contract breakage.")
                 lines[0] = ','.join(REQUIRED_COLUMNS)
                 
         csv_data = '\n'.join(lines)
@@ -1438,6 +1483,18 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
     except Exception as e:
         return json.dumps({"error": f"CSV parse error: {str(e)}", "sessions": []})
         
+    # Preserve delayed-label supervision signals across dashboard replays.
+    preserved_disagreement = None
+    preserved_labeled_sessions = None
+    if state_path and os.path.exists(state_path):
+        try:
+            saved_model, _, _, _, _ = load_full_state(state_path)
+            preserved_disagreement = float(saved_model.running_disagreement)
+            preserved_labeled_sessions = int(saved_model.labeled_sessions)
+        except Exception:
+            preserved_disagreement = None
+            preserved_labeled_sessions = None
+
     model = ReelioCLSE()
     baseline = UserBaseline()
     detector = RegimeDetector()
@@ -1464,6 +1521,8 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
     prev_gamma = None
     
     results = []
+    sess_labels = []  # Track dominant state for each session for session-level transitions
+    sess_A = [[0.5, 0.5], [0.5, 0.5]]  # Initialize session-level transition matrix
     historical_agg = {name: 0.0 for name in COMPONENT_NAMES}
     total_st_weight = 0.0
     p_capture_timeline = []
@@ -1494,6 +1553,7 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
             total_st_weight += st_weight
 
             dom_state = 1 if S_t_reported >= DOOM_PROBABILITY_THRESHOLD else 0
+            sess_labels.append(dom_state)  # Collect for session-level transition counting
             
             time_period = s_df['TimePeriod'].iloc[0] if 'TimePeriod' in s_df.columns else "Unknown"
             
@@ -1568,8 +1628,25 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
         historical_drivers = {k: 0.0 for k in historical_agg}
     
     top_historical_driver = max(historical_drivers, key=historical_drivers.get) if historical_drivers else "N/A"
-
-    regime_stability = 1.0 / (1.0 - model.A[1, 1]) if (1.0 - model.A[1, 1]) > 1e-5 else 999.0
+    
+    # DEBUG: Log model confidence calculation for troubleshooting low confidence values
+    print(f"DEBUG model_confidence: n_sessions={model.n_sessions_seen}, mu_doom={model.mu[0,1]:.3f}, mu_casual={model.mu[0,0]:.3f}, sigma={(model.sigma[0,0]+model.sigma[0,1])/2:.3f}, regime_alerts={model.n_regime_alerts}")
+    if len(sess_labels) > 1:
+        n_transitions = [[0, 0], [0, 0]]
+        for i in range(1, len(sess_labels)):
+            prev_s = sess_labels[i - 1]
+            curr_s = sess_labels[i]
+            n_transitions[prev_s][curr_s] += 1
+        for s in range(2):
+            row_total = n_transitions[s][0] + n_transitions[s][1]
+            if row_total >= 2:  # need at least 2 transitions from this state
+                sess_A[s][0] = n_transitions[s][0] / row_total
+                sess_A[s][1] = n_transitions[s][1] / row_total
+    
+    # Compute regime stability (doom persistence metric) from session-level transitions
+    # If doom_inertia is very high, system feels "stuck"; if low, user can escape doom
+    doom_inertia = sess_A[1][1] if len(sess_labels) > 1 else model.A[1, 1]
+    regime_stability = 1.0 / (1.0 - max(doom_inertia, 0.01)) if doom_inertia < 0.99 else 100.0
     
     df_circ = pd.DataFrame(session_circadian) if session_circadian else pd.DataFrame(columns=['h', 'doom'])
     circadian_map = []
@@ -1591,10 +1668,13 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
             val = personal_avg_doom
         circadian_map.append({'h': f"{h:02d}", 'doom': round(float(val), 2)})
         
+    confidence_breakdown = model.compute_model_confidence_breakdown()
+
     output_payload = {
         "model_parameters": {
             "transition_matrix": model.A.tolist(),
-            "regime_stability_score": float(regime_stability)
+            "session_transition_matrix": sess_A,
+            "doom_persistence_score_per_reel": float(regime_stability)
         },
         "sessions": results,
         "historical_drivers": historical_drivers,
@@ -1603,7 +1683,8 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
             "p_capture": p_capture_timeline
         },
         "circadian": circadian_map,
-        "model_confidence": float(model.compute_model_confidence()),
+        "model_confidence": float(confidence_breakdown['overall']),
+        "model_confidence_breakdown": confidence_breakdown,
         "feature_weights": {
             "log_dwell":           float(model.feature_weights[0]),
             "log_speed":           float(model.feature_weights[1]),
@@ -1622,6 +1703,18 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
             "environment":         float(scorer.component_weights[6]),
         }
     }
+
+    if preserved_disagreement is not None:
+        model.running_disagreement = preserved_disagreement
+    if preserved_labeled_sessions is not None:
+        model.labeled_sessions = max(model.labeled_sessions, preserved_labeled_sessions)
+
+    # Persist model state so the incremental path (run_inference_on_latest)
+    # picks up from where the full dashboard replay ended, while retaining
+    # delayed-label supervision signals that are not present in CSV.
+    if state_path:
+        save_full_state(state_path, model, baseline, detector, scorer, prev_gamma)
+
     return json.dumps(output_payload)
 
 
@@ -1688,7 +1781,7 @@ def _section_header(title):
 
 # In-memory cache: avoids re-generating the PDF when nothing new has been logged
 _report_cache: str = None          # stores the last base64 PDF string
-_report_session_count: int = -1    # session count at last generation
+_report_cache_key: str = ""        # fingerprint of sessions at last generation
 
 
 def run_report_payload(json_data: str, csv_data: str = "") -> str:
@@ -1715,7 +1808,8 @@ def run_report_payload(json_data: str, csv_data: str = "") -> str:
 
         total_sessions = len(sessions)
         total_reels = sum(s.get("nReels", 0) for s in sessions)
-        A_mat = payload.get("model_parameters", {}).get("transition_matrix", [[0.8,0.2],[0.2,0.8]])
+        A_reel_mat = payload.get("model_parameters", {}).get("transition_matrix", [[0.8,0.2],[0.2,0.8]])
+        A_sess_mat = payload.get("model_parameters", {}).get("session_transition_matrix", A_reel_mat)
         model_confidence = float(payload.get("model_confidence", 0.5))
         circadian_data = payload.get("circadian", [])
         # Safeguard: ensure we don't crash if these are missing
@@ -1723,8 +1817,10 @@ def run_report_payload(json_data: str, csv_data: str = "") -> str:
         timeline_data = payload.get("timeline", {}).get("p_capture", [])
 
         # ── Cache hit check ──
-        global _report_cache, _report_session_count
-        if _report_cache and _report_session_count == total_sessions:
+        # Key on full payload so parameter updates and score recalculations invalidate cache.
+        global _report_cache, _report_cache_key
+        cache_key = _hashlib.md5(json_data.encode('utf-8')).hexdigest()
+        if _report_cache and _report_cache_key == cache_key:
             return _report_cache
 
         # Dates/times come from startTime field in each session — no csv_data needed
@@ -1759,7 +1855,7 @@ def run_report_payload(json_data: str, csv_data: str = "") -> str:
 
         for idx_s, s in enumerate(sessions):
             st = float(s.get("S_t", 0))
-            if st >= 0.50:
+            if st >= DOOM_PROBABILITY_THRESHOLD:
                 doom_sessions += 1
                 # Bug 3 — TIME from startTime field
                 try:
@@ -1806,8 +1902,11 @@ def run_report_payload(json_data: str, csv_data: str = "") -> str:
         except:
             peak_str = "???"
 
-        # ── Model matrix ──
-        A = np.array(A_mat)
+        # ── Model matrices ──
+        # Reel-level matrix powers within-session persistence metrics.
+        # Session-level matrix powers cross-session dynamics shown as "per session" in the report.
+        A_reel = np.array(A_reel_mat)
+        A_sess = np.array(A_sess_mat)
 
         # --- DOCUMENT BUILDING ---
         PW = A4[0] - 2 * 15 * mm   # 510pt — usable page width for all Drawing widths
@@ -1879,8 +1978,8 @@ def run_report_payload(json_data: str, csv_data: str = "") -> str:
 
         # Personalized insight sentence
         try:
-            doom_avg_reels  = sum(s.get("nReels", 0) for s in sessions if float(s.get("S_t",0)) >= 0.5) / max(1, doom_sessions)
-            casual_avg_reels = sum(s.get("nReels", 0) for s in sessions if float(s.get("S_t",0)) < 0.5) / max(1, total_sessions - doom_sessions)
+            doom_avg_reels  = sum(s.get("nReels", 0) for s in sessions if float(s.get("S_t",0)) >= DOOM_PROBABILITY_THRESHOLD) / max(1, doom_sessions)
+            casual_avg_reels = sum(s.get("nReels", 0) for s in sessions if float(s.get("S_t",0)) < DOOM_PROBABILITY_THRESHOLD) / max(1, total_sessions - doom_sessions)
             ratio = doom_avg_reels / max(0.01, casual_avg_reels)
             elements.append(Paragraph(
                 f"Your average doom session is <b>{ratio:.1f}×</b> longer than your casual sessions "
@@ -2088,8 +2187,8 @@ def run_report_payload(json_data: str, csv_data: str = "") -> str:
         ))
 
         # Arrow/bar chart showing entry rate vs escape rate
-        q_enter = float(A[0][1])   # C->D probability
-        q_escape = float(A[1][0])  # D->C probability
+        q_enter = float(A_sess[0][1])   # C->D probability per session
+        q_escape = float(A_sess[1][0])  # D->C probability per session
         d_trap = Drawing(PW, 100)
         # Entry bar
         entry_w = min(q_enter * PW * 0.8, PW - 40)
@@ -2104,12 +2203,12 @@ def run_report_payload(json_data: str, csv_data: str = "") -> str:
                           fontName='Courier', fontSize=8, fillColor=AMBER))
         elements.append(d_trap)
 
-        # Doom persistence — reels until statistically free
-        doom_persistence = 1.0 / max(1e-9, float(A[1][0]))   # expected reels in doom before escape
+        # Doom persistence — sessions until statistically free
+        doom_persistence = 1.0 / max(1e-9, float(A_sess[1][0]))   # expected sessions in doom before escape
         asymmetry_ratio  = q_enter / max(q_escape, 0.001)
         elements.append(Paragraph(
-            f"Once captured, you need to scroll through approximately "
-            f"<b>~{doom_persistence:.0f} reels</b> before statistically breaking free.",
+            f"Once captured, you need approximately "
+            f"<b>~{doom_persistence:.1f} sessions</b> before statistically breaking free.",
             BODY_STYLE
         ))
         elements.append(Paragraph(
@@ -2121,8 +2220,8 @@ def run_report_payload(json_data: str, csv_data: str = "") -> str:
         # Transition matrix table
         mt_data = [
             ["TRANSITION", "→ CASUAL", "→ DOOM"],
-            ["Casual",  f"{A[0][0]:.3f}", f"{A[0][1]:.3f}"],
-            ["Doom",    f"{A[1][0]:.3f}", f"{A[1][1]:.3f}"]
+            ["Casual",  f"{A_sess[0][0]:.3f}", f"{A_sess[0][1]:.3f}"],
+            ["Doom",    f"{A_sess[1][0]:.3f}", f"{A_sess[1][1]:.3f}"]
         ]
         mts = TableStyle([
             ('BACKGROUND',  (0,0), (-1,0), GRAY),   ('TEXTCOLOR', (0,0), (-1,0), WHITE),
@@ -2255,13 +2354,13 @@ def run_report_payload(json_data: str, csv_data: str = "") -> str:
 
         # 3 "What Your Data Says" bullets
         try:
-            doom_inertia = float(A[1][1])
+            doom_inertia = float(A_reel[1][1])
             first_10_doom = sum(float(s.get("S_t",0)) for s in sessions[:10]) / min(10, max(1,len(sessions)))
             last_10_doom  = sum(float(s.get("S_t",0)) for s in sessions[-10:]) / min(10, max(1,len(sessions)))
             delta_pct = (last_10_doom - first_10_doom) / max(0.01, first_10_doom) * 100
             trend_word = "worsened" if delta_pct > 5 else "improved" if delta_pct < -5 else "stayed stable"
             late_sessions = [s for s in sessions if (lambda st: (lambda dt: dt is not None and not pd.isna(dt) and dt.hour >= 22)(pd.to_datetime(st, errors='coerce')) if st and st not in ("","Unknown") else False)(s.get("startTime",""))]
-            late_doom_rate = sum(1 for s in late_sessions if float(s.get("S_t",0)) >= 0.5) / max(1, len(late_sessions))
+            late_doom_rate = sum(1 for s in late_sessions if float(s.get("S_t",0)) >= DOOM_PROBABILITY_THRESHOLD) / max(1, len(late_sessions))
 
             bullets = [
                 f"Model confidence: <b>{conf*100:.0f}%</b> — {status.lower()}. Based on {total_sessions} sessions.",
@@ -2286,7 +2385,7 @@ def run_report_payload(json_data: str, csv_data: str = "") -> str:
         buffer.close()
         
         _report_cache = base64.b64encode(pdf_bytes).decode('utf-8')
-        _report_session_count = total_sessions
+        _report_cache_key = cache_key
         return _report_cache
     except Exception as e:
         import traceback

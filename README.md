@@ -189,7 +189,7 @@ Instead of treating each reel independently, the model fits a geometric hazard r
 Tracks the KL-divergence between recent behavior and the stored baseline. If it exceeds a threshold (life event, new phone, holiday), the long-term memory bank is frozen and only recent/medium memory updates — preventing drift corruption.
 
 **7. Sparse-Data Guard**
-`model_confidence = min(1.0, n_sessions / 20)`. Below 20 sessions, all inferences are blended with the prior in proportion to confidence. The UI shows this value explicitly.
+Composite confidence formula: `model_confidence = C_volume × C_separation × C_stability`, where C_volume = min(n_sessions / 20, 1.0), C_separation measures Casual/Doom state distinguisability, and C_stability measures regime stability. Below 20 sessions, all inferences are blended with the prior in proportion to confidence. The UI shows this value explicitly.
 
 **8. Contextual State Priors**
 A lightweight logistic regression is run at session start using 4 physical context features (time of day, charging state, previous app category, ambient light) to set the initial state probability — before any reel-level evidence is incorporated.

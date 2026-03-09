@@ -134,7 +134,8 @@ class DashboardActivity : ComponentActivity() {
                             synchronized(InstaAccessibilityService.GLOBAL_PYTHON_LOCK) {
                                 android.util.Log.i("ReelioDiag", "Dashboard acquired PYTHON_LOCK (dashboard_payload). waited=${System.currentTimeMillis() - dashLockWait1}ms")
                                 val hmmModule = py.getModule("reelio_alse")
-                                val result = hmmModule.callAttr("run_dashboard_payload", csvContent).toString()
+                                val statePath = File(filesDir, "alse_model_state.json").absolutePath
+                                val result = hmmModule.callAttr("run_dashboard_payload", csvContent, statePath).toString()
                                 // Cache the fresh result
                                 hmmFile.writeText(result)
                                 android.util.Log.i("ReelioDiag", "Dashboard releasing PYTHON_LOCK (dashboard_payload). time=${System.currentTimeMillis()}")
@@ -322,7 +323,17 @@ class DashboardActivity : ComponentActivity() {
                             android.util.Log.i("ReelioDiag", "Dashboard acquired PYTHON_LOCK (report_payload). waited=${System.currentTimeMillis() - dashLockWait2}ms")
                             val py = Python.getInstance()
                             val hmmModule = py.getModule("reelio_alse")
-                            val result = hmmModule.callAttr("run_report_payload", csvContent).toString()
+                            // Read or generate the dashboard JSON — run_report_payload expects it as first arg
+                            val hmmFile = File(filesDir, "hmm_results.json")
+                            val jsonContent = if (hmmFile.exists() && hmmFile.length() > 10 && isCacheValid(hmmFile, file)) {
+                                hmmFile.readText(Charsets.UTF_8)
+                            } else {
+                                val statePath = File(filesDir, "alse_model_state.json").absolutePath
+                                val fresh = hmmModule.callAttr("run_dashboard_payload", csvContent, statePath).toString()
+                                hmmFile.writeText(fresh)
+                                fresh
+                            }
+                            val result = hmmModule.callAttr("run_report_payload", jsonContent, csvContent).toString()
                             android.util.Log.i("ReelioDiag", "Dashboard releasing PYTHON_LOCK (report_payload). time=${System.currentTimeMillis()}")
                             result
                         }

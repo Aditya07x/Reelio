@@ -179,7 +179,8 @@ class MainActivity : ComponentActivity() {
                             }
                             val py = Python.getInstance()
                             val alseModule = py.getModule("reelio_alse")
-                            jsonContent = alseModule.callAttr("run_dashboard_payload", csvContent).toString()
+                            val statePath = File(filesDir, "alse_model_state.json").absolutePath
+                            jsonContent = alseModule.callAttr("run_dashboard_payload", csvContent, statePath).toString()
                         } catch (e: Exception) {
                             Log.e("ReactDashboard", "Python Error: ${e.message}", e)
                             handler.post {
@@ -339,6 +340,46 @@ class MainActivity : ComponentActivity() {
             return "$start,$end"
         }
 
+        private fun isCacheValid(hmmFile: File, csvFile: File): Boolean {
+            // 1. Cache must be newer than CSV
+            if (csvFile.exists() && hmmFile.lastModified() < csvFile.lastModified()) {
+                android.util.Log.d("ReactDashboard", "Cache stale: CSV is newer, forcing recompute")
+                return false
+            }
+            // 2. Cache must contain circadian key with non-empty data
+            return try {
+                val text = hmmFile.readText(Charsets.UTF_8)
+
+                // Check key exists at all
+                if (!text.contains("\"circadian\"")) {
+                    android.util.Log.d("ReactDashboard", "Cache missing circadian key, forcing recompute")
+                    hmmFile.delete()
+                    return false
+                }
+
+                // Check circadian value is not empty — reject: "circadian": [] or "circadian": {}
+                val emptyCircadian = Regex("\"circadian\"\\s*:\\s*[\\[{]\\s*[\\];}]")
+                if (emptyCircadian.containsMatchIn(text)) {
+                    android.util.Log.d("ReactDashboard", "Cache has empty circadian array, forcing recompute")
+                    hmmFile.delete()
+                    return false
+                }
+
+                // Migration FIX: Ensure cache contains new endTime metric for live ticker
+                if (!text.contains("\"endTime\"")) {
+                    android.util.Log.d("ReactDashboard", "Cache missing endTime for Live Ticker, forcing recompute")
+                    hmmFile.delete()
+                    return false
+                }
+
+                android.util.Log.d("ReactDashboard", "Cache valid with circadian and ticker data")
+                true
+            } catch (e: Exception) {
+                android.util.Log.e("ReactDashboard", "Cache read error: ${e.message}")
+                false
+            }
+        }
+
         @JavascriptInterface
         fun generateReport() {
             CoroutineScope(Dispatchers.Main).launch {
@@ -348,8 +389,9 @@ class MainActivity : ComponentActivity() {
                     try {
                         // Use the pre-computed JSON (hmm_results.json) — no CSV re-parsing
                         val jsonFile = File(filesDir, "hmm_results.json")
+                        val csvFile = File(filesDir, "insta_data.csv")
                         val jsonContent = when {
-                            jsonFile.exists() && jsonFile.length() > 10 -> jsonFile.readText()
+                            jsonFile.exists() && jsonFile.length() > 10 && isCacheValid(jsonFile, csvFile) -> jsonFile.readText()
                             else -> {
                                 // Fallback: run dashboard first to build json
                                 val csvFile = File(filesDir, "insta_data.csv")
@@ -358,7 +400,8 @@ class MainActivity : ComponentActivity() {
                                 if (!Python.isStarted()) Python.start(AndroidPlatform(mContext))
                                 val py = Python.getInstance()
                                 val mod = py.getModule("reelio_alse")
-                                val freshJson = mod.callAttr("run_dashboard_payload", csvFile.readText()).toString()
+                                val statePath = File(filesDir, "alse_model_state.json").absolutePath
+                                val freshJson = mod.callAttr("run_dashboard_payload", csvFile.readText(), statePath).toString()
                                 jsonFile.writeText(freshJson)
                                 freshJson
                             }
