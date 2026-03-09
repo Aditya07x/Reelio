@@ -37,7 +37,7 @@ class MicroProbeActivity : Activity() {
         showSessionRatingPrompt()
     }
 
-    // ── Step 1: How was the session? ──────────────────────────────────────────
+    // ── Step 1: Post-Session Affective State ──────────────────────────────────
     private fun showSessionRatingPrompt() {
         val scroll = SurveyUIUtils.createScrollRoot(this)
         val layout = SurveyUIUtils.createMainLayout(this)
@@ -45,18 +45,27 @@ class MicroProbeActivity : Activity() {
         layout.addView(SurveyUIUtils.createSystemLabel(this))
         layout.addView(SurveyUIUtils.createStepIndicator(this, totalSteps = 4, currentStep = 1))
         layout.addView(SurveyUIUtils.createBadge(this, "POST-SESSION  ·  REVIEW", "#F20DA6"))
-        layout.addView(SurveyUIUtils.createTitleView(this, "Session Complete"))
-        layout.addView(SurveyUIUtils.createSubtitle(this, "HOW DO YOU FEEL ABOUT THE TIME YOU SPENT?"))
+        layout.addView(SurveyUIUtils.createTitleView(this, "Right now, after closing Instagram, I feel..."))
+        layout.addView(SurveyUIUtils.createSubtitle(this, "SELECT YOUR CURRENT STATE"))
         layout.addView(SurveyUIUtils.createDivider(this))
 
-        val ratingRow = buildEmojiRatingRow(
-            emojis    = listOf("😩", "😕", "😐", "🙂", "😌"),
-            sublabels = listOf("Wasted", "Mostly wasted", "Mixed", "Mostly worth it", "Well spent")
-        ) { rating ->
-            postSessionRating = rating
-            showMoodAfterPrompt()
+        val affectiveOptions = listOf(
+            Triple("Refreshed / entertained",     "😌", "#34C759"),
+            Triple("About the same as before",    "😐", "#0DDFF2"),
+            Triple("A little drained",            "😕", "#FFB340"),
+            Triple("Regret I opened it",          "😬", "#FF9500"),
+            Triple("Worse than before I opened it", "😩", "#FF2D55")
+        )
+
+        for ((index, triple) in affectiveOptions.withIndex()) {
+            val (label, emoji, color) = triple
+            layout.addView(
+                SurveyUIUtils.createOptionButton(this, label, emoji, color) {
+                    postSessionRating = 5 - index  // Best=5, Worst=1
+                    showMoodAfterPrompt()
+                }
+            )
         }
-        layout.addView(ratingRow)
 
         layout.addView(SurveyUIUtils.createSkipButton(this) {
             postSessionRating = 0
@@ -67,7 +76,7 @@ class MicroProbeActivity : Activity() {
         setContentView(scroll)
     }
 
-    // ── Step 2: Mood After ────────────────────────────────────────────────────
+    // ── Step 2: Focus Change (Before/After Comparison) ────────────────────────
     private fun showMoodAfterPrompt() {
         val scroll = SurveyUIUtils.createScrollRoot(this)
         val layout = SurveyUIUtils.createMainLayout(this)
@@ -75,25 +84,31 @@ class MicroProbeActivity : Activity() {
         layout.addView(SurveyUIUtils.createSystemLabel(this))
         layout.addView(SurveyUIUtils.createStepIndicator(this, totalSteps = 4, currentStep = 2))
         layout.addView(SurveyUIUtils.createBadge(this, "POST-SESSION  ·  FOCUS CHECK", "#F20DA6"))
-        layout.addView(SurveyUIUtils.createTitleView(this, "How's your focus right now?"))
-
-        // Show mood delta context if pre-session mood was recorded
-        if (moodBefore > 0) {
-            layout.addView(SurveyUIUtils.createSubtitle(this, "YOU RATED YOUR MOOD $moodBefore BEFORE THIS SESSION"))
-        } else {
-            layout.addView(SurveyUIUtils.createSubtitle(this, "RATE YOUR CURRENT FOCUS"))
-        }
-
+        layout.addView(SurveyUIUtils.createTitleView(this, "Compared to before you opened Instagram, your focus is..."))
+        layout.addView(SurveyUIUtils.createSubtitle(this, "HOW DID YOUR FOCUS CHANGE?"))
         layout.addView(SurveyUIUtils.createDivider(this))
 
-        val moodRow = buildEmojiRatingRow(
-            emojis    = listOf("🌫️", "😕", "😐", "🙂", "⚡"),
-            sublabels = listOf("Can't focus", "Scattered", "Okay", "Fairly sharp", "Sharp")
-        ) { rating ->
-            moodAfter = rating
-            showRegretPrompt()
+        val focusOptions = listOf(
+            Triple("Better or the same", "⚡", "#34C759"),
+            Triple("A bit worse",        "😕", "#FFB340"),
+            Triple("Much worse / scattered", "🌫️", "#FF2D55")
+        )
+
+        for ((index, triple) in focusOptions.withIndex()) {
+            val (label, emoji, color) = triple
+            val focusScore = when (index) {
+                0 -> 5  // Better/same
+                1 -> 3  // A bit worse
+                2 -> 1  // Much worse
+                else -> 0
+            }
+            layout.addView(
+                SurveyUIUtils.createOptionButton(this, label, emoji, color) {
+                    moodAfter = focusScore
+                    showRegretPrompt()
+                }
+            )
         }
-        layout.addView(moodRow)
 
         layout.addView(SurveyUIUtils.createSkipButton(this) {
             moodAfter = 0
@@ -118,6 +133,8 @@ class MicroProbeActivity : Activity() {
         val subtitle = when {
             intendedAction == "Stressed / Avoidance" ->
                 "YOU OPENED THIS TO AVOID SOMETHING"
+            intendedAction == "Procrastinating something" ->
+                "YOU OPENED THIS TO PROCRASTINATE"
             intendedAction == "Quick break (intentional)" ->
                 "YOU PLANNED A QUICK BREAK"
             intendedAction == "Habit / Automatic" ->
@@ -166,34 +183,27 @@ class MicroProbeActivity : Activity() {
     private fun showComparativePrompt() {
         val scroll = SurveyUIUtils.createScrollRoot(this)
         val layout = SurveyUIUtils.createMainLayout(this)
-        val prefs = getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
-        val lastDoom = prefs.getFloat("last_session_doom_for_compare", 0f)
 
         layout.addView(SurveyUIUtils.createSystemLabel(this))
         layout.addView(SurveyUIUtils.createStepIndicator(this, totalSteps = 4, currentStep = 4))
-        layout.addView(SurveyUIUtils.createBadge(this, "POST-SESSION  ·  STABILITY", "#F20DA6"))
-        layout.addView(SurveyUIUtils.createTitleView(this, "Relative to last time?"))
-        
-        val subtitle = if (lastDoom > 0.6f) {
-            "LAST SESSION WAS DETECTED AS HIGH-DOOM"
-        } else {
-            "COMPARED TO YOUR PREVIOUS INSTAGRAM SESSION"
-        }
-        layout.addView(SurveyUIUtils.createSubtitle(this, subtitle))
+        layout.addView(SurveyUIUtils.createBadge(this, "POST-SESSION  ·  EXPERIENCE", "#F20DA6"))
+        layout.addView(SurveyUIUtils.createTitleView(this, "This session was..."))
+        layout.addView(SurveyUIUtils.createSubtitle(this, "HOW DID THIS SESSION FEEL OVERALL?"))
         layout.addView(SurveyUIUtils.createDivider(this))
 
         val options = listOf(
-            Triple("Significantly better", "🌟", "#34C759"),
-            Triple("Slightly better",      "🙂", "#0A84FF"),
-            Triple("About the same",       "😐", "#D0DCF0"),
-            Triple("Slightly worse",       "😬", "#FFB340"),
-            Triple("Significantly worse",  "😤", "#FF2D55")
+            Triple("Intentional - I got what I came for", "✅", "#34C759"),
+            Triple("Okay, nothing special",               "🙂", "#0A84FF"),
+            Triple("Longer than I wanted",                "😕", "#FFB340"),
+            Triple("A waste of time",                     "😬", "#FF9500"),
+            Triple("I could not stop - it took over",     "😵", "#FF2D55")
         )
 
         options.forEachIndexed { index, (label, emoji, color) ->
             layout.addView(
                 SurveyUIUtils.createOptionButton(this, label, emoji, color) {
-                    comparativeRating = 5 - index
+                    // 1..5 scale, higher = worse; 0 remains reserved for skip/no response.
+                    comparativeRating = index + 1
                     finalizeProbe()
                 }
             )
@@ -214,6 +224,7 @@ class MicroProbeActivity : Activity() {
             intendedAction.isEmpty()              -> 0
             intendedAction == "Habit / Automatic" -> 1   // no stated intent to violate
             intendedAction == "Stressed / Avoidance" -> 0 // opening to avoid is inherently low-match
+            intendedAction == "Procrastinating something" -> 0 // explicit avoidance intent
             regretScore >= 4                      -> 0   // high regret = didn't match
             regretScore <= 2                      -> 1   // low regret = matched
             else                                  -> 2
@@ -226,7 +237,7 @@ class MicroProbeActivity : Activity() {
             regretScore,
             moodBefore,
             moodAfter,
-            if (moodAfter > 0 && moodBefore > 0) moodAfter - moodBefore else 0, // moodDelta
+            0, // moodDelta intentionally disabled: pre-state and post-focus now use different scales
             comparativeRating
         ).joinToString(",")
 
@@ -235,7 +246,7 @@ class MicroProbeActivity : Activity() {
             .putInt("probe_post_rating",       postSessionRating)
             .putInt("probe_regret_score",      regretScore)
             .putInt("probe_focus_after",       moodAfter)   // renamed: now captures focus, not mood
-            .putInt("probe_mood_delta",        if (moodAfter > 0 && moodBefore > 0) moodAfter - moodBefore else 0)
+            .putInt("probe_mood_delta",        0)
             .putInt("probe_actual_vs_intended", actualMatch)
             .putInt("comparative_rating",       comparativeRating)
             .putString("last_microprobe_result", consolidatedResult)

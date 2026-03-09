@@ -93,7 +93,7 @@ REQUIRED_COLUMNS = [
     "CircadianPhase", "SleepProxyScore", "EstimatedSleepDurationH", "ConsistencyScore", "IsWeekend",
     "PostSessionRating", "IntendedAction", "ActualVsIntendedMatch", "RegretScore", "MoodBefore", "MoodAfter", "MoodDelta",
     "SleepStart", "SleepEnd",
-    "PreviousContext", "DelayedRegretScore", "ComparativeRating", "MorningRestScore"
+    "PreviousContext", "DelayedRegretScore", "ComparativeRating"
 ]
 
 class SchemaError(Exception):
@@ -103,6 +103,65 @@ def validate_csv_schema(df):
     missing_cols = set(REQUIRED_COLUMNS) - set(df.columns)
     if missing_cols:
         raise SchemaError(f"Missing columns: {missing_cols}. Update InstaAccessibilityService or REQUIRED_COLUMNS.")
+
+
+def normalize_comparative_rating(raw_value) -> float:
+    """
+    Normalize comparative/session-experience signal to [0, 1], higher = worse.
+    Current encoding: 1..5 (best..worst), with 0 reserved for skipped/no response.
+    Legacy fallback values are clipped safely into [0,1].
+    """
+    try:
+        val = float(raw_value)
+    except Exception:
+        return 0.0
+
+    if val <= 0:
+        return 0.0
+    if 1.0 <= val <= 5.0:
+        return float(np.clip((val - 1.0) / 4.0, 0.0, 1.0))
+    if 0.0 < val < 1.0:
+        return float(np.clip(val, 0.0, 1.0))
+    if val <= 4.0:
+        return float(np.clip(val / 4.0, 0.0, 1.0))
+    return 1.0
+
+
+def normalize_prestate_risk(raw_value) -> float:
+    """
+    Normalize pre-session state input to [0, 1], higher = higher capture risk.
+    Supports:
+      - New encoded survey values: 1,2,6,7,10
+      - Legacy mood scale values: 1..5
+      - Direct risk values in 0..1
+    """
+    try:
+        val = float(raw_value)
+    except Exception:
+        return 0.5
+
+    if np.isnan(val) or val < 0:
+        return 0.5
+    if val == 0:
+        return 0.5
+
+    encoded_map = {
+        1.0: 0.0,  # Calm and focused
+        2.0: 0.1,  # Fine, just taking a break
+        6.0: 0.6,  # Restless or bored
+        7.0: 0.7,  # Tired / winding down
+        10.0: 1.0  # Stressed or overwhelmed
+    }
+    if val in encoded_map:
+        return encoded_map[val]
+
+    if 0.0 <= val <= 1.0:
+        return float(np.clip(val, 0.0, 1.0))
+    if 1.0 <= val <= 5.0:
+        return float(np.clip((5.0 - val) / 4.0, 0.0, 1.0))
+    if 5.0 < val <= 10.0:
+        return float(np.clip(val / 10.0, 0.0, 1.0))
+    return float(np.clip(val / 100.0, 0.0, 1.0))
 
 def preprocess_session(df):
     df = df.copy()
@@ -150,24 +209,41 @@ def preprocess_session(df):
         imm = df['RegretScore'].iloc[0] / 5.0 if 'RegretScore' in df.columns else 0.0
         # Delayed regret (1hr later) is more honest/accurate (hedonic decay)
         del_reg = df['DelayedRegretScore'].iloc[0] / 5.0 if 'DelayedRegretScore' in df.columns else 0.0
-        # Better/Same/Worse comparison (Better=1, Worse=5)
-        comp = df['ComparativeRating'].iloc[0] / 5.0 if 'ComparativeRating' in df.columns else 0.0
+        comp_raw = df['ComparativeRating'].iloc[0] if 'ComparativeRating' in df.columns else 0.0
+        has_comp = float(comp_raw) > 0
+        # Session experience/comparative score normalized to [0,1], higher=worse
+        comp = normalize_comparative_rating(comp_raw) if has_comp else 0.0
         
         # Priority: Delayed Regret > Comparative > Immediate Regret
         label_score = 0.0
         if del_reg > 0:
-            label_score = 0.6 * del_reg + 0.4 * comp if comp > 0 else del_reg
-        elif comp > 0:
+            label_score = 0.6 * del_reg + 0.4 * comp if has_comp else del_reg
+        elif has_comp:
             label_score = 0.7 * comp + 0.3 * imm
         else:
             label_score = imm
         
         # Intent-based boost: avoidance/boredom intent + completed session is a strong doom signal
         intended = str(df['IntendedAction'].iloc[0]) if 'IntendedAction' in df.columns else ""
-        if intended in ("Stressed / Avoidance", "Bored / Nothing to do"):
+        if intended in ("Stressed / Avoidance", "Bored / Nothing to do", "Procrastinating something"):
             label_score = min(1.0, label_score + 0.25)
             
         df['supervised_doom'] = float(np.clip(label_score, 0.0, 1.0))
+    
+    # Intent-behavior mismatch signal
+    # When stated intent was low-risk but behavior was high-capture, 
+    # this is high-confidence doom regardless of self-report
+    if 'intent_mismatch' not in df.columns:
+        intended = str(df['IntendedAction'].iloc[0]) if 'IntendedAction' in df.columns else ""
+        low_risk_intents = ['Quick break (intentional)', 'Specific content lookup']
+        if intended in low_risk_intents:
+            reels = len(df)
+            exit_rate = df['AppExitAttempts'].mean() if 'AppExitAttempts' in df.columns else 0.0
+            # Mismatch: said quick break but session was long with high exit conflict
+            intent_mismatch = 1.0 if (reels > 20 or exit_rate > 0.05) else 0.0
+        else:
+            intent_mismatch = 0.0
+        df['intent_mismatch'] = intent_mismatch
         
     num_cols = df.select_dtypes(include=[np.number]).columns
     df[num_cols] = df[num_cols].fillna(0)
@@ -462,6 +538,7 @@ class DoomScorer:
         regret             = session_df['RegretScore'].iloc[0]           if 'RegretScore'          in session_df else 0
         focus_after        = session_df['MoodAfter'].iloc[0]             if 'MoodAfter'            in session_df else 0
         actual_vs_intended = session_df['ActualVsIntendedMatch'].iloc[0] if 'ActualVsIntendedMatch' in session_df else 2
+        intent_mismatch    = session_df['intent_mismatch'].iloc[0]       if 'intent_mismatch'      in session_df else 0
 
         amp = 0.0
         if (post_rating > 0 and post_rating < 3) or regret >= 3:
@@ -470,6 +547,8 @@ class DoomScorer:
             amp += 0.15
         if actual_vs_intended == 0:                 # confirmed intent mismatch
             amp += 0.10
+        if intent_mismatch == 1.0:                  # behavioral intent mismatch (said quick break but long/high-conflict)
+            amp += 0.15
         ds = np.clip(ds * (1.0 + amp), 0.0, 1.0)
             
         label = 'DOOM' if ds >= self.thresholds['DOOM'] else 'BORDERLINE' if ds >= self.thresholds['BORDERLINE'] else 'CASUAL'
@@ -1095,14 +1174,15 @@ class ReelioCLSE:
         risk_indicators = [
             intended == "Stressed / Avoidance",
             intended == "Bored / Nothing to do",
+            intended == "Procrastinating something",
             prev_ctx == "Work / Study",
             prev_ctx == "Boredom"
         ]
         stress_flag = 1.0 if any(risk_indicators) else 0.0
 
-        # Pre-session Mood Risk: low mood (1-2) = high risk, high mood (4-5) = low risk
-        mood_before_raw = float(df['MoodBefore'].iloc[0]) if 'MoodBefore' in df.columns else 3.0
-        mood_risk = (5.0 - mood_before_raw) / 4.0  # inverted: 1→1.0, 3→0.5, 5→0.0
+        # Pre-session state risk (supports new stress-state encoding and legacy mood data)
+        mood_before_raw = float(df['MoodBefore'].iloc[0]) if 'MoodBefore' in df.columns else 0.0
+        mood_risk = normalize_prestate_risk(mood_before_raw)
 
         ctx = np.array([
             1.0,
@@ -1113,7 +1193,7 @@ class ReelioCLSE:
             1.0 if chrge else 0.0,
             1.0 if day_of_week in (1, 7) else 0.0,
             stress_flag,                                 # index 7: pre-session stress/avoidance
-            mood_risk                                    # index 8: low pre-session mood
+            mood_risk                                    # index 8: pre-session state risk
         ])
         
         A_first = self._a_gap(gap_hr)
@@ -1312,16 +1392,17 @@ def apply_delayed_label(state_path: str, delayed_regret: int, comparative: int) 
         
         # Recompute supervised_doom with delayed data
         del_reg = delayed_regret / 5.0
-        comp = comparative / 5.0
+        has_comp = comparative > 0
+        comp = normalize_comparative_rating(comparative) if has_comp else 0.0
         if del_reg > 0:
-            supervised_doom = 0.6 * del_reg + 0.4 * comp if comp > 0 else del_reg
-        elif comp > 0:
+            supervised_doom = 0.6 * del_reg + 0.4 * comp if has_comp else del_reg
+        elif has_comp:
             supervised_doom = comp
         else:
             return json.dumps({"status": "no_update", "reason": "no delayed or comparative data"})
         
         # Label confidence is now much higher
-        label_conf = 1.0 if (del_reg > 0 and comp > 0) else 0.85
+        label_conf = 1.0 if (del_reg > 0 and has_comp) else 0.85
         
         # Last session's raw HMM doom is stored in detector history
         if not detector.doom_history:

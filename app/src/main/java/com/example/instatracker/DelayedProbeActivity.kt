@@ -9,22 +9,16 @@ import android.view.WindowManager
 class DelayedProbeActivity : Activity() {
 
     private var sessionNum = -1
-    private var isMorning = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         sessionNum = intent.getIntExtra("session_num", -1)
-        isMorning = intent.getBooleanExtra("is_morning", false)
 
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
         window.statusBarColor = Color.parseColor("#05050A")
 
-        if (isMorning) {
-            showMorningPrompt()
-        } else {
-            showDelayedRegretPrompt()
-        }
+        showDelayedRegretPrompt()
     }
 
     private fun showDelayedRegretPrompt() {
@@ -33,58 +27,24 @@ class DelayedProbeActivity : Activity() {
 
         layout.addView(SurveyUIUtils.createSystemLabel(this))
         layout.addView(SurveyUIUtils.createBadge(this, "POST-SESSION  ·  REFLECTION", "#BF5AF2"))
-        layout.addView(SurveyUIUtils.createTitleView(this, "Reflecting on session #${sessionNum}"))
-        layout.addView(SurveyUIUtils.createSubtitle(this, "NOW THAT YOU'VE STEPPED AWAY, HOW DOES THAT TIME FEEL?"))
+        layout.addView(SurveyUIUtils.createTitleView(this, "An hour ago you were on Instagram. Looking back..."))
+        layout.addView(SurveyUIUtils.createSubtitle(this, "HOW DOES SESSION #${sessionNum} FEEL NOW?"))
         layout.addView(SurveyUIUtils.createDivider(this))
 
         val options = listOf(
-            Triple("Extreme Regret", "😩", "#FF2D55"),
-            Triple("Some Regret",    "😕", "#FFB340"),
-            Triple("Neutral",        "😐", "#D0DCF0"),
-            Triple("Slightly Glad",  "🙂", "#0A84FF"),
-            Triple("Very Glad",      "😌", "#34C759")
+            Triple("I'm glad I took that break",            "😌", "#34C759"),
+            Triple("It was fine, nothing to worry about",   "🙂", "#0A84FF"),
+            Triple("I wish I'd stopped sooner",             "😕", "#FFB340"),
+            Triple("I regret opening it at all",            "😣", "#FF9500"),
+            Triple("I still feel off / distracted from it", "😩", "#FF2D55")
         )
 
         options.forEachIndexed { index, (label, emoji, color) ->
             layout.addView(
                 SurveyUIUtils.createOptionButton(this, label, emoji, color) {
-                    val score = 5 - index
+                    // 1..5 scale, higher = worse reflection.
+                    val score = index + 1
                     saveDelayedRegret(score)
-                }
-            )
-        }
-
-        layout.addView(SurveyUIUtils.createSkipButton(this) {
-            finish()
-        })
-
-        scroll.addView(layout)
-        setContentView(scroll)
-    }
-
-    private fun showMorningPrompt() {
-        val scroll = SurveyUIUtils.createScrollRoot(this)
-        val layout = SurveyUIUtils.createMainLayout(this)
-
-        layout.addView(SurveyUIUtils.createSystemLabel(this))
-        layout.addView(SurveyUIUtils.createBadge(this, "MORNING CHECK-IN", "#34C759"))
-        layout.addView(SurveyUIUtils.createTitleView(this, "How did you sleep?"))
-        layout.addView(SurveyUIUtils.createSubtitle(this, "YOUR LATE-NIGHT SCROLLING MAY HAVE IMPACTED REST"))
-        layout.addView(SurveyUIUtils.createDivider(this))
-
-        val options = listOf(
-            Triple("Very Rested",   "⚡", "#34C759"),
-            Triple("Fairly Rested", "🙂", "#0A84FF"),
-            Triple("Okay",          "😐", "#D0DCF0"),
-            Triple("Tired",         "🥱", "#FFB340"),
-            Triple("Exhausted",     "😫", "#FF2D55")
-        )
-
-        options.forEachIndexed { index, (label, emoji, color) ->
-            layout.addView(
-                SurveyUIUtils.createOptionButton(this, label, emoji, color) {
-                    val score = 5 - index
-                    saveMorningRest(score)
                 }
             )
         }
@@ -128,14 +88,6 @@ class DelayedProbeActivity : Activity() {
             }
         }.start()
         
-        finish()
-    }
-
-    private fun saveMorningRest(score: Int) {
-        getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
-            .edit()
-            .putInt("morning_rest_score", score)
-            .apply()
         finish()
     }
 }

@@ -26,28 +26,36 @@ class IntentionProbeActivity : Activity() {
         showMoodPrompt()
     }
 
-    // ── Step 1: Mood Before ───────────────────────────────────────────────────
+    // ── Step 1: Stress/Restlessness State ─────────────────────────────────────
     private fun showMoodPrompt() {
         val scroll = SurveyUIUtils.createScrollRoot(this)
         val layout = SurveyUIUtils.createMainLayout(this)
 
         layout.addView(SurveyUIUtils.createSystemLabel(this))
         layout.addView(SurveyUIUtils.createStepIndicator(this, totalSteps = 3, currentStep = 1))
-        layout.addView(SurveyUIUtils.createBadge(this, "PRE-SESSION  ·  MOOD CHECK", "#0DDFF2"))
-        layout.addView(SurveyUIUtils.createTitleView(this, "How are you feeling?"))
-        layout.addView(SurveyUIUtils.createSubtitle(this, "RATE YOUR CURRENT MOOD"))
+        layout.addView(SurveyUIUtils.createBadge(this, "PRE-SESSION  ·  STATE CHECK", "#0DDFF2"))
+        layout.addView(SurveyUIUtils.createTitleView(this, "Right now I feel..."))
+        layout.addView(SurveyUIUtils.createSubtitle(this, "SELECT YOUR CURRENT STATE"))
         layout.addView(SurveyUIUtils.createDivider(this))
 
-        // Mood labels with emojis above the buttons
-        val moodRow = buildMoodButtonRow(
-            labels   = listOf("1", "2", "3", "4", "5"),
-            emojis   = listOf("😞", "😕", "😐", "🙂", "😊"),
-            sublabels = listOf("Low", "", "Neutral", "", "High")
-        ) { rating ->
-            moodBefore = rating
-            showContextPrompt()
+        val stressOptions = listOf(
+            Triple("Calm and focused", "😌", "#34C759") to 1,
+            Triple("A bit restless or bored", "😶", "#0A84FF") to 6,
+            Triple("Stressed or overwhelmed", "😤", "#FF2D55") to 10,
+            Triple("Tired / winding down", "🥱", "#BF5AF2") to 7,
+            Triple("Fine, just taking a break", "☕", "#FFB340") to 2
+        )
+
+        for ((choice, encodedRisk) in stressOptions) {
+            val (label, emoji, color) = choice
+            layout.addView(
+                SurveyUIUtils.createOptionButton(this, label, emoji, color) {
+                    // Encoded risk scale for Python: 1->0.0, 2->0.1, 6->0.6, 7->0.7, 10->1.0
+                    moodBefore = encodedRisk
+                    showContextPrompt()
+                }
+            )
         }
-        layout.addView(moodRow)
 
         layout.addView(SurveyUIUtils.createSkipButton(this) {
             moodBefore = 0
@@ -112,6 +120,7 @@ class IntentionProbeActivity : Activity() {
         val options = listOf(
             Triple("Bored / Nothing to do",     "😶", "#0DDFF2"),
             Triple("Stressed / Avoidance",      "😤", "#FF2D55"),
+            Triple("Procrastinating something", "⏰", "#FF9500"),
             Triple("Habit / Automatic",         "🔁", "#BF5AF2"),
             Triple("Quick break (intentional)", "☕", "#FFB340"),
         )
@@ -149,76 +158,5 @@ class IntentionProbeActivity : Activity() {
             .putLong("intention_session_timestamp", System.currentTimeMillis())
             .apply()
         finish()
-    }
-
-    // ── Emoji + numeric mood button grid ──────────────────────────────────────
-    private fun buildMoodButtonRow(
-        labels: List<String>,
-        emojis: List<String>,
-        sublabels: List<String>,
-        onSelect: (Int) -> Unit
-    ): LinearLayout {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            lp.bottomMargin = SurveyUIUtils.run {
-                android.util.TypedValue.applyDimension(
-                    android.util.TypedValue.COMPLEX_UNIT_DIP, 8f, resources.displayMetrics
-                ).toInt()
-            }
-            layoutParams = lp
-        }
-
-        labels.forEachIndexed { index, label ->
-            val cell = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                val cellLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                cellLp.setMargins(6, 0, 6, 0)
-                layoutParams = cellLp
-            }
-
-            val emojiTv = TextView(this).apply {
-                text = emojis[index]
-                textSize = 22f
-                gravity = Gravity.CENTER
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).also { it.bottomMargin = 8 }
-            }
-
-            val btn = SurveyUIUtils.createStyledButton(this, label) {
-                onSelect(label.toInt())
-            }
-            btn.layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-
-            val subTv = TextView(this).apply {
-                text = sublabels[index]
-                textSize = 8f
-                setTextColor(Color.parseColor("#6B7A9F"))
-                gravity = Gravity.CENTER
-                val lp = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-                lp.topMargin = 6
-                layoutParams = lp
-            }
-
-            cell.addView(emojiTv)
-            cell.addView(btn)
-            cell.addView(subTv)
-            row.addView(cell)
-        }
-
-        return row
     }
 }

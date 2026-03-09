@@ -786,6 +786,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             .putInt("probe_focus_after", 0)
             .putInt("probe_mood_delta", 0)
             .putInt("probe_actual_vs_intended", 0)
+            .putInt("comparative_rating", 0)
             .apply()
 
         if (isSurveySession) showIntentionPrompt()
@@ -955,7 +956,8 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                 .putInt("longest_session_today", longestSessionTodayReels)
                 .putBoolean("morning_session_exists", morningSessionExists)
                 .apply()
-                
+            
+            schedulePostSessionProbes(endTime)
             injectSessionToDatabase(sessionStartTime!!, endTime)
             
             sessionStartTime = null
@@ -969,9 +971,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     
     private fun schedulePostSessionProbes(sessionEndTime: Long) {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        
-        // Immediate probe
-        showSurveyPrompt()
+        if (!prefs.getBoolean("is_survey_session", false)) return
         
         // Delayed probe: only if session scored above borderline threshold
         val lastDoom = prefs.getFloat("last_session_doom_score", 0f)
@@ -989,33 +989,6 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 sessionEndTime + 60 * 60 * 1000L,
-                pending
-            )
-        }
-        
-        // Morning check-in: only for late-night sessions (after 10pm)
-        val cal = Calendar.getInstance()
-        cal.timeInMillis = sessionEndTime
-        val sessionHour = cal.get(Calendar.HOUR_OF_DAY)
-        if (sessionHour >= 22 || sessionHour < 4) {
-            val tomorrow8am = Calendar.getInstance().apply {
-                if (sessionHour >= 22) add(Calendar.DAY_OF_YEAR, 1)
-                set(Calendar.HOUR_OF_DAY, 8)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent = Intent(this, MorningCheckInReceiver::class.java)
-            val pending = PendingIntent.getBroadcast(
-                this,
-                9001,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                tomorrow8am.timeInMillis,
                 pending
             )
         }
@@ -1048,7 +1021,8 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         val reg = prefs.getInt("probe_regret_score", 0)
         val mBf = prefs.getInt("current_mood_before", 0)
         val mAf = prefs.getInt("probe_focus_after", 0)
-        val mDl = if (mAf > 0 && mBf > 0) mAf - mBf else 0
+        // Disabled: pre-state and post-focus now use different scales.
+        val mDl = 0
 
         serviceScope.launch(Dispatchers.IO) {
             try {

@@ -62,10 +62,6 @@
             android:name=".DelayedProbeReceiver"
             android:exported="false" />
 
-        <receiver
-            android:name=".MorningCheckInReceiver"
-            android:exported="false" />
-
         <service
             android:name=".InstaAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
