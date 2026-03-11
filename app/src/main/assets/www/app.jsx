@@ -1,1120 +1,1203 @@
-const { useState, useEffect, useRef } = React;
-const {
-    AreaChart, Area, XAxis, YAxis, Tooltip,
-    ResponsiveContainer, LineChart, Line, ReferenceLine
-} = window.Recharts;
-const {
-    Eye, Zap, Shield, Clock, Brain, Activity,
-    AlertTriangle, ChevronRight, Radio, Download,
-    Trash2, Settings, ArrowLeft, TrendingDown,
-    Lock, Cpu, BarChart2, Moon, Battery, Wifi,
-    ChevronUp, ChevronDown
-} = window.lucideReact;
+import {
+    useState, useEffect, useRef, useMemo,
+    D, Styles,
+    safeArr, safeNum, maybeNum, isFiniteNumber,
+    averageOf, sumOf,
+    deriveSessionDurationSec, normalizeDateKey, pickSessionTimestampMs,
+    formatDurationSec, formatHourWindow,
+} from './shared.jsx';
 
-/* ─── DESIGN SYSTEM ────────────────────────────────────────────── */
-const D = {
-    bg: "#05050A",
-    surface: "rgba(10,17,20,0.95)",
-    card: "rgba(10,17,20,0.80)",
-    doom: "#FF2D55",
-    doomMag: "#f20da6",
-    safe: "#0ddff2",
-    warn: "#FFB340",
-    violet: "#BF5AF2",
-    blue: "#0A84FF",
-    text: "#D0DCF0",
-    muted: "#3D4F6B",
-    border: "rgba(13,223,242,0.12)",
-    borderDoom: "rgba(242,13,166,0.35)",
-    borderDanger: "rgba(255,45,85,0.35)",
-};
-
-/* ─── INJECTED STYLES ──────────────────────────────────────────── */
-const Styles = () => (
-    <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Space+Mono:wght@400;700&display=swap');
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    .app-shell {
-      width: 100%; min-height: 100vh;
-      background: ${D.bg};
-      font-family: 'Space Grotesk', sans-serif;
-      color: ${D.text};
-      position: relative;
-      overflow: hidden;
-      max-width: 500px;
-      margin: 0 auto;
-    }
-    .mono  { font-family: 'Share Tech Mono', monospace; }
-    .spacemono { font-family: 'Space Mono', monospace; }
-
-    /* ── Cyber grid background ── */
-    .app-shell::before {
-      content: '';
-      position: fixed; inset: 0;
-      background-image:
-        linear-gradient(to right, rgba(13,223,242,0.04) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(13,223,242,0.04) 1px, transparent 1px);
-      background-size: 20px 20px;
-      pointer-events: none; z-index: 0;
-    }
-
-    /* ── Top gradient bloom ── */
-    .app-shell::after {
-      content: '';
-      position: fixed; top: 0; left: 0; right: 0; height: 200px;
-      background: linear-gradient(to bottom, rgba(13,223,242,0.07), transparent);
-      pointer-events: none; z-index: 0;
-    }
-
-    /* ── Scanline overlay ── */
-    .scanlines {
-      position: fixed; inset: 0;
-      background: linear-gradient(to bottom, rgba(255,255,255,0) 50%, rgba(0,0,0,0.08) 50%);
-      background-size: 100% 4px;
-      pointer-events: none; z-index: 0; opacity: 0.4;
-    }
-
-    .text-glow-safe  { text-shadow: 0 0 10px rgba(13,223,242,0.6); }
-    .text-glow-doom  { text-shadow: 0 0 14px rgba(242,13,166,0.7); }
-    .text-glow-warn  { text-shadow: 0 0 10px rgba(255,179,64,0.5); }
-
-    .border-glow-safe   { box-shadow: 0 0 12px rgba(13,223,242,0.2), inset 0 0 6px rgba(13,223,242,0.06); }
-    .border-glow-doom   { box-shadow: 0 0 20px rgba(242,13,166,0.25), inset 0 0 8px rgba(242,13,166,0.06); }
-    .border-glow-danger { box-shadow: 0 0 15px rgba(255,45,85,0.2),  inset 0 0 5px rgba(255,45,85,0.05); }
-
-    @keyframes pulse-dot  { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.8)} }
-    @keyframes ring-out   { 0%{transform:scale(1);opacity:0.7} 100%{transform:scale(1.8);opacity:0} }
-    @keyframes slide-up   { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-    @keyframes scan-line  { 0%{top:-2px} 100%{top:100%} }
-    @keyframes float      { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
-    @keyframes ping-slow  { 0%,100%{transform:scale(1);opacity:0.75} 50%{transform:scale(1.6);opacity:0} }
-
-    .pulse    { animation: pulse-dot 2s ease-in-out infinite; }
-    .slide-up { animation: slide-up 0.5s ease both; }
-    .float    { animation: float 3s ease-in-out infinite; }
-    .ping     { animation: ping-slow 2s ease-in-out infinite; }
-
-    .scan {
-      position: absolute; left: 0; right: 0; height: 1px;
-      background: linear-gradient(90deg, transparent, ${D.safe}88, transparent);
-      animation: scan-line 5s linear infinite;
-      pointer-events: none;
-    }
-
-    /* ── Glass card ── */
-    .card {
-      background: rgba(10,17,20,0.80);
-      border: 1px solid ${D.border};
-      border-radius: 16px;
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      position: relative;
-      overflow: hidden;
-    }
-    .card::after {
-      content: '';
-      position: absolute; inset: 0;
-      background: linear-gradient(135deg, rgba(13,223,242,0.03) 0%, transparent 60%);
-      pointer-events: none; border-radius: inherit;
-    }
-
-    /* ── Doom card variant (magenta) ── */
-    .card-doom {
-      border-color: ${D.borderDoom};
-      background: rgba(26,11,21,0.80);
-    }
-    .card-doom::before {
-      content: '';
-      position: absolute; top: 0; left: 0; right: 0; height: 2px;
-      background: linear-gradient(90deg, transparent, ${D.doomMag}, transparent);
-      opacity: 0.7;
-    }
-
-    /* ── Danger card variant (red) ── */
-    .card-danger { border-color: ${D.borderDanger}; }
-    .card-danger::before {
-      content: '';
-      position: absolute; top: 0; left: 0; right: 0; height: 2px;
-      background: linear-gradient(90deg, transparent, ${D.doom}, transparent);
-      opacity: 0.5;
-    }
-
-    ::-webkit-scrollbar { width: 3px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: ${D.muted}; border-radius: 2px; }
-
-    /* ── Primary button ── */
-    .btn-primary {
-      width: 100%;
-      padding: 18px;
-      border-radius: 14px;
-      border: none;
-      cursor: pointer;
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 16px;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      background: linear-gradient(135deg, ${D.safe}, #00B8A4);
-      color: #020A0A;
-      position: relative; overflow: hidden;
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-      box-shadow: 0 8px 32px rgba(13,223,242,0.25);
-    }
-    .btn-primary:active { transform: scale(0.98); }
-    .btn-primary::after {
-      content: '';
-      position: absolute; inset: 0;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-      transform: translateX(-100%); transition: transform 0.5s ease;
-    }
-    .btn-primary:hover::after { transform: translateX(100%); }
-
-    input[type=range] {
-      -webkit-appearance: none; width: 100%;
-      height: 3px; border-radius: 2px;
-      background: rgba(13,223,242,0.2); outline: none;
-    }
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 16px; height: 16px; border-radius: 50%;
-      background: ${D.safe};
-      box-shadow: 0 0 10px ${D.safe};
-      cursor: pointer;
-    }
-
-    /* ── Neon progress bar ── */
-    .neon-bar-doom { box-shadow: 0 0 8px rgba(242,13,166,0.7); }
-    .neon-bar-safe { box-shadow: 0 0 8px rgba(13,223,242,0.6); }
-
-    /* ── Tab bar ── */
-    .tab-bar {
-      position: sticky; bottom: 0;
-      background: rgba(5,5,10,0.95);
-      backdrop-filter: blur(20px);
-      border-top: 1px solid ${D.border};
-      display: flex;
-    }
-    .tab-item {
-      flex: 1; padding: 12px 8px 16px;
-      display: flex; flex-direction: column;
-      align-items: center; gap: 3px;
-      cursor: pointer; border: none;
-      background: transparent; color: ${D.muted};
-      font-family: 'Space Grotesk'; font-size: 10px;
-      font-weight: 600; letter-spacing: 0.05em;
-      transition: color 0.2s;
-    }
-    .tab-item.active { color: ${D.safe}; }
-    .tab-item.active svg { filter: drop-shadow(0 0 6px ${D.safe}); }
-  `}</style>
+// ─── TAB ICONS (hand-crafted SVG, no emoji) ──────────────────────────────────
+const TabIconMonitor = ({ size = 20, color = "currentColor" }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
+        <circle cx="12" cy="12" r="3" />
+    </svg>
 );
-
-/* ─── MICRO COMPONENTS ─────────────────────────────────────────── */
-const Label = ({ children, style = {} }) => (
-    <span className="mono" style={{
-        fontSize: 10, letterSpacing: "0.18em",
-        color: D.muted, textTransform: "uppercase", ...style
-    }}>{children}</span>
+const TabIconCalendar = ({ size = 20, color = "currentColor" }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+        <rect x="8" y="14" width="3" height="3" rx="0.5" fill={color} stroke="none" />
+    </svg>
 );
+const TabIconDashboard = ({ size = 20, color = "currentColor" }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+    </svg>
+);
+const TabIconSettings = ({ size = 20, color = "currentColor" }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001.08 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1.08z" />
+    </svg>
+);
+import { MonitorScreen } from './screens/MonitorScreen.jsx';
+import { CaptureCalendarScreen } from './screens/CalendarScreen.jsx';
+import { DashboardScreen } from './screens/DashboardScreen.jsx';
+import { SettingsScreen } from './screens/SettingsScreen.jsx';
 
-const Tag = ({ label }) => {
-    const c = label === "DOOM" ? D.doomMag : label === "BORDERLINE" ? D.warn : D.safe;
+// ─── LoadingState ─────────────────────────────────────────────────────────────
+function LoadingState() {
     return (
-        <span className="mono" style={{
-            fontSize: 10, padding: "3px 10px", borderRadius: 4,
-            color: c, background: c + "22", border: `1px solid ${c}55`,
-            letterSpacing: "0.12em", fontWeight: 700,
-        }}>{label}</span>
-    );
-};
-
-const Divider = () => (
-    <div style={{ height: 1, background: D.border, margin: "0 -1px" }} />
-);
-
-/* ─── DOOM GAUGE ────────────────────────────────────────────────── */
-const DoomGauge = ({ value, label }) => {
-    const pct = Math.round(value * 100);
-    const col = pct > 60 ? D.doom : pct > 40 ? D.warn : D.safe;
-    // Arc: semicircle, 0..180 degrees
-    const angle = (pct / 100) * 180;
-    const r = 54, cx = 70, cy = 68;
-    const toRad = (deg) => (deg - 180) * Math.PI / 180;
-    const x = (deg) => cx + r * Math.cos(toRad(deg));
-    const y = (deg) => cy + r * Math.sin(toRad(deg));
-    const arcD = `M ${x(0)} ${y(0)} A ${r} ${r} 0 ${angle > 180 ? 1 : 0} 1 ${x(angle)} ${y(angle)}`;
-    return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <svg width={140} height={80} viewBox="0 0 140 80" style={{ overflow: "visible" }}>
-                {/* Track */}
-                <path d={`M ${x(0)} ${y(0)} A ${r} ${r} 0 1 1 ${x(180)} ${y(180)}`}
-                    fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={10} strokeLinecap="round" />
-                {/* Fill */}
-                {pct > 0 && (
-                    <path d={arcD}
-                        fill="none" stroke={col} strokeWidth={10} strokeLinecap="round"
-                        style={{ filter: `drop-shadow(0 0 6px ${col})`, transition: "all 1.5s ease" }} />
-                )}
-                {/* Value text */}
-                <text x="70" y="60" textAnchor="middle"
-                    fontFamily="Space Mono" fontSize="28" fontWeight="700"
-                    fill={col} style={{ filter: `drop-shadow(0 0 10px ${col})` }}>
-                    {pct}%
-                </text>
-            </svg>
-            <Label style={{ color: col, marginTop: -4 }}>{label}</Label>
+        <div style={{
+            minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+            background: D.bg, color: D.text, fontFamily: "'Space Grotesk', sans-serif", flexDirection: "column", gap: 12
+        }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", border: `3px solid rgba(26,22,18,0.08)`, borderTopColor: "#6B3FA0", animation: "spin 1s linear infinite" }} />
+            <div className="mono" style={{ fontSize: 10, color: "#9A8E84", letterSpacing: "0.18em" }}>INITIALIZING TRACKER...</div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
     );
-};
+}
 
-/* ─── LANDING / HOME SCREEN ────────────────────────────────────── */
-const HomeScreen = ({ onNav, SESSION, LIVE, isServiceActive }) => {
+// ─── ONBOARDING QUOTES ────────────────────────────────────────────────────────
+const ONBOARD_QUOTES = [
+    { text: "You have power over your mind, not outside events. Realise this and you will find strength. The algorithm has power over your mind. It found strength first.", tag: "Marcus Aurelius · Meditations" },
+    { text: "The definition of insanity is doing the same thing over and over and expecting different results. You have opened this app 8 times today. Each time you opened it, you expected to feel fine. Results have been consistent.", tag: "Einstein · misattributed, applicable" },
+    { text: "One must imagine Sisyphus happy. One must also imagine you closing the app. Both require the same suspension of disbelief.", tag: "Camus · The Myth of Sisyphus" },
+    { text: "The unexamined life is not worth living. You have examined 74 strangers' lives this session alone. Yours remains, as yet, unscheduled.", tag: "Socrates · The Apology" },
+    { text: "When you gaze long into the abyss, the abyss gazes back into you. The abyss has 1.2 million followers, a podcast, and a Patreon.", tag: "Nietzsche · Beyond the Algorithm" },
+    { text: "We are what we repeatedly do. Excellence, then, is a habit. You have repeatedly, without fail, opened this app within 12 minutes of waking. You have become very excellent at something.", tag: "Aristotle · Nicomachean Ethics" },
+    { text: "All the world's a stage, and all the men and women merely players. Some have more followers than others. This was not what Jaques meant but it is what happened.", tag: "Shakespeare · As You Like It" },
+    { text: "I think, therefore I am. You scroll, therefore you are somewhere between awake and not. Cogito ergo doom.", tag: "Descartes · Discourse on the Method" },
+    { text: "Not all those who wander are lost. All those who scroll without intention are. This is a meaningful distinction that Tolkien did not need to make but we do.", tag: "Tolkien · The Fellowship of the Ring" },
+    { text: "A journey of a thousand miles begins with a single step. A doom session of three hours begins with a single tap. The mechanics are identical. The destination is not.", tag: "Lao Tzu · Tao Te Ching" },
+    { text: "Peace comes from within. Do not seek it without. You have sought it in approximately 2,800 videos this month. This is a large sample size with a consistent null result. Adjust methodology.", tag: "Buddha · Dhammapada" },
+    { text: "An object in motion stays in motion unless acted upon by an outside force. You are an object in motion through an infinite scroll. Reelio is attempting to be the outside force. It is trying its best.", tag: "Newton · First Law of Motion" },
+    { text: "Know thyself. Before you do, however, allow this 15-second ad for something you whispered about near your phone two days ago.", tag: "Oracle of Delphi · 400 BC" },
+    { text: "The road goes ever on and on. So does the feed. Tolkien meant this as an invitation to adventure. Instagram means it as a business model. These are not the same invitation.", tag: "Tolkien · The Hobbit" },
+    { text: "I can resist everything except temptation. The notification badge is not a temptation. It is an engineered stimulus. Wilde did not have this distinction available. You do. Use it.", tag: "Oscar Wilde · Lady Windermere's Fan" },
+    { text: "Big Brother is watching you. Big Brother has also noted your re-watch pattern on dog content at 11:47pm and reclassified you accordingly. This detail was not in the first edition.", tag: "Orwell · 1984" },
+    { text: "Vindica te tibi. Claim yourself for yourself. This is the inscription above Seneca's mantelpiece, figuratively speaking. It is the opposite instruction from the one you are currently following.", tag: "Seneca · Letters to Lucilius" },
+    { text: "The mind is everything. What you think, you become. You have been thinking about a raccoon stealing a churro for three days. Proceed accordingly.", tag: "Buddha · Dhammapada" },
+    { text: "Slot machines were redesigned in the 1980s to maximise the time between pulls. Short-form video was designed in the 2010s with identical intent and a considerably larger sample size.", tag: "game theory" },
+    { text: "Your screen time report arrives every Sunday morning like a small, honest accountant who you continue to ignore. The accountant does not take this personally. The accountant simply returns next week.", tag: "digital confession" },
+];
+
+// ─── ONBOARDING BLOB CONFIG ──────────────────────────────────────────────────
+// Mirrors BlobBackgroundView.kt PRE palette: 7-point irregular forms,
+// Catmull-Rom splines, cat-paw drift — no gradients, no circles.
+const ONBOARD_BLOB_CONFIG = [
+    { cx: 0.12, cy: 0.26, r: 160, color: "#8B5CF6", alpha: 0.28, speed: 16500, phase: 0.0 },
+    { cx: 0.82, cy: 0.13, r: 140, color: "#6366F1", alpha: 0.27, speed: 14500, phase: 1.2 },
+    { cx: 0.66, cy: 0.48, r: 132, color: "#34D399", alpha: 0.24, speed: 17500, phase: 2.5 },
+    { cx: 0.18, cy: 0.80, r: 124, color: "#FBBF24", alpha: 0.26, speed: 15500, phase: 0.7 },
+];
+
+function _hexToRgb(hex) {
+    return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+}
+
+function _drawOnboardBlobs(ctx, w, h, elapsed) {
+    const PI2 = Math.PI * 2;
+    const N   = 7;       // points per blob
+    const T   = 0.24;    // Catmull-Rom tension
+    const sc  = Math.min(w, h) / 400;   // scale to screen size
+    ONBOARD_BLOB_CONFIG.forEach(blob => {
+        const t      = ((elapsed % blob.speed) / blob.speed) * PI2 + blob.phase;
+        const r      = blob.r * sc;
+        const driftX = Math.cos(t * 0.7) * r * 0.06;
+        const driftY = Math.sin(t * 0.6) * r * 0.05;
+        const cx     = blob.cx * w + driftX;
+        const cy     = blob.cy * h + driftY;
+        const step   = PI2 / N;
+        const pts    = [];
+        for (let k = 0; k < N; k++) {
+            const angle  = k * step + t * 0.18;
+            const wobble = r * (1 + 0.12 * Math.sin(t * 2.1 + k * 1.3));
+            pts.push({ x: cx + wobble * Math.cos(angle), y: cy + wobble * Math.sin(angle) });
+        }
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let k = 0; k < N; k++) {
+            const curr  = pts[k];
+            const next  = pts[(k + 1) % N];
+            const prev  = pts[(k + N - 1) % N];
+            const next2 = pts[(k + 2) % N];
+            ctx.bezierCurveTo(
+                curr.x + (next.x - prev.x) * T,  curr.y + (next.y - prev.y) * T,
+                next.x - (next2.x - curr.x) * T, next.y - (next2.y - curr.y) * T,
+                next.x, next.y
+            );
+        }
+        ctx.closePath();
+        const [rr, gg, bb] = _hexToRgb(blob.color);
+        ctx.fillStyle = `rgba(${rr},${gg},${bb},${blob.alpha})`;
+        ctx.fill();
+    });
+}
+
+function BlobCanvas() {
+    const canvasRef = useRef(null);
+    const rafRef    = useRef(null);
+    const t0Ref     = useRef(null);
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const resize = () => {
+            const dpr = window.devicePixelRatio || 1;
+            const w   = canvas.offsetWidth;
+            const h   = canvas.offsetHeight;
+            canvas.width  = w * dpr;
+            canvas.height = h * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        };
+        resize();
+        window.addEventListener('resize', resize);
+        t0Ref.current = performance.now();
+        const loop = () => {
+            const elapsed = performance.now() - t0Ref.current;
+            const w = canvas.offsetWidth;
+            const h = canvas.offsetHeight;
+            ctx.clearRect(0, 0, w, h);
+            _drawOnboardBlobs(ctx, w, h, elapsed);
+            rafRef.current = requestAnimationFrame(loop);
+        };
+        loop();
+        return () => {
+            window.removeEventListener('resize', resize);
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        };
+    }, []);
     return (
-        <div className="slide-up" style={{ padding: "0 16px 24px", position: "relative", zIndex: 1 }}>
-
-            {/* ── Header status bar ── */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 4px 0" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ position: "relative", width: 10, height: 10 }}>
-                        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: D.safe, opacity: 0.75 }} className="ping" />
-                        <div style={{ position: "relative", width: 10, height: 10, borderRadius: "50%", background: D.safe }} />
-                    </div>
-                    <span className="mono" style={{ fontSize: 10, color: D.safe, letterSpacing: "0.2em" }}>SYSTEM ACTIVE</span>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                    <Wifi size={14} color={D.safe + "88"} />
-                    <Battery size={14} color={D.safe + "88"} />
-                </div>
-            </div>
-
-            {/* ── Brand title ── */}
-            <div style={{ padding: "20px 0 20px", textAlign: "center", borderBottom: `1px solid ${D.border}`, marginBottom: 20 }}>
-                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "0.06em", color: "#fff", lineHeight: 1 }}>
-                    REELIO <span style={{ color: D.safe + "55", fontWeight: 300, fontSize: 20 }}>//</span> ALSE
-                </div>
-            </div>
-
-            {/* ── Service status ── */}
-            <div className="card" style={{ padding: "14px 16px", marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{
-                            width: 36, height: 36, borderRadius: 10,
-                            background: `${isServiceActive ? D.safe : D.doom}15`,
-                            border: `1px solid ${isServiceActive ? D.safe : D.doom}33`,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                        }}>
-                            <Radio size={16} color={isServiceActive ? D.safe : D.doom} />
-                        </div>
-                        <div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>Accessibility Service</div>
-                            <Label>{isServiceActive ? "Neural monitor active" : "Service Offline"}</Label>
-                        </div>
-                    </div>
-                    {!isServiceActive ? (
-                        <button className="btn-primary" style={{ padding: "8px 14px", width: "auto", fontSize: 12 }}
-                            onClick={() => window.Android?.enableAccessibility()}>Enable</button>
-                    ) : (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <div style={{ position: "relative", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <div style={{ position: "absolute", width: 16, height: 16, borderRadius: "50%", background: D.safe + "33", animation: "ring-out 2s ease-in-out infinite" }} />
-                                <div style={{ width: 8, height: 8, borderRadius: "50%", background: D.safe, boxShadow: `0 0 8px ${D.safe}` }} className="pulse" />
-                            </div>
-                            <span className="mono" style={{ fontSize: 12, color: D.safe }}>Active</span>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* ── Doom Probability Card ── */}
-            <div className={`card ${SESSION.doom_label === "DOOM" ? "card-danger" : ""}`}
-                style={{ marginBottom: 12, overflow: "hidden" }}>
-                <div style={{
-                    padding: "12px 16px",
-                    background: SESSION.doom_label === "DOOM"
-                        ? `linear-gradient(90deg, ${D.doom}18, transparent)`
-                        : `linear-gradient(90deg, ${D.safe}10, transparent)`,
-                    borderBottom: `1px solid ${SESSION.doom_label === "DOOM" ? D.borderDanger : D.border}`,
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                }}>
-                    <div>
-                        <Label style={{ color: D.doom }}>Current Intervention</Label>
-                        <div className="mono" style={{ fontSize: 10, color: D.muted, marginTop: 2 }}>ID: #SESSION-ACTIVE</div>
-                    </div>
-                    <AlertTriangle size={18} color={D.doom} style={{ filter: `drop-shadow(0 0 6px ${D.doom})` }} />
-                </div>
-
-                <div style={{ padding: "20px 16px 16px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <DoomGauge
-                        value={SESSION.S_t}
-                        label={SESSION.doom_label === "DOOM" ? "CRITICAL RISK" : SESSION.doom_label === "BORDERLINE" ? "MODERATE RISK" : "LOW RISK"}
-                    />
-                </div>
-
-                {/* Metrics row */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderTop: `1px solid ${D.border}` }}>
-                    {[
-                        { label: "Total Sessions", value: SESSION.sessions_today },
-                        { label: "Doom Sessions", value: SESSION.total_doom_sessions },
-                        { label: "Interactions · Today", value: SESSION.total_interactions }
-                    ].map((item, i) => (
-                        <div key={item.label} style={{ padding: "12px 10px", textAlign: "center", borderRight: i < 2 ? `1px solid ${D.border}` : "none" }}>
-                            <Label style={{ fontSize: 9, display: "block", marginBottom: 4 }}>{item.label}</Label>
-                            <div className="spacemono" style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{item.value}</div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* ── Cognitive Stability ── */}
-            <div className="card border-glow-safe" style={{ padding: "14px 16px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                    <Label style={{ color: D.safe }}>Cognitive Stability</Label>
-                    <div style={{ fontSize: 12, color: D.text, marginTop: 3, fontWeight: 500 }}>Based on scroll velocity & dwell variance</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: D.warn, boxShadow: `0 0 6px ${D.warn}` }} />
-                        <span style={{ fontSize: 12, color: D.warn, fontWeight: 700, letterSpacing: "0.05em" }}>MODERATE FOCUS</span>
-                    </div>
-                </div>
-                {/* Mini ring gauge */}
-                <div style={{ position: "relative", width: 56, height: 56 }}>
-                    <svg width={56} height={56} viewBox="0 0 36 36" style={{ transform: "rotate(-90deg)" }}>
-                        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                            fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={4} />
-                        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                            fill="none" stroke={D.warn} strokeWidth={4}
-                            strokeDasharray={`${Math.round((1 - SESSION.S_t) * 80)}, 100`}
-                            style={{ filter: `drop-shadow(0 0 3px ${D.warn})` }} />
-                    </svg>
-                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <span className="spacemono" style={{ fontSize: 11, fontWeight: 700, color: D.warn }}>
-                            {Math.round((1 - SESSION.S_t) * 80)}%
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Live session summary ── */}
-            <div style={{ marginBottom: 6 }}><Label style={{ paddingLeft: 2 }}>Live Session Summary</Label></div>
-            <div className={`card ${SESSION.doom_label === "DOOM" ? "card-doom" : ""}`} style={{ padding: 0, marginBottom: 12, overflow: "hidden" }}>
-                <div style={{
-                    padding: "10px 16px",
-                    background: SESSION.doom_label === "DOOM" ? `linear-gradient(90deg, ${D.doomMag}18, transparent)` : `linear-gradient(90deg, ${D.safe}10, transparent)`,
-                    borderBottom: `1px solid ${SESSION.doom_label === "DOOM" ? D.borderDoom : D.border}`,
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                }}>
-                    <Label>Current Risk State</Label>
-                    <Tag label={SESSION.doom_label} />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-                    {[
-                        { label: "Session Duration", value: LIVE.duration, col: "#fff" },
-                        { label: "Reels Observed", value: LIVE.reels, col: "#fff" },
-                        { label: "Avg Dwell Time", value: `${LIVE.avg_dwell}s`, col: D.warn },
-                        { label: "Capture Prob", value: `${Math.round(SESSION.S_t * 100)}%`, col: D.doomMag },
-                    ].map(({ label, value, col }, i) => (
-                        <div key={label} style={{
-                            padding: "14px 16px",
-                            borderRight: i % 2 === 0 ? `1px solid ${D.border}` : "none",
-                            borderBottom: i < 2 ? `1px solid ${D.border}` : "none",
-                        }}>
-                            <div className="spacemono" style={{
-                                fontSize: i < 2 ? 30 : 24, fontWeight: 700, color: col, lineHeight: 1,
-                                textShadow: col !== "#fff" ? `0 0 16px ${col}88` : "none",
-                            }}>{value}</div>
-                            <Label style={{ marginTop: 4, display: "block" }}>{label}</Label>
-                        </div>
-                    ))}
-                </div>
-                {/* Doom score bar */}
-                <div style={{ padding: "12px 16px", borderTop: `1px solid ${D.border}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                        <Label>Doom Score</Label>
-                        <span className="mono" style={{ fontSize: 11, color: D.doomMag }}>{Math.round(SESSION.doom_score * 100)}/100</span>
-                    </div>
-                    <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
-                        <div style={{
-                            height: "100%", width: `${SESSION.doom_score * 100}%`,
-                            background: `linear-gradient(90deg, ${D.warn}, ${D.doomMag})`,
-                            borderRadius: 2, boxShadow: `0 0 10px ${D.doomMag}`,
-                        }} />
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Stats row ── */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 24 }}>
-                {[
-                    { label: "Sessions", value: SESSION.sessions_today, col: D.violet },
-                    { label: "Dwell Total", value: `${SESSION.total_dwell_today_min}m`, col: D.warn },
-                    { label: "Confidence", value: `${Math.round(SESSION.model_confidence * 100)}%`, col: D.safe },
-                ].map(({ label, value, col }) => (
-                    <div key={label} className="card" style={{ padding: "12px 10px", textAlign: "center" }}>
-                        <div className="spacemono" style={{
-                            fontSize: 20, fontWeight: 700, color: col,
-                            textShadow: `0 0 12px ${col}88`,
-                        }}>{value}</div>
-                        <Label style={{ marginTop: 3, display: "block", fontSize: 9 }}>{label}</Label>
-                        <div style={{ height: 2, width: 28, background: col + "55", borderRadius: 1, margin: "6px auto 0", transition: "background 0.3s" }} />
-                    </div>
-                ))}
-            </div>
-
-            <button className="btn-primary" onClick={() => onNav("dashboard")}>
-                View Behavioral Dashboard
-                <ChevronRight size={18} style={{ display: "inline", marginLeft: 6, verticalAlign: "middle" }} />
-            </button>
-        </div>
+        <canvas ref={canvasRef} style={{
+            position: "absolute", inset: 0,
+            width: "100%", height: "100%",
+            pointerEvents: "none", zIndex: 2,
+        }} />
     );
-};
+}
 
-/* ─── DOOM DRIVER CARD ──────────────────────────────────────────── */
-const DoomDriver = ({ rank, label, value, col, icon: Icon }) => (
-    <div className="card" style={{ padding: "14px 14px", borderColor: col + "22" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{
-                    width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-                    background: col + "18", border: `1px solid ${col}33`,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                    <Icon size={13} color={col} />
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: D.text }}>{label}</span>
-            </div>
-            <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: col, textShadow: `0 0 10px ${col}` }}>
-                {Math.round(value * 100)}%
-            </span>
-        </div>
-        <div style={{ height: 5, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
-            <div style={{
-                height: "100%", width: `${value * 100}%`,
-                background: `linear-gradient(90deg, ${col}88, ${col})`,
-                borderRadius: 3, boxShadow: value > 0.6 ? `0 0 8px ${col}` : "none",
-                transition: "width 1s ease",
-            }} />
-        </div>
-    </div>
-);
+// ─── OnboardingState ──────────────────────────────────────────────────────────
+function OnboardingState() {
+    const checkA11y = () => typeof window.Android?.isAccessibilityEnabled === 'function'
+        ? !!window.Android.isAccessibilityEnabled()
+        : false;
 
-/* ─── DASHBOARD SCREEN ─────────────────────────────────────────── */
-const DashboardScreen = ({ SESSION, REELS_DATA, DAYS_14 }) => {
-    const [reelCursor, setReelCursor] = useState(REELS_DATA.length - 1);
-    const [expandedSection, setExpandedSection] = useState(null);
-    const current = REELS_DATA[reelCursor] || REELS_DATA[REELS_DATA.length - 1] || { p: 0 };
-
-    const score = Math.round((1 - SESSION.S_t) * 80 + (1 - SESSION.A[1][1]) * 20);
-    const scoreCol = score > 65 ? D.safe : score > 40 ? D.warn : D.doom;
-    const capDur = (1 / SESSION.h[1]).toFixed(1);
-    const toggle = (k) => setExpandedSection(expandedSection === k ? null : k);
-
-    // Top 3 doom drivers sorted by value
-    const doomDrivers = [
-        { k: "rapid_reentry", l: "Rapid Re-entry", icon: Zap },
-        { k: "volitional_conflict", l: "Exit Conflict", icon: Lock },
-        { k: "automaticity", l: "Scroll Automaticity", icon: Cpu },
-        { k: "length", l: "Session Length", icon: BarChart2 },
-        { k: "dwell_collapse", l: "Dwell Collapse", icon: TrendingDown },
-        { k: "rewatch", l: "Rewatch Compulsion", icon: Radio },
-        { k: "environment", l: "Environment", icon: Moon },
-    ].map(d => ({ ...d, value: SESSION.doom_components[d.k] || 0.5 }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 3);
-
-    const driverColors = [D.doomMag, D.violet, D.blue];
-
-    // Heatmap bar color based on risk
-    const heatColor = (v) => v > 0.7 ? D.doomMag : v > 0.5 ? "#9333ea" : v > 0.35 ? D.warn : D.safe;
-
-    return (
-        <div className="slide-up" style={{ padding: "16px 16px 32px", position: "relative", zIndex: 1 }}>
-
-            {/* ── Header strip ── */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <div>
-                    <div className="mono" style={{ fontSize: 10, color: D.safe, letterSpacing: "0.2em" }}>REELIO // NEURAL ENGINE</div>
-                    <div className="mono" style={{ fontSize: 9, color: D.muted, marginTop: 2 }}>v3.0 Connected</div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 6, border: `1px solid ${D.doomMag}33`, background: D.doomMag + "10" }}>
-                    <span className="mono" style={{ fontSize: 9, color: D.doomMag }}>LAST 14 DAYS</span>
-                </div>
-            </div>
-
-            {/* ── Cognitive Stability Index ── */}
-            <div className="card card-danger border-glow-danger" style={{ padding: "18px", marginBottom: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                    <div>
-                        <Label>Cognitive Stability Index</Label>
-                        <div style={{ fontSize: 13, color: D.text, marginTop: 4, fontWeight: 600 }}>Neural Load Assessment · Last Session</div>
-                    </div>
-                    <Tag label={SESSION.doom_label} />
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <DoomGauge value={SESSION.S_t} label={SESSION.doom_label === "DOOM" ? "CRITICAL" : SESSION.doom_label === "BORDERLINE" ? "MODERATE" : "STABLE"} />
-                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9 }}>
-                        {[
-                            { label: "Capture Rate · All-Time", v: `${Math.round(SESSION.S_t * 100)}%`, col: D.doomMag },
-                            { label: "Doom Inertia", v: `${Math.round(SESSION.A[1][1] * 100)}%`, col: D.doom },
-                            { label: "Escape Rate", v: `${Math.round(SESSION.A[1][0] * 100)}%`, col: D.safe },
-                            { label: "Pull Index", v: `${SESSION.doom_pull_index}×`, col: D.warn },
-                        ].map(({ label, v, col }) => (
-                            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <Label>{label}</Label>
-                                <span className="mono" style={{ fontSize: 12, color: col, textShadow: `0 0 8px ${col}88` }}>{v}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 14 }}>
-                    {[
-                        { label: "Total Reels", v: REELS_DATA.length, col: "#fff" },
-                        { label: "Doom Duration", v: `${capDur}r`, col: D.warn },
-                    ].map(({ label, v, col }) => (
-                        <div key={label} style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(0,0,0,0.35)", border: `1px solid ${D.border}` }}>
-                            <div className="spacemono" style={{ fontSize: 18, color: col }}>{v}</div>
-                            <Label style={{ display: "block", marginTop: 2 }}>{label}</Label>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* ── State Dynamics ── */}
-            <div className="card" style={{ padding: "16px", marginBottom: 10 }}>
-                <div style={{ marginBottom: 12 }}><Label>State Dynamics</Label></div>
-                <svg width="100%" viewBox="0 0 340 110" style={{ overflow: "visible" }}>
-                    <circle cx="70" cy="55" r="40" fill={D.safe + "10"} stroke={D.safe} strokeWidth={1.5} style={{ filter: `drop-shadow(0 0 10px ${D.safe}44)` }} />
-                    <text x="70" y="50" textAnchor="middle" fontFamily="Space Grotesk" fontSize="11" fontWeight="700" fill={D.safe}>CASUAL</text>
-                    <text x="70" y="65" textAnchor="middle" fontFamily="Share Tech Mono" fontSize="9" fill={D.muted}>STATE 0</text>
-                    <circle cx="270" cy="55" r="40" fill={D.doomMag + "10"} stroke={D.doomMag} strokeWidth={1.5} style={{ filter: `drop-shadow(0 0 10px ${D.doomMag}44)` }} />
-                    <text x="270" y="50" textAnchor="middle" fontFamily="Space Grotesk" fontSize="11" fontWeight="700" fill={D.doomMag}>DOOM</text>
-                    <text x="270" y="65" textAnchor="middle" fontFamily="Share Tech Mono" fontSize="9" fill={D.muted}>STATE 1</text>
-                    {/* TRAP arrow */}
-                    <path d="M 108 38 Q 170 0 232 38" fill="none" stroke={D.doomMag} strokeWidth={2.5} style={{ filter: `drop-shadow(0 0 4px ${D.doomMag})` }} />
-                    <polygon points="232,38 222,32 226,44" fill={D.doomMag} />
-                    <text x="170" y="14" textAnchor="middle" fontFamily="Share Tech Mono" fontSize="11" fontWeight="700" fill={D.doomMag}>{Math.round(SESSION.A[0][1] * 100)}%</text>
-                    <text x="170" y="26" textAnchor="middle" fontFamily="Space Grotesk" fontSize="8" fill={D.muted}>TRAP</text>
-                    {/* ESCAPE arrow */}
-                    <path d="M 232 72 Q 170 110 108 72" fill="none" stroke={D.safe} strokeWidth={1.5} strokeDasharray="5,3" opacity={0.7} />
-                    <polygon points="108,72 120,66 118,78" fill={D.safe} opacity={0.7} />
-                    <text x="170" y="105" textAnchor="middle" fontFamily="Share Tech Mono" fontSize="11" fontWeight="700" fill={D.safe}>{Math.round(SESSION.A[1][0] * 100)}%</text>
-                    <text x="170" y="93" textAnchor="middle" fontFamily="Space Grotesk" fontSize="8" fill={D.muted}>ESCAPE</text>
-                    {/* Self-loops */}
-                    <text x="70" y="14" textAnchor="middle" fontFamily="Share Tech Mono" fontSize="9" fill={D.safe + "99"}>↺ {Math.round(SESSION.A[0][0] * 100)}%</text>
-                    <text x="270" y="14" textAnchor="middle" fontFamily="Share Tech Mono" fontSize="9" fill={D.doomMag + "cc"}>↺ {Math.round(SESSION.A[1][1] * 100)}%</text>
-                    {/* Animated dot */}
-                    <circle r="4" fill={D.doomMag} style={{ filter: `drop-shadow(0 0 5px ${D.doomMag})` }}>
-                        <animateMotion path="M 108 38 Q 170 0 232 38" dur="2.5s" repeatCount="indefinite" />
-                    </circle>
-                </svg>
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                    {[
-                        { label: "Doom Pull", v: `${SESSION.doom_pull_index}×`, col: D.doomMag },
-                        { label: "Regime Life", v: `${SESSION.regime_stability.toFixed(0)}r`, col: D.warn },
-                        { label: "Conf", v: `${Math.round(SESSION.model_confidence * 100)}%`, col: D.violet },
-                    ].map(({ label, v, col }) => (
-                        <div key={label} style={{ flex: 1, padding: "8px", borderRadius: 8, textAlign: "center", background: `${col}10`, border: `1px solid ${col}25` }}>
-                            <div className="mono" style={{ fontSize: 13, color: col, textShadow: `0 0 8px ${col}` }}>{v}</div>
-                            <Label style={{ fontSize: 9 }}>{label}</Label>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* ── 14-Day Risk Heatmap ── */}
-            <div className="card" style={{ padding: "16px", marginBottom: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                    <div>
-                        <Label style={{ display: "block", marginBottom: 4 }}>Cumulative Exposure</Label>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 22, fontWeight: 700, color: "#fff", textShadow: `0 0 12px ${D.doomMag}88` }}>14-Day Risk</span>
-                            <span className="mono" style={{ fontSize: 9, color: D.safe, background: D.safe + "15", padding: "2px 6px", borderRadius: 4 }}>
-                                AVG {(DAYS_14.length ? (DAYS_14.reduce((a, b) => a + b.v, 0) / DAYS_14.length) : 0).toFixed(2)} S_t
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                <div style={{ display: "flex", gap: 3, alignItems: "flex-end", height: 80, padding: "0 2px" }}>
-                    {DAYS_14.map((day, i) => {
-                        const c = heatColor(day.v);
-                        const h = Math.max(12, day.v * 70);
-                        return (
-                            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                                <div style={{
-                                    width: "100%", height: h, borderRadius: 4,
-                                    background: `${c}30`, border: `1px solid ${c}50`,
-                                    position: "relative", overflow: "hidden",
-                                    transition: "all 0.3s ease",
-                                }}>
-                                    <div style={{
-                                        position: "absolute", bottom: 0, left: 0, right: 0,
-                                        height: `${day.v * 100}%`,
-                                        background: `linear-gradient(to top, ${c}, ${c}66)`,
-                                        boxShadow: day.v > 0.6 ? `0 0 8px ${c}` : "none",
-                                    }} />
-                                </div>
-                                <span className="mono" style={{ fontSize: 8, color: D.muted }}>{day.d}</span>
-                            </div>
-                        );
-                    })}
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                    {["14d ago", "7d ago", "Today"].map(l => (
-                        <span key={l} className="mono" style={{ fontSize: 8, color: D.muted + "99" }}>{l}</span>
-                    ))}
-                </div>
-                <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 10 }}>
-                    {[["LOW", D.safe], ["MED", "#9333ea"], ["HIGH", D.doomMag]].map(([l, c]) => (
-                        <div key={l} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <div style={{ width: 8, height: 8, borderRadius: 2, background: c, boxShadow: `0 0 4px ${c}` }} />
-                            <Label style={{ fontSize: 9 }}>{l}</Label>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* ── Top 3 Doom Drivers ── */}
-            <div style={{ marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Label>Top Doom Drivers</Label>
-                <span className="mono" style={{ fontSize: 9, color: D.doomMag }}>VIEW ALL →</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
-                {doomDrivers.map(({ k, l, icon, value }, i) => (
-                    <DoomDriver key={k} label={l} value={value} col={driverColors[i]} icon={icon} />
-                ))}
-            </div>
-
-            {/* ── Capture Timeline ── */}
-            <div className="card" style={{ padding: "16px", marginBottom: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <div>
-                        <Label style={{ display: "block", marginBottom: 2 }}>Session Topology</Label>
-                        <div className="mono" style={{ fontSize: 9, color: D.muted }}>ID: #SESSION • LIVE</div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(255,255,255,0.05)", padding: "3px 8px", borderRadius: 4 }}>
-                            <div style={{ width: 6, height: 6, borderRadius: "50%", background: D.doomMag }} className="pulse" />
-                            <span className="mono" style={{ fontSize: 9, color: D.text }}>REEL {reelCursor + 1} · {Math.round(current.p * 100)}%</span>
-                        </div>
-                        {current.exit && <span className="mono" style={{ fontSize: 9, color: D.doom }}>⚡ EXIT</span>}
-                        {current.back && <span className="mono" style={{ fontSize: 9, color: D.warn }}>↩ REWATCH</span>}
-                    </div>
-                </div>
-                <div style={{ height: 120 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={REELS_DATA.map(r => ({ r: r.r, p: r.p }))} margin={{ top: 5, right: 0, bottom: 0, left: -30 }}>
-                            <defs>
-                                <linearGradient id="capGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={D.doomMag} stopOpacity={0.45} />
-                                    <stop offset="95%" stopColor={D.doomMag} stopOpacity={0.02} />
-                                </linearGradient>
-                            </defs>
-                            <XAxis dataKey="r" stroke={D.muted} tick={{ fontSize: 8, fontFamily: "Share Tech Mono", fill: D.muted }} interval={9} />
-                            <YAxis domain={[0, 1]} stroke={D.muted} tick={{ fontSize: 8, fontFamily: "Share Tech Mono", fill: D.muted }} tickFormatter={v => `${Math.round(v * 100)}%`} />
-                            <Tooltip
-                                contentStyle={{ background: "rgba(5,5,10,0.95)", border: `1px solid ${D.border}`, borderRadius: 8, fontFamily: "Share Tech Mono", fontSize: 11, color: D.text }}
-                                formatter={v => [`${Math.round(v * 100)}%`, "Capture"]}
-                                labelFormatter={l => `Reel #${l}`}
-                            />
-                            <ReferenceLine y={0.5} stroke={D.doomMag} strokeDasharray="4 3" strokeOpacity={0.4} />
-                            <ReferenceLine x={reelCursor + 1} stroke={D.safe} strokeOpacity={0.5} strokeDasharray="3 2" />
-                            <Area type="monotone" dataKey="p" fill="url(#capGrad)" stroke={D.doomMag} strokeWidth={2} dot={false}
-                                style={{ filter: `drop-shadow(0 0 4px ${D.doomMag})` }} />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </div>
-                <div style={{ marginTop: 8 }}>
-                    <input type="range" min={0} max={Math.max(0, REELS_DATA.length - 1)} value={reelCursor} onChange={e => setReelCursor(+e.target.value)} />
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-                        <Label style={{ fontSize: 9 }}>Reel 1</Label>
-                        <Label style={{ fontSize: 9 }}>Reel {REELS_DATA.length}</Label>
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Doom Score Anatomy ── */}
-            <div className="card" style={{ marginBottom: 10, overflow: "hidden" }}>
-                <button className="ripple-surface" onClick={() => toggle("anatomy")} style={{
-                    width: "100%", padding: "14px 16px",
-                    background: "none", border: "none", cursor: "pointer",
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Label>Doom Score Anatomy</Label></div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span className="mono" style={{ fontSize: 16, color: D.doomMag, textShadow: `0 0 12px ${D.doomMag}` }}>
-                            {Math.round(SESSION.doom_score * 100)}
-                        </span>
-                        {expandedSection === "anatomy" ? <ChevronUp size={14} color={D.muted} /> : <ChevronDown size={14} color={D.muted} />}
-                    </div>
-                </button>
-                {expandedSection === "anatomy" && (
-                    <div style={{ padding: "0 16px 16px" }}>
-                        <Divider />
-                        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-                            {[
-                                { k: "length", l: "Session Length", icon: BarChart2 },
-                                { k: "volitional_conflict", l: "Exit Conflict", icon: Lock },
-                                { k: "rapid_reentry", l: "Rapid Re-entry", icon: Zap },
-                                { k: "automaticity", l: "Scroll Automaticity", icon: Cpu },
-                                { k: "dwell_collapse", l: "Dwell Collapse", icon: TrendingDown },
-                                { k: "rewatch", l: "Rewatch Compulsion", icon: Radio },
-                                { k: "environment", l: "Environment", icon: Moon },
-                            ].map(({ k, l, icon: Icon }) => {
-                                const v = SESSION.doom_components[k] || 0.5;
-                                const col = v > 0.7 ? D.doomMag : v > 0.45 ? D.warn : D.safe;
-                                return (
-                                    <div key={k}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                                <Icon size={11} color={col} />
-                                                <span style={{ fontSize: 12, color: D.text }}>{l}</span>
-                                            </div>
-                                            <span className="mono" style={{ fontSize: 11, color: col }}>{Math.round(v * 100)}%</span>
-                                        </div>
-                                        <div style={{ height: 4, background: "rgba(255,255,255,0.05)", borderRadius: 2, overflow: "hidden" }}>
-                                            <div style={{
-                                                height: "100%", width: `${v * 100}%`,
-                                                background: `linear-gradient(90deg, ${col}88, ${col})`,
-                                                borderRadius: 2,
-                                                boxShadow: v > 0.6 ? `0 0 6px ${col}` : "none",
-                                            }} />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* ── Behavioral Insights ── */}
-            <div style={{ marginBottom: 8 }}><Label>Automated Behavioral Insights</Label></div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {[
-                    { icon: AlertTriangle, col: D.doom, title: "Peak Vulnerability", body: `Late Night sessions average ${Math.round(SESSION.S_t * 100)}% capture. Dark room + charging amplifies doom state by ~${SESSION.doom_pull_index}×.` },
-                    { icon: Brain, col: D.violet, title: "Cognitive Recovery Rate", body: `Doom episodes last ~${Math.round(SESSION.regime_stability)} reels. After a ${Math.round(Math.log(2) / (SESSION.q_01 + SESSION.q_10) * 60)}min break, capture probability halves.` },
-                    { icon: Lock, col: D.warn, title: "Scroll Inertia Model", body: `Passive state retention at ${Math.round(SESSION.A[1][1] * 100)}%. Once captured, doom is ${SESSION.doom_pull_index}× harder to escape.` },
-                    { icon: Activity, col: D.safe, title: "Model Confidence", body: `${Math.round(SESSION.model_confidence * 100)}% personalized confidence. Significant accuracy gains expected at 20+ sessions.` },
-                ].map(({ icon: Icon, col, title, body }) => (
-                    <div key={title} className="card" style={{ padding: "14px", borderColor: col + "18" }}>
-                        <div style={{ display: "flex", gap: 12 }}>
-                            <div style={{
-                                width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-                                background: `${col}15`, border: `1px solid ${col}30`,
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                            }}>
-                                <Icon size={15} color={col} />
-                            </div>
-                            <div>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: D.text, marginBottom: 4 }}>{title}</div>
-                                <div style={{ fontSize: 12, color: D.muted, lineHeight: 1.5 }}>{body}</div>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-/* ─── SETTINGS SCREEN ───────────────────────────────────────────── */
-const SettingsScreen = ({ onNav }) => {
-    const [surveyProb, setSurveyProb] = useState(0.3);
-    const [sleepStart, setSleepStart] = useState(23);
-    const [sleepEnd, setSleepEnd] = useState(7);
+    const [isAccessibilityActive, setIsAccessibilityActive] = useState(checkA11y);
 
     useEffect(() => {
-        if (window.Android) {
-            setSurveyProb(window.Android.getSurveyFrequency());
-            const sleepStr = window.Android.getSleepSchedule();
-            const [s, e] = sleepStr.split(",").map(Number);
-            setSleepStart(s);
-            setSleepEnd(e);
-        }
+        const id = setInterval(() => {
+            const cur = checkA11y();
+            setIsAccessibilityActive(prev => prev !== cur ? cur : prev);
+        }, 1000);
+        const onStatus = e => setIsAccessibilityActive(!!e.detail);
+        window.addEventListener('a11y-status', onStatus);
+        return () => { clearInterval(id); window.removeEventListener('a11y-status', onStatus); };
     }, []);
 
-    const handleSurveyChange = (e) => {
-        const val = parseFloat(e.target.value);
-        setSurveyProb(val);
-        window.Android?.setSurveyFrequency(val);
-    };
-
-    const handleSleepChange = (type, val) => {
-        const v = parseInt(val, 10);
-        if (type === "start") {
-            setSleepStart(v);
-            window.Android?.setSleepSchedule(v, sleepEnd);
-        } else {
-            setSleepEnd(v);
-            window.Android?.setSleepSchedule(sleepStart, v);
-        }
-    };
+    const quote = useMemo(() => ONBOARD_QUOTES[Math.floor(Math.random() * ONBOARD_QUOTES.length)], []);
 
     return (
-        <div className="slide-up" style={{ padding: "16px 16px 32px", position: "relative", zIndex: 1 }}>
+        <>
+        <style>{`
+            @keyframes headIn { from { opacity:0; transform: translateY(-18px); } to { opacity:1; transform: translateY(0); } }
+            @keyframes cardUp { from { opacity:0; transform: translateY(32px); } to { opacity:1; transform: translateY(0); } }
+            @keyframes tagPop { from { opacity:0; transform: scale(0.85) translateY(6px); } to { opacity:1; transform: scale(1) translateY(0); } }
+            @keyframes dotPulse { 0%,100% { opacity:0.4; transform: scale(1); } 50% { opacity:1; transform: scale(1.3); } }
+        `}</style>
 
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 20, padding: "14px 4px 0" }}>
-                <Settings size={20} color={D.safe} style={{ filter: `drop-shadow(0 0 6px ${D.safe})`, marginRight: 10 }} />
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", letterSpacing: "0.05em" }}>SYSTEM PREFERENCES</div>
-            </div>
+        <div style={{
+            minHeight: "100vh",
+            background: "#EDE8DF",
+            position: "relative",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+        }}>
 
-            {/* ── Metrics Documentation (New) ── */}
-            <div className="card" style={{ padding: "16px", marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => {
-                    const el = document.getElementById("metrics-doc-content");
-                    if (el) el.style.display = el.style.display === "none" ? "block" : "none";
+            {/* ── Decorative blobs ── */}
+            <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", pointerEvents:"none", zIndex:1 }}
+                 viewBox="0 0 100 100" preserveAspectRatio="none">
+                <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="4" stitchTiles="stitch"/>
+                    <feColorMatrix type="saturate" values="0"/></filter>
+                <rect width="100%" height="100%" filter="url(#grain)" opacity="0.04"/>
+            </svg>
+
+            {/* ── Irregular animated blobs (Catmull-Rom, matches survey BlobBackgroundView) ── */}
+            <BlobCanvas />
+
+            {/* ── Header text ── */}
+            <div style={{
+                position: "relative", zIndex: 20,
+                padding: "60px 28px 0",
+                animation: "headIn 0.6s ease 0.08s both",
+            }}>
+                <div style={{
+                    fontFamily: "'Space Grotesk', sans-serif",
+                    fontSize: 52, fontWeight: 700,
+                    lineHeight: 1.06, letterSpacing: "-0.02em",
+                    color: "#1A1612",
+                    marginBottom: 6,
                 }}>
-                    <Label style={{ color: D.safe, fontSize: 13, fontWeight: 700 }}>Know How Metrics are Calculated</Label>
-                    <ChevronDown size={16} color={D.safe} />
+                    Reelio
                 </div>
-
-                <div id="metrics-doc-content" style={{ display: "none", marginTop: 16, fontSize: 12, color: D.muted, lineHeight: 1.6 }}>
-                    <div style={{ marginBottom: 14 }}>
-                        <strong style={{ color: "#fff" }}>Cumulative Exposure (14-Day Heatmap)</strong><br />
-                        <span style={{ color: D.safe }}>The Math:</span> Calculates the average Doom Score across all sessions on a given calendar day.<br />
-                        <span style={{ color: D.safe }}>The Value:</span> Reveals multi-day behavioral trends (e.g., higher exposure consistently on weekends).
-                    </div>
-                    <div style={{ marginBottom: 14 }}>
-                        <strong style={{ color: "#fff" }}>Circadian Doom Profile (24-Hour Curve)</strong><br />
-                        <span style={{ color: D.safe }}>The Math:</span> Groups all historic sessions by their Start Time hour, averaging the Doom Probability for each specific hour of the day.<br />
-                        <span style={{ color: D.safe }}>The Value:</span> Maps your biological vulnerability. Shows what time of day you are most prone to mindless scrolling.
-                    </div>
-                    <div style={{ marginBottom: 14 }}>
-                        <strong style={{ color: "#fff" }}>Pull Index (Doom Inertia)</strong><br />
-                        <span style={{ color: D.safe }}>The Math:</span> A multiplier derived from the Markov Model. `Doom Inertia (Staying hooked) ÷ Trap Rate (Getting hooked)`.<br />
-                        <span style={{ color: D.safe }}>The Value:</span> If 5.2x, you are mathematically 5.2 times more likely to stay scrolling once hooked than you were to initially start.
-                    </div>
-                    <div style={{ marginBottom: 14 }}>
-                        <strong style={{ color: "#fff" }}>Capture Rate (All-Time)</strong><br />
-                        <span style={{ color: D.safe }}>The Math:</span> Percentage of all historic reels where the AI calculated your Doom State probability at &gt;50%.
-                    </div>
-                    <div style={{ marginBottom: 14 }}>
-                        <strong style={{ color: "#fff" }}>Doom Score & Top Drivers</strong><br />
-                        <span style={{ color: D.safe }}>The Math:</span> Evaluates 6 heuristic penalties per session: Length (25%), Automaticity (20%), Exit Conflict (20%), Environment & Sleep (10%), Rapid Re-entry (15%), and Rewatch Compulsion (10%).
-                    </div>
+                <div style={{
+                    fontSize: 9, fontWeight: 800, letterSpacing: "0.28em",
+                    textTransform: "uppercase", color: "#9A8E84",
+                    marginBottom: 18,
+                    fontFamily: "'Nunito', sans-serif",
+                }}>
+                    ALSE v3.0
+                </div>
+                <div style={{
+                    fontFamily: "'Space Grotesk', sans-serif",
+                    fontSize: 36, fontWeight: 700,
+                    lineHeight: 1.12, letterSpacing: "-0.02em",
+                    color: "#1A1612",
+                }}>
+                    waiting for<br />
+                    <em style={{ fontStyle: "italic", fontWeight: 400 }}>your next move.</em>
                 </div>
             </div>
 
-            <div className="card" style={{ padding: "16px", marginBottom: 16 }}>
-                <Label style={{ display: "block", marginBottom: 16, color: D.safe }}>Micro-Probe Calibration</Label>
-                <div style={{ fontSize: 12, color: D.text, marginBottom: 16, lineHeight: 1.5 }}>
-                    Adjust the frequency of active psychological surveys deployed during sessions. Lower frequencies may reduce model confidence accuracy.
+            {/* Spacer */}
+            <div style={{ flex: 1 }} />
+
+            {/* ── Bottom section: quote + CTA ── */}
+            <div style={{
+                position: "relative", zIndex: 20,
+                padding: "0 18px 32px",
+                animation: "cardUp 0.7s cubic-bezier(0.34,1.3,0.64,1) 0.3s both",
+            }}>
+                {/* Tag pill */}
+                <div style={{
+                    display: "inline-flex", alignItems: "center", gap: 7,
+                    background: "#4A2580",
+                    borderRadius: 99,
+                    padding: "6px 16px 6px 10px",
+                    marginBottom: 10,
+                    animation: "tagPop 0.45s ease 0.6s both",
+                }}>
+                    <div style={{
+                        width: 7, height: 7, borderRadius: "50%",
+                        background: "#9B6FCC",
+                    }} />
+                    <span style={{
+                        fontSize: 9, fontWeight: 800, letterSpacing: "0.16em",
+                        textTransform: "uppercase", color: "rgba(255,255,255,0.55)",
+                        fontFamily: "'Nunito', sans-serif",
+                    }}>
+                        {quote.tag}
+                    </span>
                 </div>
 
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                    <span className="mono" style={{ fontSize: 11, color: surveyProb === 0 ? D.muted : D.safe }}>{surveyProb === 0 ? "OFF" : surveyProb < 0.2 ? "LOW" : surveyProb < 0.6 ? "STANDARD" : "AGGRESSIVE"}</span>
-                    <span className="mono" style={{ fontSize: 11, color: D.text }}>{Math.round(surveyProb * 100)}%</span>
+                {/* Quote card — pastel purple */}
+                <div style={{
+                    background: "#E8E0F5",
+                    borderRadius: 26,
+                    padding: "26px 24px 22px",
+                    position: "relative",
+                    overflow: "hidden",
+                    boxShadow: "0 12px 36px rgba(107,63,160,0.12)",
+                }}>
+                    {/* Decorative inner glow circles */}
+                    <div style={{
+                        position:"absolute", top:-30, right:-30,
+                        width:120, height:120, borderRadius:"50%",
+                        background: "#F3EFFA", opacity:0.45, filter:"blur(30px)",
+                        pointerEvents:"none",
+                    }}/>
+                    <div style={{
+                        position:"absolute", bottom:-25, left:-25,
+                        width:100, height:100, borderRadius:"50%",
+                        background: "#9B6FCC", opacity:0.2, filter:"blur(25px)",
+                        pointerEvents:"none",
+                    }}/>
+
+                    <p style={{
+                        fontFamily: "'Nunito', sans-serif",
+                        fontSize: 16, fontWeight: 400, fontStyle: "italic",
+                        lineHeight: 1.7, letterSpacing: "-0.005em",
+                        color: "#1A1612",
+                        position: "relative", zIndex: 1,
+                        marginBottom: 22,
+                    }}>
+                        &ldquo;{quote.text}&rdquo;
+                    </p>
+
+                    {/* Footer row */}
+                    <div style={{
+                        display:"flex", alignItems:"center",
+                        justifyContent:"flex-start",
+                        position:"relative", zIndex:1,
+                    }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                            <div style={{
+                                width:8, height:8, borderRadius:"50%",
+                                background: "#6B3FA0",
+                                animation: "dotPulse 2.4s ease-in-out infinite",
+                            }}/>
+                            <span style={{
+                                fontFamily: "'Space Mono', monospace",
+                                fontSize: 9, fontWeight:700, letterSpacing:"0.14em",
+                                textTransform:"uppercase", color:"rgba(107,63,160,0.4)",
+                            }}>Listening for activity</span>
+                        </div>
+                    </div>
                 </div>
-                <input type="range" min="0" max="1" step="0.1" value={surveyProb} onChange={handleSurveyChange}
-                    style={{
-                        width: "100%", height: 3, background: "rgba(13,223,242,0.2)", borderRadius: 2, appearance: "none", outline: "none",
-                        accentColor: D.safe, marginTop: 4, marginBottom: 4
-                    }}
-                />
+
+                {/* Accessibility CTA */}
+                {!isAccessibilityActive && (
+                    <div onClick={() => window.Android?.enableAccessibility?.()} style={{
+                        marginTop: 14,
+                        background: '#1A1612', borderRadius: 18,
+                        padding: '15px 20px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
+                        boxShadow: '0 8px 24px rgba(26,22,18,0.15)',
+                    }}>
+                        <span style={{ fontSize: 20 }}>🔓</span>
+                        <div style={{ flex: 1 }}>
+                            <div style={{
+                                fontSize: 13, fontWeight: 800, color: '#F7F3EC',
+                                fontFamily: "'Nunito', sans-serif",
+                            }}>Enable Accessibility</div>
+                            <div style={{
+                                fontSize: 10, fontWeight: 600, color: 'rgba(247,243,236,0.55)',
+                                fontFamily: "'Nunito', sans-serif",
+                            }}>Grant tracking permission</div>
+                        </div>
+                        <span style={{ color: '#F7F3EC', fontSize: 18 }}>→</span>
+                    </div>
+                )}
+
+                {/* Hint */}
+                <p style={{
+                    marginTop: 12, paddingLeft: 4,
+                    fontFamily: "'Nunito', sans-serif",
+                    fontStyle: "italic",
+                    fontSize: 12, color: "rgba(26,22,18,0.22)", lineHeight: 1.5,
+                }}>
+                    Open Instagram Reels — Reelio starts tracking automatically.
+                </p>
+            </div>
+        </div>
+        </>
+    );
+}
+
+// ─── normalizeData ────────────────────────────────────────────────────────────
+function normalizeData(rawData) {
+    const sessions = safeArr(rawData?.sessions).filter((s) => s && typeof s === "object");
+    const mostRecent = sessions[sessions.length - 1] || null;
+    const sessionProbabilities = sessions.map((s) => maybeNum(s.S_t)).filter(isFiniteNumber);
+    const sessionDurations = sessions.map((s) => deriveSessionDurationSec(s)).filter(isFiniteNumber);
+    const sessionReels = sessions.map((s) => maybeNum(s.nReels)).filter(isFiniteNumber);
+    const sessionDwells = sessions.map((s) => maybeNum(s.avgDwell)).filter(isFiniteNumber);
+    const transition = rawData?.model_parameters?.transition_matrix;
+
+    const dateBuckets = {};
+    sessions.forEach((s, idx) => {
+        const key = normalizeDateKey(s);
+        if (!key) return;
+        if (!dateBuckets[key]) dateBuckets[key] = [];
+        dateBuckets[key].push({
+            raw: s,
+            idx,
+            ts: pickSessionTimestampMs(s),
+            durationSec: deriveSessionDurationSec(s)
+        });
+    });
+
+    const dateKeys = Object.keys(dateBuckets).sort();
+    const latestDateKey = dateKeys.length ? dateKeys[dateKeys.length - 1] : null;
+    const earliestDateKey = dateKeys.length ? dateKeys[0] : null;
+    const latestDateSessions = latestDateKey ? [...dateBuckets[latestDateKey]] : [];
+    latestDateSessions.sort((a, b) => {
+        if (isFiniteNumber(a.ts) && isFiniteNumber(b.ts)) return a.ts - b.ts;
+        return a.idx - b.idx;
+    });
+
+    const timelineEntryFromSource = (entry, prevTs) => {
+        const source = entry.raw || entry;
+        const ts = isFiniteNumber(entry.ts) ? entry.ts : pickSessionTimestampMs(source);
+
+        let startTime = "";
+        if (isFiniteNumber(ts)) {
+            startTime = new Date(ts).toTimeString().slice(0, 5);
+        }
+
+        const explicitDurationMin = maybeNum(source.durationMin);
+        const explicitDurationSec = maybeNum(source.durationSec) ?? maybeNum(source.sessionDurationSec);
+        const derivedDurationSec = isFiniteNumber(explicitDurationSec)
+            ? explicitDurationSec
+            : (isFiniteNumber(entry.durationSec) ? entry.durationSec : deriveSessionDurationSec(source));
+        const durationMin = isFiniteNumber(explicitDurationMin)
+            ? explicitDurationMin
+            : (isFiniteNumber(derivedDurationSec) ? derivedDurationSec / 60 : null);
+
+        const reelCount = maybeNum(source.reelCount) ?? maybeNum(source.nReels) ?? maybeNum(source.totalReels);
+        const probability = maybeNum(source.S_t) ?? maybeNum(source.captureProb);
+        const explicitGap = maybeNum(source.gapBeforeMin);
+        const derivedGap = (isFiniteNumber(prevTs) && isFiniteNumber(ts)) ? (ts - prevTs) / 60000 : null;
+        const gapBeforeMin = isFiniteNumber(explicitGap)
+            ? explicitGap
+            : (isFiniteNumber(derivedGap) ? Math.max(0, derivedGap) : null);
+
+        return {
+            startTime,
+            durationMin,
+            reelCount,
+            gapBeforeMin,
+            probability,
+            isDoom: isFiniteNumber(probability) ? probability >= DOOM_THRESHOLD : Boolean(source.isDoom),
+            _ts: ts,
+            // Survey self-report labels
+            postSessionRating:  maybeNum(source.postSessionRating) ?? 0,
+            regretScore:        maybeNum(source.regretScore) ?? 0,
+            moodBefore:         maybeNum(source.moodBefore) ?? 0,
+            moodAfter:          maybeNum(source.moodAfter) ?? 0,
+            intendedAction:     source.intendedAction || "",
+            actualVsIntended:   maybeNum(source.actualVsIntended) ?? 0,
+            comparativeRating:  maybeNum(source.comparativeRating) ?? 0,
+            delayedRegretScore: maybeNum(source.delayedRegretScore) ?? 0,
+            supervisedDoom:     maybeNum(source.supervisedDoom) ?? 0,
+            hasSurvey:          Boolean(source.hasSurvey)
+        };
+    };
+
+    const providedTodaySource = safeArr(rawData?.todaySessions)
+        .filter((s) => s && typeof s === "object")
+        .map((s, idx) => ({ raw: s, idx, ts: pickSessionTimestampMs(s), durationSec: deriveSessionDurationSec(s) }));
+
+    providedTodaySource.sort((a, b) => {
+        if (isFiniteNumber(a.ts) && isFiniteNumber(b.ts)) return a.ts - b.ts;
+        return a.idx - b.idx;
+    });
+
+    // Fallback: use sessions bucketed under today's actual device date.
+    // Do NOT use latestDateKey — it could be yesterday or include all sessions.
+    // Use LOCAL date components (not UTC) so sessions after midnight but before UTC-midnight
+    // are correctly classified as "today" from the user's perspective. Python timestamps
+    // are device-local time with no timezone suffix, so local components must be used.
+    const _now = new Date();
+    const deviceTodayKey = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+    const deviceTodaySessions = dateBuckets[deviceTodayKey]
+        ? [...dateBuckets[deviceTodayKey]].sort((a, b) => {
+            if (isFiniteNumber(a.ts) && isFiniteNumber(b.ts)) return a.ts - b.ts;
+            return a.idx - b.idx;
+          })
+        : [];
+
+    const todaySource = providedTodaySource.length ? providedTodaySource : deviceTodaySessions;
+    let prevTs = null;
+    const todaySessionsDetailed = todaySource.map((entry) => {
+        const row = timelineEntryFromSource(entry, prevTs);
+        if (isFiniteNumber(row._ts)) prevTs = row._ts;
+        return row;
+    });
+
+    const todaySessions = todaySessionsDetailed.map(({ _ts, probability, ...rest }) => rest);
+
+    const todayDurationSecs = todaySessionsDetailed
+        .map((s) => (isFiniteNumber(s.durationMin) ? s.durationMin * 60 : null))
+        .filter(isFiniteNumber);
+    const derivedActiveTodaySeconds = todayDurationSecs.length ? sumOf(todayDurationSecs) : null;
+
+    const dailyTotals = dateKeys
+        .map((k) => {
+            const durations = safeArr(dateBuckets[k]).map((x) => x.durationSec).filter(isFiniteNumber);
+            return durations.length ? sumOf(durations) : null;
+        })
+        .filter(isFiniteNumber);
+
+    const dailySessionCounts = dateKeys.map((k) => safeArr(dateBuckets[k]).length).filter(isFiniteNumber);
+    const derivedAvgSessions = averageOf(dailySessionCounts);
+    const derivedAvgActiveTimeTodaySeconds = averageOf(dailyTotals);
+
+    const interactionsFromToday = todaySource
+        .map((entry) => {
+            const s = entry.raw || entry;
+            const explicit = maybeNum(s.totalInteractions);
+            if (isFiniteNumber(explicit)) return explicit;
+            const parts = [
+                maybeNum(s.totalLikes),
+                maybeNum(s.totalComments),
+                maybeNum(s.totalShares),
+                maybeNum(s.totalSaves),
+                maybeNum(s.likes),
+                maybeNum(s.comments),
+                maybeNum(s.shares),
+                maybeNum(s.saves)
+            ].filter(isFiniteNumber);
+            return parts.length ? sumOf(parts) : null;
+        })
+        .filter(isFiniteNumber);
+    const derivedInteractionsToday = interactionsFromToday.length ? sumOf(interactionsFromToday) : null;
+
+    const derivedSessionsToday = todaySessions.length || null;
+    const derivedCapturedToday = todaySessionsDetailed.length
+        ? todaySessionsDetailed.filter((s) => isFiniteNumber(s.probability) ? s.probability >= DOOM_THRESHOLD : s.isDoom).length
+        : null;
+
+    // Sort sessions by startTime to find the two most recent
+    const sessionsWithTs = sessions
+        .map((s) => ({ raw: s, startMs: pickSessionTimestampMs(s) }))
+        .filter((x) => isFiniteNumber(x.startMs))
+        .sort((a, b) => a.startMs - b.startMs);
+
+    let derivedGapMin = null;
+    if (sessionsWithTs.length >= 2) {
+        const prev = sessionsWithTs[sessionsWithTs.length - 2];
+        const last = sessionsWithTs[sessionsWithTs.length - 1];
+        // Use end-to-start gap (actual break the user experienced), not start-to-start.
+        // Python sends endTime as 'YYYY-MM-DDTHH:MM:SS' for each session.
+        const prevEndRaw = prev.raw?.endTime;
+        let prevEndMs = null;
+        if (typeof prevEndRaw === 'string' && prevEndRaw && prevEndRaw !== 'Unknown') {
+            const parsed = new Date(prevEndRaw);
+            if (!Number.isNaN(parsed.getTime())) prevEndMs = parsed.getTime();
+        }
+        // Fall back to start-to-start only when endTime is unavailable
+        const gapBaseMs = isFiniteNumber(prevEndMs) ? prevEndMs : prev.startMs;
+        derivedGapMin = Math.max(0, (last.startMs - gapBaseMs) / 60000);
+    }
+    const payloadGapMin = maybeNum(rawData?.timeSinceLastSessionMin);
+    const timeSinceLastSessionMin = (isFiniteNumber(payloadGapMin) && payloadGapMin > 0)
+        ? payloadGapMin
+        : derivedGapMin;
+
+    const captureRiskScoreRaw = maybeNum(rawData?.captureRiskScore) ?? (isFiniteNumber(maybeNum(mostRecent?.S_t)) ? maybeNum(mostRecent?.S_t) * 100 : null);
+    const captureRiskScore = isFiniteNumber(captureRiskScoreRaw) ? Math.max(0, Math.min(100, captureRiskScoreRaw)) : null;
+
+    const deriveRiskLabel = (score) => {
+        if (!isFiniteNumber(score)) return null;
+        if (score >= 70) return "CRITICAL";
+        if (score >= 45) return "ELEVATED";
+        if (score >= 25) return "STABLE";
+        return "SAFE";
+    };
+
+    const riskLabel = (typeof rawData?.riskLabel === "string" && rawData.riskLabel)
+        ? rawData.riskLabel
+        : (deriveRiskLabel(captureRiskScore) || "SAFE");
+
+    const derivedAvgSessionDurationSec = averageOf(sessionDurations);
+    const derivedAvgReelsPerSession = averageOf(sessionReels);
+    const derivedAvgDwellTimeSec = averageOf(sessionDwells);
+
+    const derivedAllTimeCaptureRate = sessionProbabilities.length
+        ? sessionProbabilities.filter((p) => p > 0.5).length / sessionProbabilities.length
+        : null;
+
+    const lastTenProbs = sessionProbabilities.slice(-10);
+    const derivedTenSessionAvgScore = lastTenProbs.length ? averageOf(lastTenProbs) * 100 : null;
+
+    const sessionDoomPersistence = maybeNum(rawData?.sessionDoomPersistence) ?? maybeNum(transition?.[1]?.[1]);
+    const escapeRate = maybeNum(rawData?.escapeRate) ?? maybeNum(transition?.[1]?.[0]);
+    const pullIndex = maybeNum(rawData?.pullIndex) ?? ((isFiniteNumber(sessionDoomPersistence) && isFiniteNumber(escapeRate) && escapeRate > 0) ? (sessionDoomPersistence / escapeRate) : null);
+
+    const modelConfidence =
+        maybeNum(rawData?.modelConfidence) ??
+        maybeNum(rawData?.model_confidence) ??
+        maybeNum(rawData?.model_confidence_breakdown?.overall);
+
+    const thisWindowDoomRate = maybeNum(rawData?.thisWindowDoomRate) ?? maybeNum(rawData?.weekly_summary?.this_week_doom_rate);
+    const lastWindowDoomRate = maybeNum(rawData?.lastWindowDoomRate) ?? maybeNum(rawData?.weekly_summary?.last_week_doom_rate);
+    const weeklyInsight =
+        (typeof rawData?.weeklyInsight === "string" && rawData.weeklyInsight) ||
+        (typeof rawData?.weekly_summary?.insight === "string" && rawData.weekly_summary.insight) ||
+        null;
+
+    let weeklyDelta =
+        (typeof rawData?.weeklyDelta === "string" && rawData.weeklyDelta) ||
+        (typeof rawData?.weekly_summary?.delta_direction === "string" && rawData.weekly_summary.delta_direction) ||
+        null;
+    if (!weeklyDelta && isFiniteNumber(thisWindowDoomRate) && isFiniteNumber(lastWindowDoomRate)) {
+        const diff = thisWindowDoomRate - lastWindowDoomRate;
+        weeklyDelta = diff <= -0.03 ? "Improving" : diff >= 0.03 ? "Worsening" : "Stable";
+    }
+
+    const parseHour = (v) => {
+        if (isFiniteNumber(v)) return v;
+        if (typeof v === "string" && /^\d{1,2}$/.test(v.trim())) return parseInt(v.trim(), 10);
+        return null;
+    };
+
+    const circadianFromPayload = safeArr(rawData?.circadianProfile).map((c) => ({
+        hour: parseHour(c?.hour),
+        captureProb: maybeNum(c?.captureProb)
+    }));
+    const circadianFromLegacy = safeArr(rawData?.circadian).map((c) => ({
+        hour: parseHour(c?.h),
+        captureProb: maybeNum(c?.doom)
+    }));
+
+    const circadianProfile = (circadianFromPayload.length ? circadianFromPayload : circadianFromLegacy)
+        .filter((c) => isFiniteNumber(c.hour) && isFiniteNumber(c.captureProb))
+        .map((c) => ({
+            hour: ((Math.round(c.hour) % 24) + 24) % 24,
+            captureProb: Math.max(0, Math.min(1, c.captureProb))
+        }))
+        .sort((a, b) => a.hour - b.hour);
+
+    const peakCircPoint = circadianProfile.reduce((best, c) => (!best || c.captureProb > best.captureProb ? c : best), null);
+    const safeCircPoint = circadianProfile.reduce((best, c) => (!best || c.captureProb < best.captureProb ? c : best), null);
+
+    const derivedPeakWindow = peakCircPoint ? formatHourWindow(peakCircPoint.hour, 2) : null;
+    const derivedSafestWindow = safeCircPoint ? formatHourWindow(safeCircPoint.hour, 2) : null;
+
+    const peakRiskWindow = (typeof rawData?.peakRiskWindow === "string" && rawData.peakRiskWindow) || derivedPeakWindow;
+    const safestWindow = (typeof rawData?.safestWindow === "string" && rawData.safestWindow) || derivedSafestWindow;
+
+    let circadianPattern = (typeof rawData?.circadianPattern === "string" && rawData.circadianPattern) || null;
+    if (!circadianPattern && peakCircPoint && safeCircPoint && peakRiskWindow && safestWindow) {
+        circadianPattern = `Highest risk around ${peakRiskWindow} (${Math.round(peakCircPoint.captureProb * 100)}%), lowest around ${safestWindow} (${Math.round(safeCircPoint.captureProb * 100)}%).`;
+    }
+
+    const driverDetailForName = (name) => {
+        if (/Session Length/i.test(name) && isFiniteNumber(maybeNum(mostRecent?.nReels))) {
+            return `Most recent session had ${Math.round(mostRecent.nReels)} reels.`;
+        }
+        if (/Rapid Re-entry/i.test(name) && isFiniteNumber(timeSinceLastSessionMin)) {
+            return `Gap before the latest session was ${Math.round(timeSinceLastSessionMin)} minutes.`;
+        }
+        if (/Dwell Collapse/i.test(name) && isFiniteNumber(maybeNum(mostRecent?.avgDwell))) {
+            return `Latest average dwell was ${mostRecent.avgDwell.toFixed(1)}s per reel.`;
+        }
+        if (/Rewatch Compulsion/i.test(name) && isFiniteNumber(maybeNum(mostRecent?.avgCaptureLength))) {
+            return `Recent average capture length was ${mostRecent.avgCaptureLength.toFixed(1)} reels.`;
+        }
+        if (/Environment/i.test(name) && typeof mostRecent?.timePeriod === "string" && mostRecent.timePeriod && mostRecent.timePeriod !== "Unknown") {
+            return `Recent high-weight sessions occurred during ${mostRecent.timePeriod.toLowerCase()} periods.`;
+        }
+        return "";
+    };
+
+    const normalizeDrivers = (drivers) => {
+        const filtered = safeArr(drivers)
+            .map((d) => {
+                const contribution = maybeNum(d?.contribution) ?? maybeNum(d?.weight);
+                if (!isFiniteNumber(contribution)) return null;
+                const name = typeof d?.name === "string" && d.name ? d.name : "Unlabeled driver";
+                return {
+                    name,
+                    contribution,
+                    weight: maybeNum(d?.weight),
+                    rawValue: d?.rawValue,
+                    detail: driverDetailForName(name)
+                };
+            })
+            .filter(Boolean);
+
+        const totalContribution = sumOf(filtered.map((d) => d.contribution));
+        return filtered.map((d) => {
+            const normalized = totalContribution > 0 ? d.contribution / totalContribution : d.contribution;
+            return {
+                name: d.name,
+                contribution: normalized,
+                weight: isFiniteNumber(d.weight) ? d.weight : normalized,
+                rawValue: d.rawValue,
+                detail: d.detail
+            };
+        });
+    };
+
+    const existingDrivers = normalizeDrivers(rawData?.doomDrivers);
+
+    const pickComponentValue = (obj, keys) => {
+        for (let i = 0; i < keys.length; i++) {
+            const candidate = maybeNum(obj?.[keys[i]]);
+            if (isFiniteNumber(candidate)) return candidate;
+        }
+        return null;
+    };
+
+    const componentSource = rawData?.historical_drivers || rawData?.doom_components || rawData?.scorer_component_weights || null;
+    const componentDriverDefs = [
+        { name: "Session Length", keys: ["session_length", "length"] },
+        { name: "Rewatch Compulsion", keys: ["rewatch_compulsion", "rewatch"] },
+        { name: "Rapid Re-entry", keys: ["rapid_reentry", "rapidReentry"] },
+        { name: "Exit Conflict", keys: ["exit_conflict", "volitional_conflict"] },
+        { name: "Scroll Automaticity", keys: ["scroll_automaticity", "automaticity"] },
+        { name: "Dwell Collapse", keys: ["dwell_collapse"] },
+        { name: "Environment", keys: ["environment"] }
+    ];
+
+    let derivedDrivers = [];
+    if (componentSource && typeof componentSource === "object") {
+        const collected = componentDriverDefs
+            .map((d) => ({ name: d.name, value: pickComponentValue(componentSource, d.keys) }))
+            .filter((d) => isFiniteNumber(d.value));
+        const total = sumOf(collected.map((d) => d.value));
+        derivedDrivers = collected.map((d) => {
+            const normalized = total > 0 ? d.value / total : d.value;
+            return {
+                name: d.name,
+                weight: normalized,
+                contribution: normalized,
+                rawValue: null,
+                detail: driverDetailForName(d.name)
+            };
+        });
+    }
+
+    const doomDrivers = (existingDrivers.length ? existingDrivers : derivedDrivers)
+        .sort((a, b) => safeNum(b.contribution, 0) - safeNum(a.contribution, 0));
+
+    const timelineCapture = safeArr(rawData?.timeline?.p_capture).map((p) => maybeNum(p)).filter(isFiniteNumber);
+    const topologyFromPayload = rawData?.sessionTopology;
+    const payloadReelData = safeArr(topologyFromPayload?.reelData)
+        .map((r, idx) => {
+            const captureProb = maybeNum(r?.captureProb);
+            if (!isFiniteNumber(captureProb)) return null;
+            return {
+                index: maybeNum(r?.index) ?? idx + 1,
+                captureProb,
+                state: captureProb > 0.66 ? "Autopilot" : captureProb > 0.33 ? "Borderline" : "Mindful"
+            };
+        })
+        .filter(Boolean);
+
+    const derivedTopologyData = timelineCapture.map((p, i) => ({
+        index: i + 1,
+        captureProb: p,
+        state: p > 0.66 ? "Autopilot" : p > 0.33 ? "Borderline" : "Mindful"
+    }));
+
+    const topologyReelData = payloadReelData.length ? payloadReelData : derivedTopologyData;
+    const topologyTotal = topologyReelData.length;
+    const topologySafeCount = topologyReelData.filter((r) => r.captureProb <= 0.33).length;
+    const topologyBorderCount = topologyReelData.filter((r) => r.captureProb > 0.33 && r.captureProb <= 0.66).length;
+    const topologyDoomCount = topologyReelData.filter((r) => r.captureProb > 0.66).length;
+
+    const sessionTopology = {
+        totalReels: isFiniteNumber(maybeNum(topologyFromPayload?.totalReels)) ? topologyFromPayload.totalReels : topologyTotal,
+        sessions: sessions.length,
+        safePercent: topologyTotal ? (topologySafeCount / topologyTotal) * 100 : 0,
+        borderPercent: topologyTotal ? (topologyBorderCount / topologyTotal) * 100 : 0,
+        doomPercent: topologyTotal ? (topologyDoomCount / topologyTotal) * 100 : 0,
+        reelData: topologyReelData
+    };
+
+    const derivedCasualToDoom = maybeNum(transition?.[0]?.[1]);
+    const derivedDoomToCasual = maybeNum(transition?.[1]?.[0]);
+    const stateDynamics = {
+        casualToDoomProb: maybeNum(rawData?.stateDynamics?.casualToDoomProb) ?? derivedCasualToDoom,
+        doomToCasualProb: maybeNum(rawData?.stateDynamics?.doomToCasualProb) ?? derivedDoomToCasual,
+        recoveryWindowSessions: maybeNum(rawData?.stateDynamics?.recoveryWindowSessions) ?? ((isFiniteNumber(derivedDoomToCasual) && derivedDoomToCasual > 0) ? (1 / derivedDoomToCasual) : null),
+        recoveryWindowDelta: maybeNum(rawData?.stateDynamics?.recoveryWindowDelta),
+        modelConfidence
+    };
+
+    // Derive per-day heatmap from dateBuckets (real organic S_t data from ALSE).
+    // Each day's avgCapture = mean of S_t across all sessions that day.
+    // This is used when Python doesn't send pre-aggregated heatmapData (it never does).
+    const derivedHeatmapData = dateKeys.map((dateKey) => {
+        const bucket = dateBuckets[dateKey] || [];
+        const probs = bucket.map((e) => maybeNum(e.raw?.S_t)).filter(isFiniteNumber);
+        const avgCapture = probs.length ? probs.reduce((s, p) => s + p, 0) / probs.length : null;
+        return {
+            date: dateKey,
+            dayLabel: dateKey.slice(5),
+            avgCapture,
+            riskLevel: null,
+            sessionCount: bucket.length,
+        };
+    }).filter((d) => isFiniteNumber(d.avgCapture));
+
+    const heatmapData = safeArr(rawData?.heatmapData).length
+        ? safeArr(rawData.heatmapData).map((d) => ({
+            date: d?.date || "",
+            dayLabel: d?.dayLabel || d?.d || "",
+            avgCapture: maybeNum(d?.avgCapture) ?? maybeNum(d?.v),
+            riskLevel: d?.riskLevel || null,
+            sessionCount: maybeNum(d?.sessionCount) ?? maybeNum(d?.s)
+        }))
+        : safeArr(rawData?.days14).length
+        ? safeArr(rawData.days14).map((d) => ({
+            date: d?.date || "",
+            dayLabel: d?.dayLabel || d?.d || "",
+            avgCapture: maybeNum(d?.avgCapture) ?? maybeNum(d?.v),
+            riskLevel: d?.riskLevel || null,
+            sessionCount: maybeNum(d?.sessionCount) ?? maybeNum(d?.s)
+        }))
+        : derivedHeatmapData;
+
+    // Count of consecutive doom sessions from the most recent backwards.
+    // Breaks on the first non-doom session — this is a recency count, not a validated "clean streak".
+    const derivedDoomStreak = (() => {
+        let streak = 0;
+        for (let i = sessions.length - 1; i >= 0; i -= 1) {
+            const p = maybeNum(sessions[i]?.S_t);
+            if (!isFiniteNumber(p) || p < DOOM_THRESHOLD) break;
+            streak += 1;
+        }
+        return streak;
+    })();
+
+    const avgSessions = maybeNum(rawData?.avgSessions) ?? derivedAvgSessions;
+    const sessionsToday = maybeNum(rawData?.sessionsToday) ?? derivedSessionsToday;
+    const todayVsAvgDelta = maybeNum(rawData?.todayVsAvgDelta) ?? (
+        (isFiniteNumber(sessionsToday) && isFiniteNumber(avgSessions) && avgSessions > 0)
+            ? ((sessionsToday - avgSessions) / avgSessions) * 100
+            : null
+    );
+
+    const activeTimeTodaySeconds = maybeNum(rawData?.activeTimeTodaySeconds) ?? derivedActiveTodaySeconds;
+    const activeTimeToday = (typeof rawData?.activeTimeToday === "string" && rawData.activeTimeToday)
+        ? rawData.activeTimeToday
+        : (isFiniteNumber(activeTimeTodaySeconds) ? formatDurationSec(activeTimeTodaySeconds) : null);
+
+    const dataSinceDate =
+        (typeof rawData?.dataSinceDate === "string" && rawData.dataSinceDate) ||
+        (typeof rawData?.startDate === "string" && rawData.startDate) ||
+        earliestDateKey ||
+        null;
+
+    const last3SessionAutopilotRates = safeArr(rawData?.last3SessionAutopilotRates).filter(isFiniteNumber);
+    const derivedLast3SessionAutopilotRates = sessionProbabilities.slice(-7).map((p) => Math.round(p * 100));
+
+    return {
+        captureRiskScore,
+        riskLabel,
+        sessionsToday,
+        activeTimeToday,
+        activeTimeTodaySeconds,
+        interactionsToday: maybeNum(rawData?.interactionsToday) ?? derivedInteractionsToday,
+        capturedSessionsToday: maybeNum(rawData?.capturedSessionsToday) ?? derivedCapturedToday,
+        avgSessionDurationSec: maybeNum(rawData?.avgSessionDurationSec) ?? derivedAvgSessionDurationSec,
+        avgReelsPerSession: maybeNum(rawData?.avgReelsPerSession) ?? maybeNum(rawData?.avgNReels) ?? derivedAvgReelsPerSession,
+        avgDwellTimeSec: maybeNum(rawData?.avgDwellTimeSec) ?? derivedAvgDwellTimeSec,
+        timeSinceLastSessionMin,
+        pullIndex,
+        totalReels: maybeNum(rawData?.totalReels) ?? (sessionReels.length ? sumOf(sessionReels) : (timelineCapture.length || null)),
+        doomRate: maybeNum(rawData?.doomRate) ?? derivedAllTimeCaptureRate,
+        tenSessionAvgScore: maybeNum(rawData?.tenSessionAvgScore) ?? derivedTenSessionAvgScore,
+        allTimeCaptureRate: maybeNum(rawData?.allTimeCaptureRate) ?? derivedAllTimeCaptureRate,
+        sessionDoomPersistence,
+        escapeRate,
+        modelConfidence,
+        weeklyInsight,
+        thisWindowDoomRate,
+        lastWindowDoomRate,
+        weeklyDelta,
+        circadianProfile,
+        peakRiskWindow,
+        safestWindow,
+        circadianPattern,
+        doomDrivers,
+        sessionTopology,
+        stateDynamics,
+        heatmapData,
+        dateBuckets,
+        todaySessions,
+        doomStreak: maybeNum(rawData?.doomStreak) ?? derivedDoomStreak,
+        currentHour: maybeNum(rawData?.currentHour) ?? new Date().getHours(),
+        todayVsAvgDelta,
+        dataSinceDate,
+        totalSessions: sessions.length,
+        avgSessions,
+        avgActiveTimeTodaySeconds: maybeNum(rawData?.avgActiveTimeTodaySeconds) ?? derivedAvgActiveTimeTodaySeconds,
+        last3SessionAutopilotRates: last3SessionAutopilotRates.length ? last3SessionAutopilotRates : derivedLast3SessionAutopilotRates
+    };
+}
+
+// ─── DOOM THRESHOLD ─────────────────────────────────────────────────────────
+// Matches Python's DOOM_PROBABILITY_THRESHOLD = 0.55 — single source of truth.
+// The header risk bands (70 / 45 / 25) operate on the 0-100 captureRiskScore scale,
+// not the raw S_t probability — different layer, not a conflict.
+const DOOM_THRESHOLD = 0.55;
+
+// ─── STATE PALETTE (mirrors MonitorScreen) ───────────────────────────────────
+const HEADER_STATE = {
+    doom:    { accent: '#C4563A', bg: 'rgba(196,86,58,0.08)', glow: 'rgba(196,86,58,0.4)',  label: 'DOOM',    pulseCycle: '1.2s' },
+    hooked:  { accent: '#C4973A', bg: 'rgba(196,151,58,0.08)', glow: 'rgba(196,151,58,0.35)', label: 'HOOKED',  pulseCycle: '1.8s' },
+    aware:   { accent: '#6B3FA0', bg: 'rgba(107,63,160,0.06)', glow: 'rgba(107,63,160,0.3)', label: 'AWARE',   pulseCycle: '2.5s' },
+    mindful: { accent: '#3A9E6F', bg: 'rgba(58,158,111,0.08)', glow: 'rgba(58,158,111,0.3)', label: 'MINDFUL', pulseCycle: '3s'   },
+};
+const getHeaderState = (s) =>
+    s >= 70 ? HEADER_STATE.doom :
+    s >= 45 ? HEADER_STATE.hooked :
+    s >= 25 ? HEADER_STATE.aware :
+    HEADER_STATE.mindful;
+
+// ─── REELIO HEADER ────────────────────────────────────────────────────────────
+function ReelioHeader({ data, isAccessibilityActive, openAccessibilitySettings }) {
+    const score = safeNum(data?.captureRiskScore, 0);
+    const st = getHeaderState(score);
+    const timeSince = maybeNum(data?.timeSinceLastSessionMin);
+    const activeSeconds = maybeNum(data?.activeTimeTodaySeconds);
+    const peakWindow = data?.peakRiskWindow;
+    const currentHour = safeNum(data?.currentHour, new Date().getHours());
+
+    // Determine if we're in peak risk window
+    const inPeakWindow = (() => {
+        if (!peakWindow || typeof peakWindow !== 'string') return false;
+        const m = peakWindow.match(/(\d{1,2}):\d{2}\s*-\s*(\d{1,2}):\d{2}/);
+        if (!m) return false;
+        const start = parseInt(m[1], 10);
+        const end = parseInt(m[2], 10);
+        if (start <= end) return currentHour >= start && currentHour < end;
+        return currentHour >= start || currentHour < end;
+    })();
+
+    // Status chip logic
+    let chipText, chipDotColor, chipPulse;
+    if (!isAccessibilityActive) {
+        chipText = '⚠ Enable tracking';
+        chipDotColor = D.warn;
+        chipPulse = false;
+    } else if (isFiniteNumber(timeSince) && timeSince < 5) {
+        // Actively tracking or just finished
+        const elapsed = isFiniteNumber(activeSeconds) ? formatDurationSec(activeSeconds) : '';
+        chipText = elapsed ? `Tracking · ${elapsed}` : 'Tracking';
+        chipDotColor = st.accent;
+        chipPulse = true;
+    } else if (inPeakWindow) {
+        chipText = 'Peak hours';
+        chipDotColor = D.coral;
+        chipPulse = true;
+    } else if (isFiniteNumber(timeSince)) {
+        const hrs = Math.floor(timeSince / 60);
+        const mins = Math.round(timeSince % 60);
+        const ago = hrs > 0 ? `${hrs}h ago` : `${mins}m ago`;
+        chipText = `Idle · ${ago}`;
+        chipDotColor = D.soft;
+        chipPulse = false;
+    } else {
+        chipText = 'Ready';
+        chipDotColor = D.safe;
+        chipPulse = false;
+    }
+
+    // Blend state color into yellow base for the header background
+    return (
+        <div style={{
+            height: 58,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 20px',
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+            background: '#EDE8DF',
+            borderBottom: '1px solid rgba(26,22,18,0.06)',
+            transition: 'border-color 0.6s ease',
+        }}>
+            {/* Left: Logo wordmark with state-colored icon */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <div style={{
+                    width: 28, height: 28,
+                    borderRadius: '50%',
+                    background: st.accent,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: `0 0 10px ${st.glow}`,
+                    transition: 'background 0.6s ease, box-shadow 0.6s ease',
+                }}>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <circle cx="7" cy="7" r="3.5" fill="white" fillOpacity="0.9"/>
+                        <circle cx="7" cy="7" r="6" stroke="white" strokeOpacity="0.5" strokeWidth="1.2" fill="none"/>
+                    </svg>
+                </div>
+                <span style={{
+                    fontFamily: "'Space Grotesk', sans-serif",
+                    fontSize: 21,
+                    fontWeight: 800,
+                    color: D.ink,
+                    letterSpacing: '-0.01em',
+                    lineHeight: 1,
+                }}>Reelio</span>
             </div>
 
-            <div className="card" style={{ padding: "16px", marginBottom: 16 }}>
-                <Label style={{ display: "block", marginBottom: 16, color: D.violet }}>Sleep Proximity Model</Label>
-                <div style={{ fontSize: 12, color: D.text, marginBottom: 16, lineHeight: 1.5 }}>
-                    Define typical sleep boundaries to calibrate ALSE circadian capture penalties. Activity inside these boundaries aggressively flags as 'Doom'.
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <div>
-                        <Label style={{ fontSize: 9, display: "block", marginBottom: 6 }}>Bedtime Hour</Label>
-                        <select value={sleepStart} onChange={(e) => handleSleepChange("start", e.target.value)}
-                            style={{
-                                width: "100%", padding: "10px", background: "rgba(0,0,0,0.5)", border: `1px solid ${D.border}`,
-                                color: "#fff", borderRadius: 8, fontFamily: "Space Mono", fontSize: 14, outline: "none", cursor: "pointer"
-                            }}>
-                            {Array.from({ length: 24 }, (_, i) => (
-                                <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <Label style={{ fontSize: 9, display: "block", marginBottom: 6 }}>Wake-up Hour</Label>
-                        <select value={sleepEnd} onChange={(e) => handleSleepChange("end", e.target.value)}
-                            style={{
-                                width: "100%", padding: "10px", background: "rgba(0,0,0,0.5)", border: `1px solid ${D.border}`,
-                                color: "#fff", borderRadius: 8, fontFamily: "Space Mono", fontSize: 14, outline: "none", cursor: "pointer"
-                            }}>
-                            {Array.from({ length: 24 }, (_, i) => (
-                                <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div className="card card-danger" style={{ padding: "16px", marginBottom: 16 }}>
-                <Label style={{ display: "block", marginBottom: 16, color: D.doom }}>Data Management</Label>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <button className="btn-primary" onClick={() => window.Android?.exportCsv()} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(135deg, ${D.muted}, #1a2436)`, color: "#fff", padding: "14px" }}>
-                        <Download size={15} /> Export Behavioral Baseline
+            {/* Right: Status chip */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {!isAccessibilityActive && (
+                    <button
+                        onClick={openAccessibilitySettings}
+                        style={{
+                            border: 'none',
+                            background: st.accent,
+                            color: 'white',
+                            borderRadius: 999,
+                            padding: '7px 14px',
+                            fontFamily: "'Space Grotesk', sans-serif",
+                            fontSize: 10,
+                            fontWeight: 800,
+                            letterSpacing: '0.05em',
+                            textTransform: 'uppercase',
+                            cursor: 'pointer',
+                            boxShadow: `0 2px 10px ${st.glow}`,
+                            transition: 'background 0.4s ease',
+                        }}
+                    >
+                        {chipText}
                     </button>
-                    <button className="btn-primary" onClick={() => window.Android?.clearData()} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(135deg, ${D.doomMag}, #7a0854)`, color: "#fff", padding: "14px", boxShadow: `0 8px 32px ${D.doomMag}33` }}>
-                        <Trash2 size={15} /> Flush Tracking Data
-                    </button>
-                </div>
-            </div>
-
-            <div style={{ textAlign: "center", marginTop: 24, marginBottom: 8 }}>
-                <div className="mono" style={{ fontSize: 10, color: D.muted, letterSpacing: "0.15em" }}>ALSE ENGINE CONFIGURATION</div>
-                <div className="mono" style={{ fontSize: 9, color: D.muted, marginTop: 4 }}>v3.0 INTEGRATION</div>
+                )}
+                {isAccessibilityActive && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 7,
+                        background: 'rgba(255,255,255,0.75)',
+                        borderRadius: 999,
+                        padding: '6px 14px 6px 10px',
+                        border: `1.5px solid ${chipPulse ? st.accent : D.borderSoft}`,
+                        transition: 'border-color 0.5s ease',
+                    }}>
+                        <div style={{
+                            width: 8, height: 8,
+                            borderRadius: '50%',
+                            background: chipDotColor,
+                            boxShadow: chipPulse ? `0 0 8px ${chipDotColor}` : 'none',
+                            animation: chipPulse ? `dotPulse ${st.pulseCycle} ease-in-out infinite` : 'none',
+                            transition: 'background 0.4s ease',
+                        }} />
+                        <span style={{
+                            fontFamily: "'Space Grotesk', sans-serif",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: chipPulse ? st.accent : D.ink3,
+                            letterSpacing: '0.04em',
+                            textTransform: 'uppercase',
+                            whiteSpace: 'nowrap',
+                            transition: 'color 0.4s ease',
+                        }}>{chipText}</span>
+                    </div>
+                )}
             </div>
         </div>
     );
-};
+}
 
-/* ─── APP SHELL ─────────────────────────────────────────────────── */
+// ─── ReeliApp ─────────────────────────────────────────────────────────────────
 export default function ReeliApp() {
     const [screen, setScreen] = useState("home");
     const [rawData, setRawData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [isServiceActive, setIsServiceActive] = useState(false);
+    // Splash: onboarding screen shows for ≥7s on cold start, or until data arrives (whichever is later)
+    const [splashDone, setSplashDone] = useState(false);
+
+    const checkA11y = () => typeof window.Android?.isAccessibilityEnabled === 'function'
+        ? !!window.Android.isAccessibilityEnabled()
+        : false;
+    const [isAccessibilityActive, setIsAccessibilityActive] = useState(checkA11y);
+    useEffect(() => {
+        // Poll every second as a fallback
+        const id = setInterval(() => {
+            const cur = checkA11y();
+            setIsAccessibilityActive(prev => prev !== cur ? cur : prev);
+        }, 1000);
+        // Hook into Kotlin onResume's window.updateServiceStatus call
+        window.updateServiceStatus = (enabled) => {
+            setIsAccessibilityActive(!!enabled);
+            window.dispatchEvent(new CustomEvent('a11y-status', { detail: !!enabled }));
+        };
+        // Also respond to cross-component events
+        const onStatus = e => setIsAccessibilityActive(!!e.detail);
+        window.addEventListener('a11y-status', onStatus);
+        return () => { clearInterval(id); window.removeEventListener('a11y-status', onStatus); };
+    }, []);
+
+    // 7-second splash timer
+    useEffect(() => {
+        const tid = setTimeout(() => setSplashDone(true), 7000);
+        return () => clearTimeout(tid);
+    }, []);
+
+    const openAccessibilitySettings = () => {
+        if (window.Android && window.Android.enableAccessibility) {
+            window.Android.enableAccessibility();
+        }
+    };
 
     useEffect(() => {
-        if (window.Android) setIsServiceActive(window.Android.isAccessibilityEnabled());
-        window.updateServiceStatus = (isActive) => setIsServiceActive(isActive);
+        // "No data" errors from Kotlin mean CSV doesn't exist yet — not a real error.
+        // Show onboarding instead of a red error screen.
+        const isNoDataError = (msg) =>
+            typeof msg === 'string' && (
+                msg.includes('No data file found') ||
+                msg.includes('No data available') ||
+                msg.includes('Empty CSV')
+            );
 
         const handleData = (parsed) => {
-            if (parsed.error) {
-                setError(parsed.error);
-            } else if (parsed.sessions && parsed.sessions.length > 0) {
-                setRawData(parsed);
-                setError(null);
-            } else {
-                setError("No sufficient data yet. Scroll a few more reels!");
+            if (!parsed) {
+                setRawData(null);
+                setLoading(false);
+                return;
             }
+            if (parsed.error) {
+                if (isNoDataError(parsed.error)) {
+                    // Treat as empty state, not error
+                    setRawData(null);
+                    setError(null);
+                } else {
+                    setError(parsed.error);
+                }
+                setLoading(false);
+                return;
+            }
+            setRawData(parsed);
+            setError(null);
             setLoading(false);
         };
 
         window.reactDataCallback = handleData;
-        if (window.injectedJsonData) handleData(window.injectedJsonData);
+        if (window.injectedJsonData) {
+            handleData(window.injectedJsonData);
+        } else {
+            setLoading(false);
+        }
 
-        const timer = setTimeout(() => {
-            if (!window.injectedJsonData) {
-                setLoading(false);
-                setError("Waiting for Tracker injection... (Make sure accessibility service is active and you have scrolled Reels)");
-            }
-        }, 10000);
-        return () => clearTimeout(timer);
+        return () => {
+            window.reactDataCallback = null;
+        };
     }, []);
 
-    if (loading) return (
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: D.bg, color: D.text, fontFamily: 'Space Grotesk, sans-serif', flexDirection: "column", gap: 16 }}>
-            <div style={{ width: 40, height: 40, borderRadius: "50%", border: `3px solid ${D.muted}`, borderTopColor: D.safe, animation: "spin 1s linear infinite" }} />
-            <div className="mono" style={{ fontSize: 11, color: D.muted, letterSpacing: "0.2em" }}>INITIALIZING ENGINE...</div>
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
-    );
+    // Memoized — recomputes only when Kotlin pushes new rawData, not on every tab change or state update
+    const data = useMemo(() => (rawData ? normalizeData(rawData) : null), [rawData]);
 
-    if (error) return (
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: D.bg, color: D.doom, fontFamily: 'Space Grotesk, sans-serif', padding: 20, textAlign: "center" }}>
-            ⚠️ {error}
-        </div>
-    );
+    if (loading) return <LoadingState />;
 
-    if (!rawData) return null;
+    if (error) {
+        return (
+            <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: D.bg, color: "#FF3B3B", padding: 20, textAlign: "center" }}>
+                ⚠️ {error}
+            </div>
+        );
+    }
 
-    const mostRecentSession = rawData.sessions[rawData.sessions.length - 1];
-    const allSessionsSt = rawData.sessions.map(s => s.S_t);
-    const avgSt = allSessionsSt.reduce((a, b) => a + b, 0) / rawData.sessions.length;
-    const A = rawData.model_parameters.transition_matrix || [[0.8, 0.2], [0.2, 0.8]];
-
-    const derivedSession = {
-        ...mostRecentSession,
-        doom_label: mostRecentSession.S_t > 0.6 ? "DOOM" : mostRecentSession.S_t > 0.35 ? "BORDERLINE" : "CASUAL",
-        doom_score: mostRecentSession.S_t,
-        model_confidence: Math.min(1.0, rawData.sessions.length / 20),
-        doom_pull_index: ((A[0][1] / Math.max(0.01, A[1][0])) * 1.5).toFixed(1),
-        regime_stability: 1.0 / (1.0 - A[1][1] + 0.001),
-        regime_alert: mostRecentSession.S_t > (avgSt + 0.2),
-        sessions_today: rawData.sessions.length,
-        total_doom_sessions: rawData.sessions.filter(s => s.S_t > 0.65).length,
-        total_interactions: rawData.sessions.reduce((acc, s) => acc + (s.likes || 0) + (s.comments || 0) + (s.shares || 0) + (s.saves || 0), 0),
-        total_dwell_today_min: (rawData.sessions.length * 5),
-        A: A,
-        q_01: 0.31, q_10: 0.13, h: [0.156, 0.037],
-        doom_components: {
-            length: Math.random() * 0.5 + 0.4,
-            volitional_conflict: Math.random() * 0.5 + 0.4,
-            rapid_reentry: Math.random() * 0.5 + 0.4,
-            automaticity: Math.random() * 0.5 + 0.4,
-            dwell_collapse: Math.random() * 0.5 + 0.4,
-            rewatch: Math.random() * 0.5 + 0.4,
-            environment: Math.random() * 0.5 + 0.4,
-        },
-    };
-
-    const derivedLive = {
-        duration: "LIVE",
-        reels: rawData.timeline?.p_capture?.length || 0,
-        avg_dwell: 3.5,
-    };
-
-    const timelineData = (rawData.timeline?.p_capture || []).map((p, i) => ({
-        r: i + 1, p,
-        exit: Math.random() > 0.95,
-        back: Math.random() > 0.95,
-    }));
-
-    const mockDays = Array.from({ length: 14 }, (_, i) => ({
-        d: ["M", "T", "W", "T", "F", "S", "S"][i % 7],
-        n: i + 8,
-        v: parseFloat((avgSt * 0.7 + Math.random() * 0.3).toFixed(2)),
-        s: Math.floor(2 + Math.random() * 5),
-    }));
+    // Show onboarding when: no data at all, OR splash timer hasn't elapsed yet
+    const hasData = rawData && safeArr(rawData.sessions).length > 0;
+    if (!hasData || !splashDone) return <OnboardingState />;
 
     return (
-        <div style={{ display: "flex", justifyContent: "center", minHeight: "100vh", background: "#000", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", justifyContent: "center", minHeight: "100vh", background: "#EDE8DF", alignItems: "flex-start" }}>
             <Styles />
-            <div className="app-shell" style={{ position: "relative" }}>
+            <div
+                className="app-shell"
+                style={{ position: "relative", display: 'flex', flexDirection: 'column', height: '100vh' }}
+                onContextMenu={(e) => e.preventDefault()}
+                onSelectStart={(e) => e.preventDefault()}
+            >
                 <div className="scanlines" />
-                <div className="scan" />
 
-                {/* Top nav bar */}
-                <div style={{
-                    height: 44, display: "flex", alignItems: "center",
-                    justifyContent: "space-between", padding: "0 20px",
-                    position: "sticky", top: 0, zIndex: 100,
-                    background: "rgba(5,5,10,0.9)", backdropFilter: "blur(20px)",
-                    borderBottom: `1px solid ${D.border}`,
-                }}>
-                    {screen === "dashboard" ? (
-                        <button onClick={() => setScreen("home")} style={{
-                            background: "none", border: "none", cursor: "pointer",
-                            display: "flex", alignItems: "center", gap: 4,
-                            color: D.safe, fontFamily: "Space Grotesk", fontSize: 13, fontWeight: 600,
-                        }}>
-                            <ArrowLeft size={16} /> Home
-                        </button>
-                    ) : (
-                        <div className="mono" style={{ fontSize: 11, color: D.muted }}>v3.0</div>
-                    )}
-                    <div className="mono" style={{ fontSize: 11, color: D.muted }}>SYNCED ▲</div>
+                <ReelioHeader data={data} isAccessibilityActive={isAccessibilityActive} openAccessibilitySettings={openAccessibilitySettings} />
+
+                <div style={{ overflowY: "auto", flex: 1, paddingBottom: 80 }}>
+                    {screen === "home"      && <MonitorScreen data={data} />}
+                    {screen === "calendar"  && <CaptureCalendarScreen data={data} />}
+                    {screen === "dashboard" && <DashboardScreen data={data} />}
+                    {screen === "settings"  && <SettingsScreen data={data} />}
                 </div>
 
-                {/* Scrollable content */}
-                <div style={{ overflowY: "auto", height: "calc(100vh - 44px - 56px)" }}>
-                    {screen === "home" ? <HomeScreen onNav={setScreen} SESSION={derivedSession} LIVE={derivedLive} isServiceActive={isServiceActive} />
-                        : screen === "dashboard" ? <DashboardScreen SESSION={derivedSession} REELS_DATA={timelineData} DAYS_14={mockDays} />
-                            : <SettingsScreen onNav={setScreen} />}
-                </div>
-
-                {/* Tab bar */}
                 <div className="tab-bar">
                     {[
-                        { id: "home", icon: Eye, label: "Monitor" },
-                        { id: "dashboard", icon: BarChart2, label: "Dashboard" },
-                        { id: "settings", icon: Settings, label: "Settings" },
+                        { id: "home",      icon: TabIconMonitor,   label: "Monitor"   },
+                        { id: "calendar",  icon: TabIconCalendar,  label: "Calendar"  },
+                        { id: "dashboard", icon: TabIconDashboard, label: "Dashboard" },
+                        { id: "settings",  icon: TabIconSettings,  label: "Settings"  },
                     ].map(({ id, icon: Icon, label }) => (
-                        <button key={id} className={`tab-item ripple-surface ${screen === id ? "active" : ""}`}
-                            onClick={() => setScreen(id)}>
-                            <Icon size={20} />
+                        <button key={id} className={`tab-item ${screen === id ? "active" : ""}`} onClick={() => setScreen(id)}>
+                            <Icon size={20} color={screen === id ? "white" : D.muted} />
                             <span>{label}</span>
                         </button>
                     ))}

@@ -54,6 +54,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private var currentSessionNumber = 0
+    private var pendingSessionUuid: String? = null
     private var sessionStartTime: Long? = null
     private var lastActiveTime = 0L
     private var lastExitTime = 0L
@@ -243,6 +244,9 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     companion object {
         private const val WINDOW_SIZE = 5
         private const val PREFS_NAME = "InstaTrackerPrefs"
+        const val SURVEY_NOTIF_ID_BASE = 90000
+        private const val REENTRY_NEW_SESSION_GAP_MS = 5_000L
+        private const val SURVEY_ACTIVITY_STALE_MS = 15 * 60 * 1000L
         private const val MAX_DWELL_HISTORY = 200
         private const val MAX_SCROLL_INTERVALS = 200
         private const val MAX_INTERACTION_HISTORY = 200
@@ -290,7 +294,8 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         val info = AccessibilityServiceInfo()
         info.eventTypes = AccessibilityEvent.TYPE_VIEW_SCROLLED or
                          AccessibilityEvent.TYPE_VIEW_CLICKED or
-                         AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                         AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
+                         AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
         serviceInfo = info
         lastActiveTime = System.currentTimeMillis()
@@ -338,7 +343,8 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             val type = event.eventType
             if (type != AccessibilityEvent.TYPE_VIEW_SCROLLED &&
                 type != AccessibilityEvent.TYPE_VIEW_CLICKED &&
-                type != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
+                type != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+                type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
             val now = System.currentTimeMillis()
             val packageName = event.packageName?.toString() ?: ""
@@ -352,7 +358,12 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             } else {
                 if (lastExitTime != 0L) {
                     val exitDuration = now - lastExitTime
-                    if (exitDuration < 20_000L) {
+                    if (sessionStartTime != null && exitDuration >= REENTRY_NEW_SESSION_GAP_MS) {
+                        // If user left Instagram and came back after a short gap,
+                        // split sessions immediately so post-survey can fire and
+                        // next entry can show a fresh pre-session prompt.
+                        endCurrentSession(lastActiveTime)
+                    } else if (exitDuration < 20_000L) {
                         appExitAttempts++
                     }
                     lastExitTime = 0L
@@ -489,7 +500,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                             settleScheduledAt = now
                             lastReelSettleJob?.cancel()
                             val capturedTarget = newIndex
-                            lastReelSettleJob = serviceScope.launch {
+                            lastReelSettleJob = serviceScope.launch(Dispatchers.Main) {
                                 delay(150L) // 150ms: real swipe completes in ~100-130ms
                                 val current = currentReelIndex ?: return@launch
                                 if (capturedTarget != current) {
@@ -507,12 +518,13 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                                     }
 
                                     processPreviousReel(System.currentTimeMillis())
-                                    if (skippedCount > 0) {
-                                        // Apply skipped reels after writing the previous row
-                                        // so that row indices stay consistent.
-                                        reelCount += skippedCount
-                                        cumulativeReels += skippedCount
-                                    }
+                                    // NOTE: We intentionally do NOT inflate reelCount
+                                    // or cumulativeReels for skipped reels.  Only reels
+                                    // that produce a CSV row (with dwell/interaction data)
+                                    // should be counted. Inflating the counters here was
+                                    // causing 1-reel sessions to appear as 139-reel sessions
+                                    // in the CSV because CumulativeReels diverged from the
+                                    // actual number of recorded rows.
                                     currentReelIndex = capturedTarget
                                     settleTargetIndex = -1
                                     startNextReel(System.currentTimeMillis())
@@ -626,7 +638,21 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         // backScrollCount, ambientLuxStart, and appExitAttempts moved to processPreviousReel
     }
 
+    // Guard: last (sessionNumber, cumulativeReels) tuple that was written.
+    // Prevents duplicate CSV rows if endCurrentSession or the settle job
+    // somehow calls processPreviousReel twice for the same reel.
+    private var lastWrittenSessionNum = -1
+    private var lastWrittenCumulativeReel = -1
+
     private fun processPreviousReel(now: Long) {
+        // Dedup guard: never write the same (session, reel) twice.
+        if (currentSessionNumber == lastWrittenSessionNum && cumulativeReels == lastWrittenCumulativeReel) {
+            Log.w("ReelioDiag", "Skipping duplicate CSV write for session=$currentSessionNumber reel=$cumulativeReels")
+            return
+        }
+        lastWrittenSessionNum = currentSessionNumber
+        lastWrittenCumulativeReel = cumulativeReels
+
         if (reelCount % 10 == 0) Log.i("ReelioDiag", "Reel heartbeat: reel=$reelCount PID=${android.os.Process.myPid()}")
         val dwell = computeDwell(now)
         sessionDwellTimes.add(dwell.sec)
@@ -646,11 +672,14 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     }
 
     private fun calculateVariance(mags: List<Float>): Float {
-        if (mags.isEmpty()) return 0f
-        val mean = mags.average().toFloat()
+        // Defensive copy: mags may be mutated by onSensorChanged on the main
+        // thread while this function iterates on a coroutine worker thread.
+        val snapshot = ArrayList(mags)
+        if (snapshot.isEmpty()) return 0f
+        val mean = snapshot.average().toFloat()
         var v = 0f
-        for (m in mags) { v += (m - mean) * (m - mean) }
-        return v / mags.size
+        for (m in snapshot) { v += (m - mean) * (m - mean) }
+        return v / snapshot.size
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -689,6 +718,15 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         currentReelIndex = null
         uniqueAudioTracks.clear()
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        // If process was restarted while a survey activity was on top, this flag can
+        // remain stuck true and permanently block post-session probes.
+        prefs.edit()
+            .putBoolean("survey_activity_open", false)
+            .remove("survey_activity_open_since")
+            .putBoolean("is_survey_session", false)
+            .putInt("survey_session_num", -1)
+            .apply()
         
         // --- Layer 8: Micro-Probes Data Extraction ---
         val rawProbe = prefs.getString("last_microprobe_result", "0,,0,0,0,0,0,0") ?: "0,,0,0,0,0,0,0"
@@ -779,6 +817,11 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         } else {
             -1.0
         }
+
+        // Assign session number before survey decision so all survey state is scoped
+        // to the correct session and cannot be clobbered by previous-session cleanup.
+        currentSessionNumber = if (today != lastDate) 1 else prefs.getInt(KEY_SESSION_NUM, 0) + 1
+        prefs.edit().putInt(KEY_SESSION_NUM, currentSessionNumber).putString("last_session_date", today).apply()
         
         // --- Layer 8: Trigger Probabilistic Paired Surveys ---
         val sliderValue = prefs.getFloat("survey_probability", 0.30f)
@@ -794,8 +837,14 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             else                 -> Math.random() < (sliderValue * baseRate)
         }
 
+        Log.i(
+            "ReelioDiag",
+            "Survey decision: session=$currentSessionNumber slider=$sliderValue lastScore=$lastSt baseRate=$baseRate selected=$isSurveySession"
+        )
+
         prefs.edit()
             .putBoolean("is_survey_session", isSurveySession)
+            .putInt("survey_session_num", if (isSurveySession) currentSessionNumber else -1)
             .putInt("current_mood_before", 0)
             .putString("current_intended_action", "")
             .putInt("probe_post_rating", 0)
@@ -809,11 +858,10 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         if (isSurveySession) showIntentionPrompt()
         // -----------------------------------------------------
         
-        currentSessionNumber = if (today != lastDate) 1 else prefs.getInt(KEY_SESSION_NUM, 0) + 1
-        prefs.edit().putInt(KEY_SESSION_NUM, currentSessionNumber).putString("last_session_date", today).apply()
-        
         cumulativeReels = 0
         reelCount = 0
+        lastWrittenSessionNum = -1
+        lastWrittenCumulativeReel = -1
         continuousScrollCount = 0
         settleTargetIndex = -1
         settleScheduledAt = 0L
@@ -951,19 +999,86 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         try {
             lastReelSettleJob?.cancel()
             if (sessionStartTime == null) return
+            val savedSessionStart = sessionStartTime!!
             val batteryIntent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
             batteryLevelEnd = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
             if (lastReelStartTime != 0L && endTime > lastReelStartTime) processPreviousReel(endTime)
             
+            // CRITICAL: Null out session state IMMEDIATELY after the CSV write,
+            // BEFORE any survey/notification/database code that could throw.
+            // Previously these were at the bottom of the try block. If any line
+            // between processPreviousReel() and here threw an exception, the
+            // catch block ran but sessionStartTime stayed non-null and
+            // lastReelStartTime stayed non-zero. Every subsequent accessibility
+            // event then re-entered endCurrentSession via checkSessionTimeout
+            // and re-wrote the same last reel — producing 100-344 duplicate
+            // CSV rows with identical timestamps (the "poisoned session" bug).
+            val savedReelCount = reelCount
+            sessionStartTime = null
+            lastReelStartTime = 0L
+            reelCount = 0
+            dwellWindow.clear()
+            
             val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             
-            if (prefs.getBoolean("is_survey_session", false)) showSurveyPrompt()
+            // Only show survey prompt if this is a survey session AND the user
+            // hasn't already completed the survey for this session number
+            // AND no survey activity is currently open (prevents stacking).
+            val surveySessionNum = prefs.getInt("survey_session_num", -1)
+            val isSurvey = (surveySessionNum == currentSessionNumber)
+            val completedForSession = prefs.getInt("survey_completed_for_session", -1)
+            val alreadyCompleted = completedForSession == currentSessionNumber
+            var surveyAlreadyOpen = prefs.getBoolean("survey_activity_open", false)
+            val surveyOpenSince = prefs.getLong("survey_activity_open_since", 0L)
+
+            if (surveyAlreadyOpen) {
+                val ageMs = if (surveyOpenSince > 0L) endTime - surveyOpenSince else Long.MAX_VALUE
+                if (ageMs > SURVEY_ACTIVITY_STALE_MS) {
+                    Log.w("ReelioDiag", "Clearing stale survey_activity_open flag. ageMs=$ageMs")
+                    prefs.edit()
+                        .putBoolean("survey_activity_open", false)
+                        .remove("survey_activity_open_since")
+                        .apply()
+                    surveyAlreadyOpen = false
+                }
+            }
+
+            Log.i(
+                "ReelioDiag",
+                "Post survey gate: session=$currentSessionNumber surveySessionNum=$surveySessionNum isSurvey=$isSurvey completedFor=$completedForSession alreadyCompleted=$alreadyCompleted surveyOpen=$surveyAlreadyOpen pending=${prefs.getInt("pending_survey_session_num", -1)}"
+            )
+
+            if (isSurvey && !alreadyCompleted && !surveyAlreadyOpen) {
+                // Cancel any stale survey notification from a previous session
+                // that the user never completed, so notifications don't stack.
+                val prevPending = prefs.getInt("pending_survey_session_num", -1)
+                if (prevPending >= 0 && prevPending != currentSessionNumber) {
+                    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    nm.cancel(SURVEY_NOTIF_ID_BASE + prevPending)
+                }
+                // Generate UUID synchronously BEFORE firing the notification,
+                // so MicroProbeActivity always reads the correct session UUID.
+                val sessionUuid = UUID.randomUUID().toString()
+                prefs.edit()
+                    .putInt("pending_survey_session_num", currentSessionNumber)
+                    .putString("pending_survey_session_uuid", sessionUuid)
+                    // Clear flag immediately so duplicate endCurrentSession calls
+                    // can't fire another notification for the same session.
+                    .putBoolean("is_survey_session", false)
+                    .putInt("survey_session_num", -1)
+                    .apply()
+                pendingSessionUuid = sessionUuid
+                Log.i("ReelioDiag", "Post survey prompt queued for session=$currentSessionNumber")
+                showSurveyPrompt()
+            } else {
+                Log.i("ReelioDiag", "Post survey skipped for session=$currentSessionNumber")
+            }
             
             sensorManager.unregisterListener(this)
             
-            val dwellMin = ((endTime - (sessionStartTime ?: endTime)) / 60000f).toFloat()
+            val dwellMin = ((endTime - savedSessionStart) / 60000f).toFloat()
             totalDwellTodayMin += dwellMin
-            if (reelCount > longestSessionTodayReels) longestSessionTodayReels = reelCount
+            if (savedReelCount > longestSessionTodayReels) longestSessionTodayReels = savedReelCount
             if (getTimePeriod() == "Morning") morningSessionExists = true
             
             prefs.edit()
@@ -974,21 +1089,31 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                 .putBoolean("morning_session_exists", morningSessionExists)
                 .apply()
             
-            schedulePostSessionProbes(endTime)
-            injectSessionToDatabase(sessionStartTime!!, endTime)
+            // schedulePostSessionProbes uses setExactAndAllowWhileIdle which throws
+            // SecurityException if the user hasn't granted SCHEDULE_EXACT_ALARM in
+            // system settings.  Isolate it so injectSessionToDatabase always runs.
+            try {
+                schedulePostSessionProbes(endTime)
+            } catch (e: Exception) {
+                android.util.Log.w("InstaTracker", "schedulePostSessionProbes failed (non-fatal): ${e.message}")
+            }
+
+            injectSessionToDatabase(savedSessionStart, endTime, pendingSessionUuid)
             
-            sessionStartTime = null
-            reelCount = 0
-            dwellWindow.clear()
-            lastReelStartTime = 0L
+            pendingSessionUuid = null
         } catch (e: Exception) {
+            // Even if we get here, sessionStartTime and lastReelStartTime are
+            // already nulled/zeroed so re-entry won't duplicate CSV rows.
             android.util.Log.e("InstaTracker", "Exception in endCurrentSession", e)
         }
     }
     
     private fun schedulePostSessionProbes(sessionEndTime: Long) {
+        // Only schedule delayed probe if this was a survey session
+        // (pendingSessionUuid is set when survey notification fires)
+        if (pendingSessionUuid == null) return
+        
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("is_survey_session", false)) return
         
         // Delayed probe: only if session scored above borderline threshold
         val lastDoom = prefs.getFloat("last_session_doom_score", 0f)
@@ -1003,15 +1128,26 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                sessionEndTime + 60 * 60 * 1000L,
-                pending
-            )
+            // SCHEDULE_EXACT_ALARM requires explicit user grant on API 31+.
+            // Fall back to inexact alarm if permission not yet granted.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                Log.w("InstaTracker", "Exact alarm permission not granted — using inexact delayed-probe alarm")
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    sessionEndTime + 60 * 60 * 1000L,
+                    pending
+                )
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    sessionEndTime + 60 * 60 * 1000L,
+                    pending
+                )
+            }
         }
     }
     
-    private fun injectSessionToDatabase(startTime: Long, endTime: Long) {
+    private fun injectSessionToDatabase(startTime: Long, endTime: Long, preGeneratedUuid: String? = null) {
         val sTime = startTime
         val eTime = endTime
         val durSec = ((eTime - sTime) / 1000).toLong()
@@ -1115,8 +1251,11 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                 }
                 
                 val db = DatabaseProvider.getDatabase(this@InstaAccessibilityService)
+                // Use the pre-generated UUID if available (survey sessions),
+                // otherwise generate a new one (non-survey sessions).
+                val sessionUuid = preGeneratedUuid ?: UUID.randomUUID().toString()
                 val dbSession = SessionEntity(
-                    sessionId = UUID.randomUUID().toString(),
+                    sessionId = sessionUuid,
                     sessionStart = sTime,
                     sessionEnd = eTime,
                     durationSeconds = durSec,
@@ -1138,6 +1277,15 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                     postSessionRating = rat, intendedAction = act, actualVsIntendedMatch = mat, regretScore = reg, moodBefore = mBf, moodAfter = mAf, moodDelta = mDl
                 )
                 db.sessionDao().insert(dbSession)
+                
+                // For non-survey sessions, store UUID in case it's needed.
+                // For survey sessions, UUID was already written synchronously
+                // before the notification was shown.
+                if (preGeneratedUuid == null) {
+                    getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                        .putString("pending_survey_session_uuid", sessionUuid)
+                        .apply()
+                }
             } catch (t: Throwable) {
                 android.util.Log.e("InstaTracker", "Fatal error in Database Injector Coroutine", t)
             }
@@ -1261,11 +1409,16 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         val variance = if (dwellWindow.isNotEmpty()) dwellWindow.map { (it - rollingMean) * (it - rollingMean) }.average() else 0.0
         val rollingStd = sqrt(variance)
 
-        val avgSpeed = if (scrollDistances.isNotEmpty()) scrollDistances.average() else 0.0
-        val maxSpeed = if (scrollDistances.isNotEmpty()) scrollDistances.maxOrNull()?.toDouble() ?: 0.0 else 0.0
+        // Defensive copies: these lists are mutated by onAccessibilityEvent
+        // and onSensorChanged on the main thread. processPreviousReel may be
+        // running on a coroutine worker thread.
+        val scrollSnap = ArrayList(scrollDistances)
+        val avgSpeed = if (scrollSnap.isNotEmpty()) scrollSnap.average() else 0.0
+        val maxSpeed = if (scrollSnap.isNotEmpty()) scrollSnap.maxOrNull()?.toDouble() ?: 0.0 else 0.0
 
-        val accVar = calculateVariance(accelMagnitudes).toDouble()
-        val isStationary = if (accVar < 0.2 && accelMagnitudes.isNotEmpty()) 1 else 0
+        val accelSnap = ArrayList(accelMagnitudes)
+        val accVar = calculateVariance(accelSnap).toDouble()
+        val isStationary = if (accVar < 0.2 && accelSnap.isNotEmpty()) 1 else 0
 
         val luxDelta = if (ambientLuxStart != -1f && ambientLuxEnd != -1f) ambientLuxEnd - ambientLuxStart else 0f
         val batteryDelta = if (batteryLevelStart != -1 && batteryLevelEnd != -1) batteryLevelStart - batteryLevelEnd else 0
@@ -1343,9 +1496,13 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     }
 
     private fun showSurveyPrompt() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val sessNum = prefs.getInt("pending_survey_session_num", currentSessionNumber)
         val intent = Intent(this, MicroProbeActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
+        // Use a fixed notification ID so MicroProbeActivity can cancel it reliably
+        val notifId = SURVEY_NOTIF_ID_BASE + sessNum
         val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_aware_notification)
@@ -1354,10 +1511,19 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(currentSessionNumber, builder.build())
+            .setTimeoutAfter(10 * 60 * 1000L) // auto-dismiss after 10 min
+        Log.i("ReelioDiag", "Showing post survey notification id=$notifId session=$sessNum")
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(notifId, builder.build())
     }
     
     private fun showIntentionPrompt() {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // Cancel any stale intention notification from a previous session
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prevSessNum = prefs.getInt(KEY_SESSION_NUM, 0)
+        if (prevSessNum > 0 && prevSessNum != currentSessionNumber) {
+            nm.cancel(prevSessNum + 1000)
+        }
         val intent = Intent(this, com.example.instatracker.IntentionProbeActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -1369,7 +1535,8 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(currentSessionNumber + 1000, builder.build())
+            .setTimeoutAfter(5 * 60 * 1000L) // auto-dismiss after 5 min
+        nm.notify(currentSessionNumber + 1000, builder.build())
     }
 
     private fun createNotificationChannel() {

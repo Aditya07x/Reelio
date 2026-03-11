@@ -34,7 +34,7 @@ class DashboardActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         webView = WebView(this)
-        webView.setBackgroundColor(android.graphics.Color.parseColor("#05050A"))
+        webView.setBackgroundColor(android.graphics.Color.parseColor("#FBF7F0"))
         webView.layoutParams = android.view.ViewGroup.LayoutParams(
             android.view.ViewGroup.LayoutParams.MATCH_PARENT, 
             android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -226,7 +226,15 @@ class DashboardActivity : ComponentActivity() {
                 return false
             }
 
-            android.util.Log.d("ReactDashboard", "Cache valid with circadian and ticker data")
+            // Migration FIX: enforce pipeline version key so stale pre-dedupe
+            // payloads are invalidated and Monitor time metrics recompute.
+            if (!text.contains("\"pipeline_version\"")) {
+                android.util.Log.d("ReactDashboard", "Cache missing pipeline_version, forcing recompute")
+                hmmFile.delete()
+                return false
+            }
+
+            android.util.Log.d("ReactDashboard", "Cache valid with circadian, ticker, and pipeline version")
             true
         } catch (e: Exception) {
             android.util.Log.e("ReactDashboard", "Cache read error: ${e.message}")
@@ -375,15 +383,35 @@ class DashboardActivity : ComponentActivity() {
         fun clearData() {}
 
         @JavascriptInterface
-        fun getSurveyFrequency(): Float = 0.35f
+        fun getSurveyFrequency(): Float {
+            return mContext.getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
+                .getFloat("survey_probability", 0.30f)
+        }
 
         @JavascriptInterface
-        fun setSurveyFrequency(freq: Float) {}
+        fun setSurveyFrequency(freq: Float) {
+            val bounded = freq.coerceIn(0f, 1f)
+            mContext.getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
+                .edit()
+                .putFloat("survey_probability", bounded)
+                .apply()
+        }
 
         @JavascriptInterface
-        fun getSleepSchedule(): String = "23,7"
+        fun getSleepSchedule(): String {
+            val prefs = mContext.getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
+            val start = prefs.getInt("sleep_start_hour", 23)
+            val end = prefs.getInt("sleep_end_hour", 7)
+            return "$start,$end"
+        }
 
         @JavascriptInterface
-        fun setSleepSchedule(start: Int, end: Int) {}
+        fun setSleepSchedule(start: Int, end: Int) {
+            mContext.getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
+                .edit()
+                .putInt("sleep_start_hour", start)
+                .putInt("sleep_end_hour", end)
+                .apply()
+        }
     }
 }

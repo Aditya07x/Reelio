@@ -17,11 +17,15 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.core.content.FileProvider
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -48,7 +52,7 @@ class MainActivity : ComponentActivity() {
         }
 
         webView = WebView(this)
-        webView.setBackgroundColor(android.graphics.Color.parseColor("#05050A")) // Match index.html bg
+        webView.setBackgroundColor(android.graphics.Color.parseColor("#FBF7F0")) // Match index.html bg
         webView.layoutParams = android.view.ViewGroup.LayoutParams(
             android.view.ViewGroup.LayoutParams.MATCH_PARENT, 
             android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -64,7 +68,7 @@ class MainActivity : ComponentActivity() {
         settings.allowFileAccessFromFileURLs = true
         settings.allowUniversalAccessFromFileURLs = true
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-        settings.cacheMode = WebSettings.LOAD_NO_CACHE
+        settings.cacheMode = WebSettings.LOAD_DEFAULT
 
         // Expose Native Android Methods to React
         webView.addJavascriptInterface(WebAppInterface(this), "Android")
@@ -89,8 +93,28 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        webView.clearCache(true)
         webView.loadUrl("file:///android_asset/www/index.html")
+
+        // Schedule weekly notification worker (runs every 7 days at 9 AM)
+        scheduleWeeklyNotificationWorker()
+    }
+
+    private fun scheduleWeeklyNotificationWorker() {
+        try {
+            val weeklyWorkRequest = PeriodicWorkRequestBuilder<WeeklyNotificationWorker>(
+                7, TimeUnit.DAYS
+            ).build()
+            
+            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "weekly_doom_summary",
+                ExistingPeriodicWorkPolicy.KEEP,
+                weeklyWorkRequest
+            )
+            
+            Log.d("MainActivity", "Weekly notification worker scheduled")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to schedule weekly worker: ${e.message}")
+        }
     }
 
     override fun onResume() {
