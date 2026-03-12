@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "public": "firebase_public",
+    "site": "reelio-web-20260312",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "cleanUrls": true,
+    "trailingSlash": false
+  }
+}

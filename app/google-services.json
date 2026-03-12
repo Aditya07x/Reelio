@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "139920054733",
+    "project_id": "reelio-web-20260312",
+    "storage_bucket": "reelio-web-20260312.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:139920054733:android:69ed720e566beb510a4c84",
+        "android_client_info": {
+          "package_name": "Reelio.alse.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfSZKgxXfENIRT6qu_AmD4I_mhArsPEvE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:139920054733:android:2d885a6bebeb65aa0a4c84",
+        "android_client_info": {
+          "package_name": "com.example.instatracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfSZKgxXfENIRT6qu_AmD4I_mhArsPEvE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,4103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reelio - Adaptive Latent State Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Nunito:wght@500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #EDE8DF;
+      --section: #E4DED4;
+      --surface: #FDFAF6;
+      --card: #F7F3EC;
+      --nav: #F0EBE2;
+      --ink: #1A1612;
+      --ink2: #6A5E56;
+      --ink3: #9A8E84;
+      --purple: #6B3FA0;
+      --purple-dark: #4A2580;
+      --safe: #3A9E6F;
+      --warn: #C4973A;
+      --danger: #C4563A;
+      --deep-doom: #A03030;
+      --border: rgba(26, 22, 18, 0.12);
+      --border-soft: rgba(26, 22, 18, 0.06);
+      --shadow: 0 8px 30px rgba(26, 22, 18, 0.08);
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'Nunito', sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    #blob-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.8;
+    }
+
+    .page {
+      position: relative;
+      z-index: 2;
+    }
+
+    .container {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 40;
+      background: rgba(240, 235, 226, 0.96);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+    }
+
+    .nav-inner {
+      height: 66px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+
+    .brand {
+      font-family: 'Space Mono', monospace;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      color: var(--purple);
+      white-space: nowrap;
+    }
+
+    .nav-links {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--ink2);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--purple);
+    }
+
+    .hero {
+      min-height: 100vh;
+      padding: 120px 0 80px;
+      display: flex;
+      align-items: center;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 28px;
+      align-items: stretch;
+      width: 100%;
+    }
+
+    .hero-kicker {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      color: var(--safe);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-family: 'Lora', serif;
+      font-size: clamp(44px, 8vw, 74px);
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      margin-bottom: 18px;
+      color: var(--ink);
+    }
+
+    .hero-lead {
+      font-size: 19px;
+      color: var(--ink2);
+      max-width: 760px;
+      margin-bottom: 26px;
+    }
+
+    .hero-list {
+      list-style: none;
+      display: grid;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .hero-list li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      color: var(--ink2);
+      font-size: 15px;
+    }
+
+    .hero-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      margin-top: 7px;
+      flex-shrink: 0;
+      background: var(--purple);
+      border: 1px solid var(--purple-dark);
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 12px 20px;
+      border-radius: 999px;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: var(--purple);
+      color: #fff;
+      border: 2px solid var(--purple);
+    }
+
+    .btn-primary:hover {
+      background: var(--purple-dark);
+      border-color: var(--purple-dark);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--purple);
+      border: 2px solid var(--purple);
+    }
+
+    .btn-ghost:hover {
+      background: rgba(107, 63, 160, 0.1);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-panel {
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+      height: 100%;
+      align-content: start;
+    }
+
+    .panel-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink3);
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat-chip {
+      background: var(--card);
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .stat-num {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 800;
+      font-size: 24px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--ink3);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .stat-purple .stat-num {
+      color: var(--purple);
+    }
+
+    .stat-safe .stat-num {
+      color: var(--safe);
+    }
+
+    .stat-warn .stat-num {
+      color: var(--warn);
+    }
+
+    .stat-danger .stat-num {
+      color: var(--danger);
+    }
+
+    .code-panel {
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #1A1612;
+      color: #EDE8DF;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+    }
+
+    .code-head {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(237, 232, 223, 0.14);
+      color: #C4973A;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-size: 10px;
+    }
+
+    .code-body {
+      padding: 12px;
+      line-height: 1.7;
+      color: #E4DED4;
+      white-space: pre-wrap;
+    }
+
+    .section {
+      padding: 96px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .section.alt {
+      background: var(--section);
+    }
+
+    .kicker {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--purple);
+      margin-bottom: 10px;
+    }
+
+    .title {
+      font-family: 'Lora', serif;
+      font-size: clamp(34px, 6vw, 56px);
+      line-height: 1.1;
+      letter-spacing: -0.01em;
+      margin-bottom: 14px;
+    }
+
+    .lead {
+      max-width: 860px;
+      color: var(--ink2);
+      font-size: 18px;
+      margin-bottom: 28px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .info-card {
+      padding: 18px;
+      border-radius: 14px;
+      border: 1px solid var(--border-soft);
+      background: var(--surface);
+    }
+
+    .info-card h3 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 18px;
+      margin-bottom: 8px;
+      color: var(--ink);
+    }
+
+    .info-card p,
+    .info-card li {
+      color: var(--ink2);
+      font-size: 15px;
+    }
+
+    .info-card ul {
+      margin-top: 8px;
+      margin-left: 18px;
+      display: grid;
+      gap: 5px;
+    }
+
+    .architecture {
+      display: grid;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .arch-node {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .arch-step {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink3);
+    }
+
+    .arch-name {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .arch-desc {
+      color: var(--ink2);
+      font-size: 15px;
+    }
+
+    .arch-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .tag {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border-soft);
+      background: var(--card);
+      color: var(--ink2);
+    }
+
+    .layer-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .layer {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .layer summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid transparent;
+    }
+
+    .layer summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .layer[open] summary {
+      border-bottom-color: var(--border-soft);
+      background: var(--card);
+    }
+
+    .layer-num {
+      font-family: 'Space Mono', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--purple);
+      min-width: 44px;
+    }
+
+    .layer-head {
+      display: grid;
+      gap: 2px;
+    }
+
+    .layer-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .layer-meta {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--ink3);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .layer-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .layer-table tr {
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .layer-table td {
+      padding: 10px 16px;
+      vertical-align: top;
+      color: var(--ink2);
+    }
+
+    .layer-table td:first-child {
+      width: 40%;
+      color: var(--ink);
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+    }
+
+    .pillars {
+      margin-top: 20px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .pillar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .pillar-num {
+      font-family: 'Space Mono', monospace;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--purple);
+    }
+
+    .pillar h3 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 16px;
+      color: var(--ink);
+    }
+
+    .pillar p {
+      color: var(--ink2);
+      font-size: 14px;
+    }
+
+    .code-update {
+      margin-top: 16px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      color: var(--ink2);
+      line-height: 1.8;
+      white-space: pre-wrap;
+    }
+
+    .dashboard-shell {
+      margin-top: 20px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .dashboard-head {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--card);
+    }
+
+    .dashboard-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .preset-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .preset-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--ink3);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .preset-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .preset-tab {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--ink2);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .preset-tab.active,
+    .preset-tab:hover {
+      background: var(--safe);
+      border-color: var(--safe);
+      color: #fff;
+    }
+
+    .dash-tab {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--ink2);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .dash-tab.active,
+    .dash-tab:hover {
+      background: var(--purple);
+      color: #fff;
+      border-color: var(--purple);
+    }
+
+    .dashboard-panel {
+      display: none;
+      padding: 16px;
+    }
+
+    .dashboard-panel.active {
+      display: block;
+    }
+
+    .dash-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .dash-grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dash-grid.one {
+      grid-template-columns: 1fr;
+    }
+
+    .chart-card {
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      background: #fff;
+      padding: 14px;
+      min-height: 220px;
+    }
+
+    .chart-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 2px;
+    }
+
+    .chart-meta {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--ink3);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .gauge-wrap {
+      display: grid;
+      grid-template-columns: 170px 1fr;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .gauge-face {
+      position: relative;
+      width: 160px;
+      height: 100px;
+      margin: 0 auto;
+    }
+
+    .gauge-score {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 5px;
+      text-align: center;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 34px;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--warn);
+    }
+
+    .gauge-label {
+      text-align: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink3);
+    }
+
+    .insight {
+      font-size: 14px;
+      color: var(--ink2);
+      margin-top: 8px;
+      line-height: 1.6;
+    }
+
+    .state-svg {
+      width: 100%;
+      height: 170px;
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      background: var(--card);
+    }
+
+    .drivers-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .timeline-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .timeline-cell {
+      border: 1px solid var(--border-soft);
+      background: var(--card);
+      border-radius: 10px;
+      padding: 8px;
+      display: grid;
+      gap: 6px;
+      align-content: start;
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .timeline-cell:hover {
+      transform: translateY(-1px);
+      border-color: var(--purple);
+    }
+
+    .timeline-cell.active {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 1px rgba(107, 63, 160, 0.15);
+    }
+
+    .timeline-empty {
+      font-size: 13px;
+      color: var(--ink3);
+      background: var(--card);
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 10px;
+    }
+
+    .timeline-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(26, 22, 18, 0.12);
+    }
+
+    .timeline-time {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--ink3);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .timeline-badge {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.2;
+    }
+
+    .timeline-detail {
+      border: 1px solid var(--border-soft);
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+      font-size: 13px;
+      color: var(--ink2);
+      line-height: 1.6;
+    }
+
+    .driver {
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      background: var(--card);
+      overflow: hidden;
+    }
+
+    .driver-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+      padding: 10px 12px;
+    }
+
+    .driver-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .driver-abbr {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ink2);
+      flex-shrink: 0;
+    }
+
+    .driver-name {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .driver-pct {
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      color: var(--ink2);
+      flex-shrink: 0;
+    }
+
+    .driver-track {
+      height: 7px;
+      margin: 0 12px 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(26, 22, 18, 0.08);
+    }
+
+    .driver-fill {
+      height: 100%;
+      width: 0;
+      transition: width 0.7s ease;
+      background: var(--danger);
+    }
+
+    .driver-body {
+      display: none;
+      padding: 0 12px 12px;
+      font-size: 13px;
+      color: var(--ink2);
+      line-height: 1.6;
+    }
+
+    .driver.open .driver-body {
+      display: block;
+    }
+
+    .bar-grid {
+      height: 210px;
+      display: grid;
+      grid-template-columns: repeat(14, minmax(0, 1fr));
+      gap: 7px;
+      align-items: end;
+      padding: 8px 0 0;
+    }
+
+    .bar-col {
+      display: grid;
+      gap: 6px;
+      justify-items: center;
+      align-items: end;
+    }
+
+    .bar-stick {
+      width: 100%;
+      border-radius: 8px 8px 0 0;
+      min-height: 14px;
+      background: var(--safe);
+      border: 1px solid rgba(26, 22, 18, 0.08);
+    }
+
+    .bar-day {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--ink3);
+    }
+
+    .svg-wrap {
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      background: var(--card);
+      overflow: hidden;
+    }
+
+    .svg-wrap svg {
+      display: block;
+      width: 100%;
+      height: 240px;
+    }
+
+    .mini-metrics {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .mini {
+      background: var(--card);
+      border: 1px solid var(--border-soft);
+      border-radius: 10px;
+      padding: 8px;
+    }
+
+    .mini-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--ink3);
+      margin-bottom: 4px;
+    }
+
+    .mini-value {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--ink);
+    }
+
+    .weights {
+      display: grid;
+      gap: 10px;
+    }
+
+    .weight-row {
+      display: grid;
+      gap: 6px;
+    }
+
+    .weight-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--ink2);
+      font-family: 'Space Mono', monospace;
+    }
+
+    .weight-track {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(26, 22, 18, 0.08);
+      overflow: hidden;
+    }
+
+    .weight-fill {
+      height: 100%;
+      width: 0;
+      background: var(--purple);
+      transition: width 0.7s ease;
+    }
+
+    .confidence-bars {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .conf-row {
+      display: grid;
+      grid-template-columns: 140px 1fr 44px;
+      gap: 8px;
+      align-items: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      color: var(--ink2);
+    }
+
+    .conf-track {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(26, 22, 18, 0.08);
+      overflow: hidden;
+    }
+
+    .conf-fill {
+      height: 100%;
+      width: 0;
+      background: var(--safe);
+      transition: width 0.7s ease;
+    }
+
+    .monitor-card {
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      background: #E8E0F5;
+      padding: 18px;
+    }
+
+    .monitor-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink3);
+      margin-bottom: 10px;
+    }
+
+    .monitor-headline {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 34px;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      font-weight: 800;
+      color: var(--ink);
+      margin-bottom: 8px;
+      max-width: 400px;
+    }
+
+    .monitor-sub {
+      color: var(--ink2);
+      font-size: 14px;
+      margin-bottom: 14px;
+    }
+
+    .monitor-bento {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .tile {
+      border-radius: 12px;
+      border: 1px solid var(--border-soft);
+      padding: 12px;
+      background: #fff;
+    }
+
+    .tile-value {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 30px;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--ink);
+      margin-bottom: 5px;
+    }
+
+    .tile-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink3);
+    }
+
+    .stack {
+      display: grid;
+      gap: 8px;
+    }
+
+    .session-quality {
+      margin-top: 10px;
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      background: #fff;
+      padding: 12px;
+    }
+
+    .quality-track {
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(26, 22, 18, 0.08);
+      display: flex;
+    }
+
+    .quality-safe {
+      background: var(--safe);
+      width: 0;
+      transition: width 0.6s ease;
+    }
+
+    .quality-warn {
+      background: var(--warn);
+      width: 0;
+      transition: width 0.6s ease;
+    }
+
+    .quality-doom {
+      background: var(--danger);
+      width: 0;
+      transition: width 0.6s ease;
+    }
+
+    .calendar-layout {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 12px;
+    }
+
+    .calendar-card,
+    .calendar-detail {
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      background: #fff;
+      padding: 12px;
+    }
+
+    .calendar-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .cal-month {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .cal-label {
+      text-align: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--ink3);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding-bottom: 2px;
+    }
+
+    .cal-day {
+      min-height: 38px;
+      border-radius: 10px;
+      border: 1px solid var(--border-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink2);
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+      background: #F9F6F1;
+    }
+
+    .cal-day:hover {
+      transform: translateY(-1px);
+      border-color: var(--purple);
+    }
+
+    .cal-empty {
+      background: transparent;
+      border: none;
+      cursor: default;
+    }
+
+    .cal-day.safe {
+      background: #EAF3EE;
+      border-color: rgba(58, 158, 111, 0.35);
+      color: #2A7A54;
+    }
+
+    .cal-day.aware {
+      background: #E8E0F5;
+      border-color: rgba(107, 63, 160, 0.35);
+      color: #4A2580;
+    }
+
+    .cal-day.hooked {
+      background: #F5F0E2;
+      border-color: rgba(196, 151, 58, 0.35);
+      color: #7A6020;
+    }
+
+    .cal-day.doom {
+      background: #F5EDE9;
+      border-color: rgba(196, 86, 58, 0.35);
+      color: #A03A25;
+    }
+
+    .cal-legend {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--ink3);
+      text-transform: uppercase;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      border: 1px solid var(--border-soft);
+      background: #fff;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-soft);
+      font-size: 14px;
+      color: var(--ink2);
+      vertical-align: top;
+    }
+
+    th {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--ink3);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: var(--card);
+    }
+
+    td:first-child {
+      color: var(--ink);
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .limit-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .limit-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .limit-item h3 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 16px;
+      margin-bottom: 6px;
+      color: var(--ink);
+    }
+
+    .limit-item p {
+      color: var(--ink2);
+      font-size: 14px;
+    }
+
+    .terminal {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #1A1612;
+      color: #EDE8DF;
+      margin-top: 14px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+    }
+
+    .terminal-head {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(237, 232, 223, 0.14);
+      color: #C4973A;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .terminal-body {
+      padding: 12px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+    }
+
+    .roadmap {
+      margin-top: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .road {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .road h3 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 18px;
+      margin-bottom: 6px;
+      color: var(--ink);
+    }
+
+    .road ul {
+      margin-left: 18px;
+      display: grid;
+      gap: 5px;
+      color: var(--ink2);
+      font-size: 14px;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 44px 0;
+      background: var(--section);
+    }
+
+    .footer-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .footer-brand {
+      font-family: 'Space Mono', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--purple);
+      margin-bottom: 6px;
+    }
+
+    .footer-copy {
+      color: var(--ink2);
+      font-size: 14px;
+    }
+
+    @media (max-width: 1060px) {
+      .hero-grid,
+      .dash-grid.two,
+      .calendar-layout,
+      .grid-3,
+      .grid-2,
+      .pillars,
+      .monitor-bento {
+        grid-template-columns: 1fr;
+      }
+
+      .gauge-wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .mini-metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .stat-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .conf-row {
+        grid-template-columns: 110px 1fr 36px;
+      }
+    }
+
+    @media (max-width: 840px) {
+      .container,
+      .nav-inner {
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .hero {
+        min-height: auto;
+        padding-top: 98px;
+      }
+
+      .title {
+        margin-bottom: 12px;
+      }
+
+      .lead {
+        font-size: 17px;
+      }
+
+      .section {
+        padding: 74px 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="blob-canvas"></canvas>
+
+  <div class="page">
+    <nav>
+      <div class="nav-inner">
+        <div class="brand">REELIO</div>
+        <ul class="nav-links">
+          <li><a href="#why">Purpose</a></li>
+          <li><a href="#architecture">How It Works</a></li>
+          <li><a href="#signals">What It Watches</a></li>
+          <li><a href="#alse">How It Thinks</a></li>
+          <li><a href="#dashboards">How To Read</a></li>
+          <li><a href="#privacy">Privacy</a></li>
+          <li><a href="#build">Run Locally</a></li>
+          <li><a href="#limitations">Limits</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <header id="top" class="hero">
+      <div class="container hero-grid">
+        <div class="reveal">
+          <div class="hero-kicker">A plain-language guide to your scrolling patterns</div>
+          <h1>Reelio helps you see your scrolling habits clearly, so you can understand yourself better.</h1>
+          <p class="hero-lead">
+            This page is a guide to how Reelio works in real life. It explains what the app observes, how those signals
+            become risk scores, what each dashboard means, and where the limits are. The model runs on your device and
+            adapts to your own pattern over time.
+          </p>
+          <ul class="hero-list">
+            <li><span class="hero-dot"></span><span>The current data format uses schema version 5 and pipeline version 6.</span></li>
+            <li><span class="hero-dot"></span><span>A session is flagged as doom when predicted probability reaches 0.55 or higher.</span></li>
+            <li><span class="hero-dot"></span><span>The doom score is explained through 7 readable behavior factors, then aligned with the HMM estimate.</span></li>
+            <li><span class="hero-dot"></span><span>Confidence is shown in clear parts: data volume, state separation, stability, and supervision from check-ins.</span></li>
+          </ul>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="#dashboards">Start With Your Dashboard</a>
+            <a class="btn btn-ghost" href="#architecture">Understand The System Flow</a>
+          </div>
+        </div>
+
+        <aside class="hero-panel card reveal">
+          <div class="panel-title">Live model constants from reelio_alse.py</div>
+          <div class="stat-grid">
+            <div class="stat-chip stat-purple">
+              <div class="stat-num">v3.0</div>
+              <div class="stat-label">ALSE engine</div>
+            </div>
+            <div class="stat-chip stat-safe">
+              <div class="stat-num">0.55</div>
+              <div class="stat-label">doom threshold</div>
+            </div>
+            <div class="stat-chip stat-warn">
+              <div class="stat-num">6</div>
+              <div class="stat-label">pipeline version</div>
+            </div>
+            <div class="stat-chip stat-danger">
+              <div class="stat-num">5</div>
+              <div class="stat-label">schema version</div>
+            </div>
+          </div>
+
+          <div class="code-panel">
+            <div class="code-head">What feeds the dashboards</div>
+            <div class="code-body">run_dashboard_payload(...)
+- sessions
+- model_parameters.transition_matrix
+- model_confidence_breakdown
+- feature_weights
+- scorer_component_weights
+- historical_drivers
+- circadian map</div>
+          </div>
+        </aside>
+      </div>
+    </header>
+
+    <section id="why" class="section alt">
+      <div class="container">
+        <div class="kicker reveal">01 / Why, What, How</div>
+        <h2 class="title reveal">A guide first, not a pitch.</h2>
+        <p class="lead reveal">
+          Reelio is built to help you notice patterns you usually feel only after the fact. Instead of only counting
+          minutes, it tracks how sessions start, drift, and end. The goal is practical self-understanding: see what
+          pulls you in, what helps you exit, and how those patterns change over time.
+        </p>
+
+        <div class="grid-3 reveal">
+          <article class="info-card">
+            <h3>Why this exists</h3>
+            <p>Time alone can hide the real story. Two sessions can last the same length but feel very different.
+              Reelio tracks friction, re-entry, and rhythm so risk feels interpretable, not vague.</p>
+          </article>
+
+          <article class="info-card">
+            <h3>What is measured</h3>
+            <p>Each reel adds small signals: pace, pauses, exits, rewatches, and context like time of day or environment.
+              These are combined at session and history level before scoring.</p>
+          </article>
+
+          <article class="info-card">
+            <h3>How to read this page</h3>
+            <p>This page moves from simple to deep: purpose, architecture, signal layers, model logic, and dashboards.
+              Use it as a reference while reading your own data in the app.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture" class="section">
+      <div class="container">
+        <div class="kicker reveal">02 / Architecture</div>
+        <h2 class="title reveal">From scroll events to insights you can act on.</h2>
+        <p class="lead reveal">
+          This is the exact pipeline running behind the app. Read it as five simple questions:
+          what happened, is the data reliable, what state are you in, why that state, and how it is shown to you.
+        </p>
+
+        <div class="architecture reveal">
+          <article class="arch-node">
+            <div class="arch-step">Step 1</div>
+            <div class="arch-name">InstaAccessibilityService (Kotlin)</div>
+            <div class="arch-desc">
+              First, the Android service records what actually happened during the session in real time.
+              It logs dwell, speed, pauses, rewatches, exits, return gaps, light, posture,
+              charging state, source app, and timing. Think of this as the raw behavior journal.
+            </div>
+            <div class="arch-tags">
+              <span class="tag">AccessibilityService</span>
+              <span class="tag">SensorManager</span>
+              <span class="tag">Room + CSV</span>
+              <span class="tag">append-only logging</span>
+            </div>
+          </article>
+
+          <article class="arch-node">
+            <div class="arch-step">Step 2</div>
+            <div class="arch-name">Schema guard and preprocessing (Python)</div>
+            <div class="arch-desc">
+              Second, Python checks that the session data is complete and trustworthy.
+              It validates required columns, removes duplicate or corrupted rows, normalizes labels,
+              and builds derived features such as intent mismatch and fatigue risk when available.
+            </div>
+            <div class="arch-tags">
+              <span class="tag">EXPECTED_SCHEMA_VERSION=5</span>
+              <span class="tag">REQUIRED_COLUMNS enforcement</span>
+              <span class="tag">dedupe_session_rows</span>
+              <span class="tag">preprocess_session</span>
+            </div>
+          </article>
+
+          <article class="arch-node">
+            <div class="arch-step">Step 3</div>
+            <div class="arch-name">ALSE inference core (ReelioCLSE)</div>
+            <div class="arch-desc">
+              Third, ALSE estimates the hidden session state over time.
+              It combines HMM inference, gap-aware transitions, drift checks, contextual priors,
+              and confidence scoring. This is where doom probability is computed, using a fixed
+              threshold of 0.55.
+            </div>
+            <div class="arch-tags">
+              <span class="tag">HMM</span>
+              <span class="tag">CTMC</span>
+              <span class="tag">regime detector</span>
+              <span class="tag">confidence breakdown</span>
+            </div>
+          </article>
+
+          <article class="arch-node">
+            <div class="arch-step">Step 4</div>
+            <div class="arch-name">Heuristic anatomy and alignment loop (DoomScorer)</div>
+            <div class="arch-desc">
+              Fourth, a parallel scorer turns risk into plain reasons you can interpret.
+              It uses seven drivers: session length, exit conflict, rapid re-entry, automaticity,
+              dwell collapse, rewatch compulsion, and environment. Weights are re-aligned against
+              HMM output so the explanation stays consistent with the model state.
+            </div>
+            <div class="arch-tags">
+              <span class="tag">7 component anatomy</span>
+              <span class="tag">dynamic weights</span>
+              <span class="tag">intent mismatch amplification</span>
+              <span class="tag">fatigue proxy input</span>
+            </div>
+          </article>
+
+          <article class="arch-node">
+            <div class="arch-step">Step 5</div>
+            <div class="arch-name">Dashboard payload and UI projection</div>
+            <div class="arch-desc">
+              Fifth, run_dashboard_payload packages transitions, confidence, drivers, circadian map,
+              feature weights, and session summaries. The dashboards render this same structure so
+              what you see matches what the model actually produced.
+            </div>
+            <div class="arch-tags">
+              <span class="tag">PIPELINE_VERSION=6</span>
+              <span class="tag">model_parameters</span>
+              <span class="tag">historical_drivers</span>
+              <span class="tag">feature_weights</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="signals" class="section alt">
+      <div class="container">
+        <div class="kicker reveal">03 / Signal Layers</div>
+        <h2 class="title reveal">What the app learns from your behavior.</h2>
+        <p class="lead reveal">
+          If you want to understand why a score changed, start here. These are the signal groups
+          that feed the model, written to match current reelio_alse.py behavior.
+        </p>
+
+        <div class="layer-list reveal">
+          <details class="layer" open>
+            <summary>
+              <div class="layer-num">01</div>
+              <div class="layer-head">
+                <div class="layer-title">Interaction Signals</div>
+                <div class="layer-meta">per reel event dynamics</div>
+              </div>
+            </summary>
+            <table class="layer-table">
+              <tr><td>DwellTime</td><td>Shows how long each reel holds your attention.</td></tr>
+              <tr><td>AvgScrollSpeed / MaxScrollSpeed</td><td>Faster pace can mean autopilot; slower pace often means more intentional viewing.</td></tr>
+              <tr><td>ScrollPauseCount / ScrollPauseDurationMs</td><td>Frequent pauses can show hesitation, checking, or decision friction.</td></tr>
+              <tr><td>SwipeCompletionRatio</td><td>Lower completion can reflect restless scrolling and weaker engagement.</td></tr>
+              <tr><td>BackScrollCount</td><td>Going back to replay content can be a pull signal.</td></tr>
+              <tr><td>AppExitAttempts</td><td>Repeated attempts to leave and return show exit conflict.</td></tr>
+            </table>
+          </details>
+
+          <details class="layer">
+            <summary>
+              <div class="layer-num">02</div>
+              <div class="layer-head">
+                <div class="layer-title">Physical Context</div>
+                <div class="layer-meta">motion, light, power, posture</div>
+              </div>
+            </summary>
+            <table class="layer-table">
+              <tr><td>AmbientLuxStart / End</td><td>Very low light often maps to late-hour sessions with higher capture risk.</td></tr>
+              <tr><td>AccelVariance / PostureShiftCount</td><td>Movement pattern helps estimate focus, restlessness, or fatigue state.</td></tr>
+              <tr><td>IsStationary / DeviceOrientation</td><td>Long still posture can indicate deeper capture during a session.</td></tr>
+              <tr><td>IsCharging</td><td>Charging sessions often run longer and can raise risk.</td></tr>
+              <tr><td>Headphones / AudioOutputType</td><td>Audio context can increase immersion and session depth.</td></tr>
+            </table>
+          </details>
+
+          <details class="layer">
+            <summary>
+              <div class="layer-num">03</div>
+              <div class="layer-head">
+                <div class="layer-title">System and Session Context</div>
+                <div class="layer-meta">entry pathway and recurrence</div>
+              </div>
+            </summary>
+            <table class="layer-table">
+              <tr><td>PreviousApp / Category</td><td>Shows the mental context you came from before opening reels.</td></tr>
+              <tr><td>TimeSinceLastSessionMin</td><td>Short gaps mean quick returns, one of the strongest risk signals.</td></tr>
+              <tr><td>ScreenOnCount1hr / Duration1hr</td><td>Heavy phone use before reels can increase vulnerability.</td></tr>
+              <tr><td>DND / NightMode</td><td>Night-time context helps interpret late-hour behavior shifts.</td></tr>
+              <tr><td>SessionTriggeredByNotif</td><td>Notification-led opens can create unplanned session starts.</td></tr>
+            </table>
+          </details>
+
+          <details class="layer">
+            <summary>
+              <div class="layer-num">04</div>
+              <div class="layer-head">
+                <div class="layer-title">Derived Within-Session Features</div>
+                <div class="layer-meta">trend, entropy, burst structure</div>
+              </div>
+            </summary>
+            <table class="layer-table">
+              <tr><td>DwellTimeZscore / Pctile</td><td>Compares current dwell depth to your personal baseline.</td></tr>
+              <tr><td>SessionDwellTrend</td><td>Shows whether attention deepens or collapses as the session continues.</td></tr>
+              <tr><td>ScrollRhythmEntropy</td><td>Low rhythm variety often means more automatic scrolling.</td></tr>
+              <tr><td>ScrollIntervalCV / BurstDuration</td><td>Describes whether scrolling is steady or bursty.</td></tr>
+              <tr><td>InteractionBurstiness / Dropoff</td><td>Tracks early engagement spikes and later drop-off.</td></tr>
+            </table>
+          </details>
+
+          <details class="layer">
+            <summary>
+              <div class="layer-num">05</div>
+              <div class="layer-head">
+                <div class="layer-title">Cross-Session Memory Features</div>
+                <div class="layer-meta">history pressure and recurrence</div>
+              </div>
+            </summary>
+            <table class="layer-table">
+              <tr><td>SessionsToday / LongestSession</td><td>Captures daily load and how intense today has been.</td></tr>
+              <tr><td>DoomStreakLength</td><td>Counts how many recent sessions stayed in high-risk mode.</td></tr>
+              <tr><td>MorningSessionExists</td><td>Early-day opening pattern that can shape the rest of the day.</td></tr>
+              <tr><td>CumulativeReels</td><td>True reel exposure count, including very fast swipes.</td></tr>
+            </table>
+          </details>
+
+          <details class="layer">
+            <summary>
+              <div class="layer-num">06</div>
+              <div class="layer-head">
+                <div class="layer-title">Circadian and Sleep Proxies</div>
+                <div class="layer-meta">time-phase and wake load</div>
+              </div>
+            </summary>
+            <table class="layer-table">
+              <tr><td>CircadianPhase</td><td>Places each session in your body-clock window.</td></tr>
+              <tr><td>SleepProxyScore / EstimatedSleepDurationH</td><td>Rough rest signal that helps explain next-session risk.</td></tr>
+              <tr><td>SleepStart / SleepEnd</td><td>Used to estimate wake load and possible fatigue pressure.</td></tr>
+              <tr><td>MorningRestScore</td><td>Your own rest anchor for daily interpretation.</td></tr>
+            </table>
+          </details>
+
+          <details class="layer">
+            <summary>
+              <div class="layer-num">07</div>
+              <div class="layer-head">
+                <div class="layer-title">Content Diversity Proxies</div>
+                <div class="layer-meta">repetition and novelty balance</div>
+              </div>
+            </summary>
+            <table class="layer-table">
+              <tr><td>UniqueAudioCount</td><td>Higher variety usually means more novelty and less repetition pull.</td></tr>
+              <tr><td>RepeatContentFlag / ContentRepeatRate</td><td>Shows how much repeated content may be reinforcing loops.</td></tr>
+            </table>
+          </details>
+
+          <details class="layer">
+            <summary>
+              <div class="layer-num">08</div>
+              <div class="layer-head">
+                <div class="layer-title">Self-Report and Calibration Labels</div>
+                <div class="layer-meta">intent and regret supervision loop</div>
+              </div>
+            </summary>
+            <table class="layer-table">
+              <tr><td>PostSessionRating / RegretScore</td><td>Immediate check-in on how the session felt after ending.</td></tr>
+              <tr><td>DelayedRegretScore</td><td>Later reflection label, often more reliable for calibration.</td></tr>
+              <tr><td>ComparativeRating</td><td>Compares this session to your usual personal baseline.</td></tr>
+              <tr><td>IntendedAction / ActualVsIntendedMatch</td><td>Shows whether the session matched what you meant to do.</td></tr>
+              <tr><td>MoodBefore / MoodAfter / MoodDelta</td><td>Tracks emotional shift linked to the session.</td></tr>
+            </table>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section id="alse" class="section">
+      <div class="container">
+        <div class="kicker reveal">04 / ALSE internals</div>
+        <h2 class="title reveal">How ALSE decides, in plain language.</h2>
+        <p class="lead reveal">
+          These pillars keep the model stable and interpretable. You do not need to know the math to use this;
+          this section explains what each part protects against and why it matters.
+        </p>
+
+        <div class="pillars reveal">
+          <article class="pillar"><div class="pillar-num">01</div><h3>Personalized Bayesian Baseline</h3><p>Learns your personal baseline first, so each score is compared to you.</p></article>
+          <article class="pillar"><div class="pillar-num">02</div><h3>Self-Calibrating Emission Weights</h3><p>Rebalances feature importance as your behavior pattern shifts.</p></article>
+          <article class="pillar"><div class="pillar-num">03</div><h3>Hierarchical Temporal Memory</h3><p>Uses short-, mid-, and long-term memory so one unusual day does not distort everything.</p></article>
+          <article class="pillar"><div class="pillar-num">04</div><h3>Continuous-Time Markov Chain</h3><p>Updates transitions using real time gaps between sessions.</p></article>
+          <article class="pillar"><div class="pillar-num">05</div><h3>Survival Framing</h3><p>Models how likely you are to stop, not only how long you continue.</p></article>
+          <article class="pillar"><div class="pillar-num">06</div><h3>Regime Change Detector</h3><p>Flags sudden life-pattern shifts so old behavior does not mislead new predictions.</p></article>
+          <article class="pillar"><div class="pillar-num">07</div><h3>Sparse-Data Guard</h3><p>When data is limited, it backs off safely instead of making overconfident guesses.</p></article>
+          <article class="pillar"><div class="pillar-num">08</div><h3>Contextual State Priors</h3><p>Uses session-start context to set stronger starting probabilities.</p></article>
+          <article class="pillar"><div class="pillar-num">09</div><h3>Composite Doom Score</h3><p>Keeps a readable 7-driver score alongside latent-state inference.</p></article>
+          <article class="pillar"><div class="pillar-num">10</div><h3>Extended Regret Validator</h3><p>Uses regret labels to correct repeated prediction bias.</p></article>
+          <article class="pillar"><div class="pillar-num">11</div><h3>Confidence Decomposition</h3><p>Breaks confidence into parts so trust stays transparent and explainable.</p></article>
+          <article class="pillar"><div class="pillar-num">12</div><h3>Dynamic Alignment</h3><p>Keeps heuristic explanations synchronized with HMM behavior.</p></article>
+        </div>
+
+        <div class="code-update reveal">DOOM_PROBABILITY_THRESHOLD = 0.55
+PIPELINE_VERSION = 6
+EXPECTED_SCHEMA_VERSION = 5
+
+COMPONENT_NAMES =
+- session_length
+- exit_conflict
+- rapid_reentry
+- scroll_automaticity
+- dwell_collapse
+- rewatch_compulsion
+- environment
+
+RegretValidator bias correction is clipped to [-0.15, +0.15].
+Model confidence breakdown exposes: overall, volume, separation, stability, supervision,
+label_coverage, agreement_quality.</div>
+      </div>
+    </section>
+
+    <section id="dashboards" class="section alt">
+      <div class="container">
+        <div class="kicker reveal">05 / Dashboard suite</div>
+        <h2 class="title reveal">Dashboards that explain behavior, not just numbers.</h2>
+        <p class="lead reveal">
+          Each panel below is generated in this page and follows app semantics (Today, Week, All Time, Monitor,
+          Calendar). Use them to understand trends, not to judge yourself.
+        </p>
+
+        <div class="dashboard-shell reveal">
+          <div class="dashboard-head">
+            <div class="chart-title">Reelio telemetry dashboard</div>
+            <div class="chart-meta" id="dashboard-mode-meta">Synthetic demo telemetry for website representation only</div>
+            <div class="preset-row">
+              <div class="preset-label">Scenario Presets</div>
+              <div class="preset-tabs">
+                <button class="preset-tab" data-preset="calm">Calm</button>
+                <button class="preset-tab active" data-preset="mixed">Mixed</button>
+                <button class="preset-tab" data-preset="high-risk">High Risk</button>
+              </div>
+            </div>
+            <div class="dashboard-tabs">
+              <button class="dash-tab active" data-tab="today">Today</button>
+              <button class="dash-tab" data-tab="week">This Week</button>
+              <button class="dash-tab" data-tab="all">All Time</button>
+              <button class="dash-tab" data-tab="monitor">Monitor</button>
+              <button class="dash-tab" data-tab="calendar">Calendar</button>
+            </div>
+          </div>
+
+          <div class="dashboard-panel active" data-panel="today">
+            <div class="dash-grid two">
+              <article class="chart-card">
+                <div class="chart-title">Current capture risk</div>
+                <div class="chart-meta">Monitor screen score banding (safe, aware, hooked, doom)</div>
+                <div class="gauge-wrap">
+                  <div>
+                    <div class="gauge-face">
+                      <svg width="160" height="100" viewBox="0 0 160 100">
+                        <path d="M 12 88 A 68 68 0 0 1 148 88" fill="none" stroke="rgba(26,22,18,0.12)" stroke-width="10" stroke-linecap="round"></path>
+                        <path id="gauge-fill" d="M 12 88 A 68 68 0 0 1 148 88" fill="none" stroke="#C4973A" stroke-width="10" stroke-linecap="round" style="transition: stroke-dashoffset 1s ease;"></path>
+                      </svg>
+                      <div id="gauge-score" class="gauge-score">0</div>
+                    </div>
+                    <div id="gauge-label" class="gauge-label">calibrating</div>
+                  </div>
+                  <div>
+                    <p class="insight" id="gauge-insight"></p>
+                  </div>
+                </div>
+              </article>
+
+              <article class="chart-card">
+                <div class="chart-title">State dynamics</div>
+                <div class="chart-meta">All-time transition matrix from model_parameters.transition_matrix</div>
+                <svg class="state-svg" viewBox="0 0 420 170">
+                  <circle cx="90" cy="88" r="44" fill="rgba(58,158,111,0.12)" stroke="#3A9E6F" stroke-width="2"></circle>
+                  <text x="90" y="83" text-anchor="middle" font-family="Space Grotesk" font-size="13" font-weight="700" fill="#2A7A54">CASUAL</text>
+                  <text x="90" y="101" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#6A5E56">STATE 0</text>
+
+                  <circle cx="330" cy="88" r="44" fill="rgba(196,86,58,0.12)" stroke="#C4563A" stroke-width="2"></circle>
+                  <text x="330" y="83" text-anchor="middle" font-family="Space Grotesk" font-size="13" font-weight="700" fill="#A03A25">DOOM</text>
+                  <text x="330" y="101" text-anchor="middle" font-family="Space Mono" font-size="10" fill="#6A5E56">STATE 1</text>
+
+                  <path d="M 136 70 Q 210 28 284 70" fill="none" stroke="#C4563A" stroke-width="2"></path>
+                  <path d="M 284 106 Q 210 145 136 106" fill="none" stroke="#3A9E6F" stroke-width="2" stroke-dasharray="5 3"></path>
+
+                  <text id="dyn-c2d" x="210" y="35" text-anchor="middle" font-family="Space Mono" font-size="12" fill="#A03A25">16%</text>
+                  <text id="dyn-d2c" x="210" y="151" text-anchor="middle" font-family="Space Mono" font-size="12" fill="#2A7A54">75%</text>
+
+                  <path d="M 60 46 C 40 18 126 18 110 46" fill="none" stroke="#3A9E6F" stroke-width="1.5" stroke-dasharray="3 2"></path>
+                  <text id="dyn-c2c" x="86" y="18" text-anchor="middle" font-family="Space Mono" font-size="11" fill="#2A7A54">84%</text>
+
+                  <path d="M 300 46 C 280 18 366 18 350 46" fill="none" stroke="#C4563A" stroke-width="1.5" stroke-dasharray="3 2"></path>
+                  <text id="dyn-d2d" x="326" y="18" text-anchor="middle" font-family="Space Mono" font-size="11" fill="#A03A25">25%</text>
+                </svg>
+                <p class="insight" id="dyn-insight"></p>
+              </article>
+            </div>
+
+            <div class="dash-grid one" style="margin-top: 12px;">
+              <article class="chart-card">
+                <div class="chart-title">Today's Session Timeline</div>
+                <div class="chart-meta">Same session ordering and doom-threshold logic used in app Dashboard > Today</div>
+                <div id="today-timeline" class="timeline-grid"></div>
+                <div id="today-selected" class="timeline-detail">Tap a session to inspect duration, reels, and self-report labels.</div>
+                <div class="chart-meta" style="margin-top: 10px;">Doom score anatomy (same 7 drivers)</div>
+                <div id="drivers-list" class="drivers-list"></div>
+              </article>
+            </div>
+          </div>
+
+          <div class="dashboard-panel" data-panel="week">
+            <div class="dash-grid two">
+              <article class="chart-card">
+                <div class="chart-title">Weekly heatmap window</div>
+                <div class="chart-meta">Recent day-level avg capture from app heatmap buckets</div>
+                <div id="exposure-bars" class="bar-grid"></div>
+                <p class="insight" id="week-insight"></p>
+              </article>
+
+              <article class="chart-card">
+                <div class="chart-title">Circadian risk map</div>
+                <div class="chart-meta">All-time vulnerability curve (same circadianProfile shape)</div>
+                <div id="circadian-wrap" class="svg-wrap"></div>
+                <div class="mini-metrics">
+                  <div class="mini">
+                    <div class="mini-label">Peak window</div>
+                    <div id="circ-peak" class="mini-value">--</div>
+                  </div>
+                  <div class="mini">
+                    <div class="mini-label">Safest window</div>
+                    <div id="circ-safe" class="mini-value">--</div>
+                  </div>
+                  <div class="mini">
+                    <div class="mini-label">Average risk</div>
+                    <div id="circ-avg" class="mini-value">--</div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <div class="dashboard-panel" data-panel="all">
+            <div class="dash-grid two">
+              <article class="chart-card">
+                <div class="chart-title">Session topology</div>
+                <div class="chart-meta">All-time reel path from timeline.p_capture, threshold 0.55</div>
+                <div id="topology-wrap" class="svg-wrap"></div>
+                <div class="mini-metrics">
+                  <div class="mini">
+                    <div class="mini-label">Peak p(doom)</div>
+                    <div id="top-peak" class="mini-value">--</div>
+                  </div>
+                  <div class="mini">
+                    <div class="mini-label">Doom reels</div>
+                    <div id="top-count" class="mini-value">--</div>
+                  </div>
+                  <div class="mini">
+                    <div class="mini-label">Mean p(doom)</div>
+                    <div id="top-avg" class="mini-value">--</div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="chart-card">
+                <div class="chart-title">Emission and confidence profile</div>
+                <div class="chart-meta">Feature influence and confidence parts</div>
+                <div id="feature-weights" class="weights"></div>
+                <div id="confidence-bars" class="confidence-bars"></div>
+              </article>
+            </div>
+          </div>
+
+          <div class="dashboard-panel" data-panel="monitor">
+            <div class="dash-grid one">
+              <article class="monitor-card" id="monitor-card">
+                <div class="monitor-label" id="monitor-label">aware</div>
+                <div class="monitor-headline" id="monitor-headline">Mostly in control.</div>
+                <div class="monitor-sub" id="monitor-sub">Your current state summary is based on score plus recent trend.</div>
+
+                <div class="monitor-bento">
+                  <div class="tile" style="background: #EAF3EE;">
+                    <div id="tile-time" class="tile-value" style="color:#2A7A54;">--</div>
+                    <div class="tile-label">On app today</div>
+                  </div>
+                  <div class="stack">
+                    <div class="tile" style="background: #F5EDE9;">
+                      <div id="tile-sessions" class="tile-value" style="font-size:26px;color:#A03A25;">--</div>
+                      <div class="tile-label">Sessions</div>
+                    </div>
+                    <div class="tile" style="background: #EEE9F5;">
+                      <div id="tile-mindful" class="tile-value" style="font-size:26px;color:#4A2580;">--</div>
+                      <div class="tile-label">Closed mindfully</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="session-quality">
+                  <div class="chart-meta" style="margin-bottom:8px;">All-time session quality split</div>
+                  <div class="quality-track">
+                    <div id="quality-safe" class="quality-safe"></div>
+                    <div id="quality-warn" class="quality-warn"></div>
+                    <div id="quality-doom" class="quality-doom"></div>
+                  </div>
+                  <p class="insight" id="monitor-insight"></p>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <div class="dashboard-panel" data-panel="calendar">
+            <div class="calendar-layout">
+              <article class="calendar-card">
+                <div class="calendar-top">
+                  <div>
+                    <div class="chart-title" style="margin-bottom:0;">Capture calendar</div>
+                    <div id="calendar-month" class="chart-meta">Current month</div>
+                  </div>
+                </div>
+
+                <div class="cal-grid" id="calendar-grid"></div>
+
+                <div class="cal-legend">
+                  <div class="legend-item"><span class="legend-swatch" style="background:#EAF3EE;border-color:rgba(58,158,111,0.35)"></span>Mindful</div>
+                  <div class="legend-item"><span class="legend-swatch" style="background:#E8E0F5;border-color:rgba(107,63,160,0.35)"></span>Aware</div>
+                  <div class="legend-item"><span class="legend-swatch" style="background:#F5F0E2;border-color:rgba(196,151,58,0.35)"></span>Hooked</div>
+                  <div class="legend-item"><span class="legend-swatch" style="background:#F5EDE9;border-color:rgba(196,86,58,0.35)"></span>Doom</div>
+                </div>
+              </article>
+
+              <aside class="calendar-detail">
+                <div class="chart-title">Day detail</div>
+                <div class="chart-meta">Click a day to inspect state</div>
+                <p id="calendar-detail-text" class="insight" style="margin-top:6px;">Select any active day cell to inspect aggregate state and estimated capture risk.</p>
+                <div id="calendar-detail-stats" class="mini-metrics" style="margin-top:12px;grid-template-columns:1fr;">
+                  <div class="mini">
+                    <div class="mini-label">Selected date</div>
+                    <div id="cal-selected" class="mini-value">--</div>
+                  </div>
+                  <div class="mini">
+                    <div class="mini-label">State</div>
+                    <div id="cal-state" class="mini-value">--</div>
+                  </div>
+                  <div class="mini">
+                    <div class="mini-label">Estimated capture</div>
+                    <div id="cal-risk" class="mini-value">--</div>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="privacy" class="section">
+      <div class="container">
+        <div class="kicker reveal">06 / Privacy and permission model</div>
+        <h2 class="title reveal">Local-first privacy, explained clearly.</h2>
+        <p class="lead reveal">
+          Core inference and dashboard generation happen on-device. Permissions exist for specific reasons,
+          and data boundaries are explicit.
+        </p>
+
+        <div class="grid-2 reveal">
+          <article class="info-card">
+            <h3>Data handling boundaries</h3>
+            <ul>
+              <li>Core inference works without uploading behavioral telemetry.</li>
+              <li>Model state is stored locally and updated incrementally.</li>
+              <li>run_dashboard_payload replays sessions locally to build dashboards.</li>
+              <li>Reports and delayed-label updates run in local Python.</li>
+            </ul>
+          </article>
+
+          <article class="info-card">
+            <h3>Permissions and purpose</h3>
+            <ul>
+              <li>Accessibility service: reads interaction flow during reel sessions.</li>
+              <li>Usage stats: adds entry context such as previous app.</li>
+              <li>Notifications: delivers delayed check-ins and prompts.</li>
+              <li>Sensors: add light, motion, and posture context.</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="table-wrap reveal" style="margin-top: 16px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Permission or signal</th>
+                <th>Why it exists</th>
+                <th>Where used</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>AppExitAttempts</td>
+                <td>Measure friction and exit conflict.</td>
+                <td>DoomScorer + payload anatomy</td>
+              </tr>
+              <tr>
+                <td>TimeSinceLastSessionMin</td>
+                <td>Detect rapid re-entry loops.</td>
+                <td>DoomScorer rapid_reentry + CTMC updates</td>
+              </tr>
+              <tr>
+                <td>ScrollRhythmEntropy</td>
+                <td>Estimate automaticity and rhythm dissociation.</td>
+                <td>Emission features + scroll_automaticity</td>
+              </tr>
+              <tr>
+                <td>Regret and comparative ratings</td>
+                <td>Post-hoc calibration supervision.</td>
+                <td>RegretValidator bias correction</td>
+              </tr>
+              <tr>
+                <td>SleepStart/SleepEnd</td>
+                <td>Approximate wake load and fatigue context.</td>
+                <td>fatigue_risk in environment component</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="build" class="section alt">
+      <div class="container">
+        <div class="kicker reveal">07 / Build and run reference</div>
+        <h2 class="title reveal">How to run and inspect locally.</h2>
+        <p class="lead reveal">
+          This section keeps the practical setup steps visible so this page stays a real technical guide,
+          not just a summary.
+        </p>
+
+        <div class="terminal reveal">
+          <div class="terminal-head">build commands</div>
+          <div class="terminal-body">git clone https://github.com/your-handle/reelio.git
+cd reelio
+
+# Android Studio: sync Gradle and Chaquopy dependencies
+# Install and run on physical Android device
+
+# First-run flow
+1) Enable accessibility service for Reelio
+2) Grant usage stats access
+3) Grant notifications for delayed probes
+4) Open Instagram and start session logging</div>
+        </div>
+
+        <div class="terminal reveal">
+          <div class="terminal-head">project map</div>
+          <div class="terminal-body">InstagramTracker/
+app/src/main/java/.../InstaAccessibilityService.kt
+app/src/main/java/.../MainActivity.kt
+app/src/main/python/reelio_alse.py
+app/src/main/assets/www/app.jsx
+app/src/main/assets/www/screens/DashboardScreen.jsx
+app/src/main/assets/www/screens/MonitorScreen.jsx
+app/src/main/assets/www/screens/CalendarScreen.jsx</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="limitations" class="section">
+      <div class="container">
+        <div class="kicker reveal">08 / Limitations and known edges</div>
+        <h2 class="title reveal">What this system can and cannot claim.</h2>
+        <p class="lead reveal">
+          Reelio is useful, but it has limits. Knowing those limits is part of using the insights responsibly.
+        </p>
+
+        <div class="limit-list reveal">
+          <article class="limit-item">
+            <h3>Accessibility surface drift</h3>
+            <p>Instagram UI changes can alter event shapes and occasionally affect reel boundary quality.</p>
+          </article>
+          <article class="limit-item">
+            <h3>Proxy-based content signals</h3>
+            <p>Content repetition indicators are still proxy-level and not full fingerprint matching.</p>
+          </article>
+          <article class="limit-item">
+            <h3>Cold start latency</h3>
+            <p>First Python invocation in a process can be slower because runtime initialization is required.</p>
+          </article>
+          <article class="limit-item">
+            <h3>Low-data confidence floor</h3>
+            <p>Early sessions rely more heavily on priors by design. Confidence disclosure is required for trust.</p>
+          </article>
+          <article class="limit-item">
+            <h3>Sleep and fatigue are approximations</h3>
+            <p>fatigue_risk is intentionally conservative and should be interpreted as a proxy, not a diagnosis.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="roadmap" class="section alt">
+      <div class="container">
+        <div class="kicker reveal">09 / Roadmap</div>
+        <h2 class="title reveal">What we are improving next.</h2>
+
+        <div class="roadmap reveal">
+          <article class="road">
+            <h3>Near term</h3>
+            <ul>
+              <li>Better repeat-content detection.</li>
+              <li>More delayed check-ins for stronger calibration.</li>
+              <li>Cleaner drill-down parity between app and export reports.</li>
+            </ul>
+          </article>
+
+          <article class="road">
+            <h3>Mid term</h3>
+            <ul>
+              <li>Interventions timed using confidence components.</li>
+              <li>Clearer long-term trend narratives from transition drift.</li>
+              <li>Richer pre-session context priors.</li>
+            </ul>
+          </article>
+
+          <article class="road">
+            <h3>Long term</h3>
+            <ul>
+              <li>Support for more short-form surfaces with local processing preserved.</li>
+              <li>Optional encrypted backup of model state without raw logs.</li>
+              <li>More readable counterfactual guidance for recovery planning.</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="container footer-row">
+        <div>
+          <div class="footer-brand">REELIO</div>
+          <div class="footer-copy">Adaptive Latent State Engine for reflective, on-device behavior insight</div>
+        </div>
+        <div class="footer-copy">Built as a guide to understanding your own patterns</div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const DOOM_THRESHOLD = 0.55;
+
+    const isFiniteNumber = (v) => typeof v === "number" && Number.isFinite(v);
+    const safeNum = (v, fallback) => (isFiniteNumber(v) ? v : fallback);
+    const maybeNum = (v) => (isFiniteNumber(v) ? v : null);
+    const safeArr = (v) => (Array.isArray(v) ? v : []);
+    const sumOf = (vals) => safeArr(vals).filter(isFiniteNumber).reduce((acc, n) => acc + n, 0);
+    const averageOf = (vals) => {
+      const nums = safeArr(vals).filter(isFiniteNumber);
+      return nums.length ? (sumOf(nums) / nums.length) : null;
+    };
+
+    function coalesceNumber() {
+      for (let i = 0; i < arguments.length; i += 1) {
+        if (isFiniteNumber(arguments[i])) return arguments[i];
+      }
+      return null;
+    }
+
+    function clampNum(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function formatHour(hour) {
+      return String((hour + 24) % 24).padStart(2, "0") + ":00";
+    }
+
+    function formatHourWindow(hour, span) {
+      if (!isFiniteNumber(hour)) return null;
+      const h = ((Math.round(hour) % 24) + 24) % 24;
+      const end = (h + (span || 2)) % 24;
+      return formatHour(h) + "-" + formatHour(end);
+    }
+
+    function normalizeDateKey(session) {
+      const startRaw = session && session.startTime;
+      if (typeof startRaw === "string" && startRaw && startRaw !== "Unknown") {
+        const dt = new Date(startRaw);
+        if (!Number.isNaN(dt.getTime())) {
+          const y = dt.getFullYear();
+          const m = String(dt.getMonth() + 1).padStart(2, "0");
+          const d = String(dt.getDate()).padStart(2, "0");
+          return y + "-" + m + "-" + d;
+        }
+      }
+      const dateRaw = String((session && session.date) || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) return dateRaw;
+      if (/^\d{2}-\d{2}$/.test(dateRaw)) return String(new Date().getFullYear()) + "-" + dateRaw;
+      return null;
+    }
+
+    function pickSessionTimestampMs(session) {
+      const startRaw = session && session.startTime;
+      if (typeof startRaw === "string" && startRaw && startRaw !== "Unknown") {
+        const ms = Date.parse(startRaw);
+        if (!Number.isNaN(ms)) return ms;
+      }
+      return null;
+    }
+
+    function deriveSessionDurationSec(session) {
+      const explicitSec = coalesceNumber(
+        maybeNum(session && session.durationSec),
+        maybeNum(session && session.sessionDurationSec),
+        maybeNum(session && session.totalDurationSec)
+      );
+      if (isFiniteNumber(explicitSec) && explicitSec > 0) return explicitSec;
+      const reels = maybeNum(session && session.nReels);
+      const dwell = maybeNum(session && session.avgDwell);
+      if (isFiniteNumber(reels) && reels > 0 && isFiniteNumber(dwell) && dwell > 0) return reels * dwell;
+      return null;
+    }
+
+    function formatDurationSec(sec) {
+      const s = Math.round(safeNum(sec, 0));
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      if (m > 0) return m + "m " + r + "s";
+      return r + "s";
+    }
+
+    function parseActiveTimeSeconds(str, fallback) {
+      if (typeof str !== "string" || !str.trim()) return safeNum(fallback, 0);
+      let total = 0;
+      const h = str.match(/(\d+)h/);
+      const m = str.match(/(\d+)m/);
+      const s = str.match(/(\d+)s/);
+      if (h) total += parseInt(h[1], 10) * 3600;
+      if (m) total += parseInt(m[1], 10) * 60;
+      if (s) total += parseInt(s[1], 10);
+      return total || safeNum(fallback, 0);
+    }
+
+    function driverEnglish(name, rawValue) {
+      if (/Session Length/i.test(name)) return "You stayed longer than your usual pattern.";
+      if (/Rewatch Compulsion/i.test(name)) return rawValue ? "Rewatch signal value: " + rawValue : "Rewatch behavior contributed to this score.";
+      if (/Rapid Re-entry/i.test(name)) return "Short gaps between sessions increased risk.";
+      if (/Exit Conflict/i.test(name)) return "Exit-attempt friction contributed to this score.";
+      if (/Scroll Automaticity/i.test(name)) return "Scroll rhythm became more automatic.";
+      if (/Dwell Collapse/i.test(name)) return "Attention per reel dropped as the session progressed.";
+      if (/Environment/i.test(name)) return "Time-of-day and context patterns increased risk.";
+      return "This driver contributed to your score.";
+    }
+
+    function toLocalIso(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      const hh = String(date.getHours()).padStart(2, "0");
+      const mm = String(date.getMinutes()).padStart(2, "0");
+      const ss = String(date.getSeconds()).padStart(2, "0");
+      return y + "-" + m + "-" + d + "T" + hh + ":" + mm + ":" + ss;
+    }
+
+    function inferTimePeriod(hour) {
+      if (hour >= 5 && hour < 11) return "Morning";
+      if (hour >= 11 && hour < 16) return "Afternoon";
+      if (hour >= 16 && hour < 21) return "Evening";
+      return "Night";
+    }
+
+    function buildDemoRawPayload(preset) {
+      const scenario = preset || "mixed";
+      const presetConfig = {
+        calm: {
+          dayPattern: [1, 2, 1, 2, 1, 2, 1],
+          hourPattern: [8, 11, 14, 17, 19, 20, 21],
+          riskShift: -0.14,
+          nightBoost: 0.08,
+          reentryBoost: 0.02,
+          topologyRamp: 0.14,
+          transition: [[0.90, 0.10], [0.82, 0.18]],
+          weekly: {
+            thisRate: 0.24,
+            lastRate: 0.31,
+            insight: "This week stayed calmer than last week, with fewer late-night spikes.",
+            delta: "Improving"
+          },
+          driverWeights: {
+            session_length: 0.17,
+            exit_conflict: 0.11,
+            rapid_reentry: 0.12,
+            scroll_automaticity: 0.19,
+            dwell_collapse: 0.14,
+            rewatch_compulsion: 0.08,
+            environment: 0.19
+          }
+        },
+        mixed: {
+          dayPattern: [2, 3, 1, 4, 2, 3, 2],
+          hourPattern: [8, 12, 15, 19, 21, 22, 23],
+          riskShift: 0,
+          nightBoost: 0.16,
+          reentryBoost: 0.04,
+          topologyRamp: 0.28,
+          transition: [[0.83, 0.17], [0.72, 0.28]],
+          weekly: {
+            thisRate: 0.44,
+            lastRate: 0.39,
+            insight: "This week drifted slightly above last week in autopilot ratio.",
+            delta: "Worsening"
+          },
+          driverWeights: {
+            session_length: 0.21,
+            exit_conflict: 0.16,
+            rapid_reentry: 0.18,
+            scroll_automaticity: 0.14,
+            dwell_collapse: 0.12,
+            rewatch_compulsion: 0.08,
+            environment: 0.11
+          }
+        },
+        "high-risk": {
+          dayPattern: [3, 4, 2, 5, 4, 4, 3],
+          hourPattern: [12, 15, 19, 21, 22, 23, 0],
+          riskShift: 0.16,
+          nightBoost: 0.28,
+          reentryBoost: 0.07,
+          topologyRamp: 0.46,
+          transition: [[0.74, 0.26], [0.58, 0.42]],
+          weekly: {
+            thisRate: 0.68,
+            lastRate: 0.53,
+            insight: "High-risk pattern intensified this week, with persistent doom carryover.",
+            delta: "Worsening"
+          },
+          driverWeights: {
+            session_length: 0.24,
+            exit_conflict: 0.18,
+            rapid_reentry: 0.20,
+            scroll_automaticity: 0.13,
+            dwell_collapse: 0.10,
+            rewatch_compulsion: 0.07,
+            environment: 0.08
+          }
+        }
+      };
+      const cfg = presetConfig[scenario] || presetConfig.mixed;
+
+      const now = new Date();
+      const base = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 27, 0, 0, 0, 0);
+      const sessions = [];
+      const dayPattern = cfg.dayPattern;
+      const hourPattern = cfg.hourPattern;
+
+      for (let d = 0; d < 28; d += 1) {
+        const sessionCount = dayPattern[d % dayPattern.length];
+        for (let s = 0; s < sessionCount; s += 1) {
+          const date = new Date(base);
+          date.setDate(base.getDate() + d);
+          const hr = hourPattern[(d + s * 2) % hourPattern.length];
+          const min = 4 + ((d * 11 + s * 7) % 52);
+          date.setHours(hr, min, 0, 0);
+          if (date.getTime() > now.getTime()) continue;
+
+          const nReels = 16 + ((d * 5 + s * 3) % 34);
+          const avgDwell = 4.2 + ((d + s) % 7) * 0.7;
+          const durationSec = Math.round(nReels * avgDwell);
+          const riskBase = (hr >= 21 || hr < 2) ? (0.35 + cfg.nightBoost) : (hr >= 17 ? 0.22 : 0.11);
+          const intensity = clampNum(0.18 + cfg.riskShift + riskBase + (nReels / 110) + (s * cfg.reentryBoost) + Math.sin((d + 1) * 0.8) * 0.08, 0.05, 0.96);
+          const hasSurvey = ((d + s) % 2) === 0;
+          const regret = hasSurvey ? Math.max(1, Math.min(5, Math.round(intensity * 5))) : 0;
+          const rating = hasSurvey ? Math.max(1, 5 - regret + (((d + s) % 2) ? 1 : 0)) : 0;
+          const moodBefore = hasSurvey ? Math.max(1, 4 - Math.round(intensity * 2.3)) : 0;
+          const moodAfter = hasSurvey ? Math.max(1, moodBefore - (regret >= 4 ? 1 : 0)) : 0;
+
+          const endDate = new Date(date.getTime() + durationSec * 1000);
+          sessions.push({
+            startTime: toLocalIso(date),
+            endTime: toLocalIso(endDate),
+            nReels: nReels,
+            avgDwell: Number(avgDwell.toFixed(2)),
+            S_t: Number(intensity.toFixed(4)),
+            durationSec: durationSec,
+            timePeriod: inferTimePeriod(hr),
+            hasSurvey: hasSurvey,
+            postSessionRating: rating,
+            regretScore: regret,
+            moodBefore: moodBefore,
+            moodAfter: moodAfter,
+            intendedAction: hasSurvey ? (regret >= 4 ? "Quick check" : "Purposeful break") : "",
+            actualVsIntended: hasSurvey ? (regret >= 4 ? 0.3 : 0.8) : 0,
+            comparativeRating: hasSurvey ? Math.max(1, Math.min(5, 3 + (regret >= 4 ? 1 : 0))) : 0,
+            delayedRegretScore: hasSurvey ? Math.max(1, Math.min(5, regret + ((d % 3) === 0 ? 1 : 0))) : 0,
+            totalLikes: (nReels % 7),
+            totalComments: (nReels % 4),
+            totalShares: (nReels % 3),
+            totalSaves: (nReels % 2)
+          });
+        }
+      }
+
+      sessions.sort((a, b) => {
+        const ta = Date.parse(a.startTime);
+        const tb = Date.parse(b.startTime);
+        return ta - tb;
+      });
+
+      const circ = [];
+      for (let h = 0; h < 24; h += 2) {
+        const values = sessions.filter((s) => {
+          const dt = new Date(s.startTime);
+          return dt.getHours() >= h && dt.getHours() < h + 2;
+        }).map((s) => maybeNum(s.S_t)).filter(isFiniteNumber);
+        const p = values.length ? averageOf(values) : clampNum(0.2 + cfg.riskShift + Math.sin((h / 24) * Math.PI * 2) * 0.18 + (h >= 20 || h < 2 ? 0.2 + cfg.nightBoost : 0), 0.08, 0.92);
+        circ.push({ hour: h, captureProb: Number(p.toFixed(4)) });
+      }
+
+      const pCapture = Array.from({ length: 72 }, (_, i) => {
+        const t = i / 71;
+        const wave = 0.2 + Math.sin(t * Math.PI * 2.2) * 0.14;
+        const ramp = i > 40 ? ((i - 40) / 32) * cfg.topologyRamp : 0;
+        const noise = Math.sin(i * 0.87) * 0.04;
+        return Number(clampNum(wave + cfg.riskShift + ramp + noise, 0.05, 0.96).toFixed(4));
+      });
+
+      const sessionTail = sessions.slice(-7).map((s) => Math.round(clampNum(safeNum(s.S_t, 0) * 100, 0, 100)));
+      const overallConf = clampNum(0.45 + Math.min(0.3, sessions.length / 300), 0.45, 0.82);
+
+      return {
+        sessions: sessions,
+        model_parameters: {
+          transition_matrix: cfg.transition
+        },
+        historical_drivers: cfg.driverWeights,
+        feature_weights: [
+          { feature: "log_dwell", weight: 0.82, desc: "Log-transformed dwell time" },
+          { feature: "rhythm_dissociation", weight: 0.73, desc: "Cadence divergence" },
+          { feature: "exit_flag", weight: 0.66, desc: "Exit and return conflict" },
+          { feature: "log_speed", weight: 0.59, desc: "Log-transformed scroll speed" },
+          { feature: "rewatch_flag", weight: 0.54, desc: "Back-scroll signal" },
+          { feature: "swipe_incomplete", weight: 0.47, desc: "Aborted swipe proxy" }
+        ],
+        model_confidence_breakdown: {
+          overall: Number(overallConf.toFixed(4)),
+          volume: Number(clampNum(overallConf - 0.07, 0, 1).toFixed(4)),
+          separation: 0.71,
+          stability: 0.88,
+          supervision: 0.39,
+          label_coverage: 0.31,
+          agreement_quality: 0.69
+        },
+        circadianProfile: circ,
+        timeline: { p_capture: pCapture },
+        last3SessionAutopilotRates: sessionTail,
+        weekly_summary: {
+          this_week_doom_rate: cfg.weekly.thisRate,
+          last_week_doom_rate: cfg.weekly.lastRate,
+          insight: cfg.weekly.insight,
+          delta_direction: cfg.weekly.delta
+        }
+      };
+    }
+
+    function normalizeData(rawData) {
+      const sessions = safeArr(rawData && rawData.sessions).filter((s) => s && typeof s === "object");
+      const mostRecent = sessions.length ? sessions[sessions.length - 1] : null;
+      const sessionProbabilities = sessions.map((s) => maybeNum(s.S_t)).filter(isFiniteNumber);
+      const sessionDurations = sessions.map((s) => deriveSessionDurationSec(s)).filter(isFiniteNumber);
+      const sessionReels = sessions.map((s) => maybeNum(s.nReels)).filter(isFiniteNumber);
+      const sessionDwells = sessions.map((s) => maybeNum(s.avgDwell)).filter(isFiniteNumber);
+      const transition = rawData && rawData.model_parameters ? rawData.model_parameters.transition_matrix : null;
+
+      const dateBuckets = {};
+      sessions.forEach((s, idx) => {
+        const key = normalizeDateKey(s);
+        if (!key) return;
+        if (!dateBuckets[key]) dateBuckets[key] = [];
+        dateBuckets[key].push({
+          raw: s,
+          idx: idx,
+          ts: pickSessionTimestampMs(s),
+          durationSec: deriveSessionDurationSec(s)
+        });
+      });
+
+      const dateKeys = Object.keys(dateBuckets).sort();
+      const earliestDateKey = dateKeys.length ? dateKeys[0] : null;
+
+      function timelineEntryFromSource(entry, prevTs) {
+        const source = entry.raw || entry;
+        const ts = isFiniteNumber(entry.ts) ? entry.ts : pickSessionTimestampMs(source);
+
+        let startTime = "";
+        if (isFiniteNumber(ts)) startTime = new Date(ts).toTimeString().slice(0, 5);
+
+        const explicitDurationMin = maybeNum(source.durationMin);
+        const explicitDurationSec = coalesceNumber(maybeNum(source.durationSec), maybeNum(source.sessionDurationSec));
+        const derivedDurationSec = isFiniteNumber(explicitDurationSec)
+          ? explicitDurationSec
+          : (isFiniteNumber(entry.durationSec) ? entry.durationSec : deriveSessionDurationSec(source));
+        const durationMin = isFiniteNumber(explicitDurationMin)
+          ? explicitDurationMin
+          : (isFiniteNumber(derivedDurationSec) ? derivedDurationSec / 60 : null);
+
+        const reelCount = coalesceNumber(maybeNum(source.reelCount), maybeNum(source.nReels), maybeNum(source.totalReels));
+        const probability = coalesceNumber(maybeNum(source.S_t), maybeNum(source.captureProb));
+        const explicitGap = maybeNum(source.gapBeforeMin);
+        const derivedGap = (isFiniteNumber(prevTs) && isFiniteNumber(ts)) ? (ts - prevTs) / 60000 : null;
+        const gapBeforeMin = isFiniteNumber(explicitGap) ? explicitGap : (isFiniteNumber(derivedGap) ? Math.max(0, derivedGap) : null);
+
+        return {
+          startTime: startTime,
+          durationMin: durationMin,
+          reelCount: reelCount,
+          gapBeforeMin: gapBeforeMin,
+          probability: probability,
+          isDoom: isFiniteNumber(probability) ? probability >= DOOM_THRESHOLD : !!source.isDoom,
+          _ts: ts,
+          postSessionRating: coalesceNumber(maybeNum(source.postSessionRating), 0),
+          regretScore: coalesceNumber(maybeNum(source.regretScore), 0),
+          moodBefore: coalesceNumber(maybeNum(source.moodBefore), 0),
+          moodAfter: coalesceNumber(maybeNum(source.moodAfter), 0),
+          intendedAction: source.intendedAction || "",
+          actualVsIntended: coalesceNumber(maybeNum(source.actualVsIntended), 0),
+          comparativeRating: coalesceNumber(maybeNum(source.comparativeRating), 0),
+          delayedRegretScore: coalesceNumber(maybeNum(source.delayedRegretScore), 0),
+          supervisedDoom: coalesceNumber(maybeNum(source.supervisedDoom), 0),
+          hasSurvey: !!source.hasSurvey
+        };
+      }
+
+      const providedTodaySource = safeArr(rawData && rawData.todaySessions)
+        .filter((s) => s && typeof s === "object")
+        .map((s, idx) => ({ raw: s, idx: idx, ts: pickSessionTimestampMs(s), durationSec: deriveSessionDurationSec(s) }));
+
+      providedTodaySource.sort((a, b) => {
+        if (isFiniteNumber(a.ts) && isFiniteNumber(b.ts)) return a.ts - b.ts;
+        return a.idx - b.idx;
+      });
+
+      const now = new Date();
+      const deviceTodayKey = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+      const deviceTodaySessions = dateBuckets[deviceTodayKey]
+        ? dateBuckets[deviceTodayKey].slice().sort((a, b) => {
+            if (isFiniteNumber(a.ts) && isFiniteNumber(b.ts)) return a.ts - b.ts;
+            return a.idx - b.idx;
+          })
+        : [];
+
+      const todaySource = providedTodaySource.length ? providedTodaySource : deviceTodaySessions;
+      let prevTs = null;
+      const todaySessionsDetailed = todaySource.map((entry) => {
+        const row = timelineEntryFromSource(entry, prevTs);
+        if (isFiniteNumber(row._ts)) prevTs = row._ts;
+        return row;
+      });
+      const todaySessions = todaySessionsDetailed.map((row) => {
+        const copy = Object.assign({}, row);
+        delete copy._ts;
+        delete copy.probability;
+        return copy;
+      });
+
+      const todayDurationSecs = todaySessionsDetailed
+        .map((s) => (isFiniteNumber(s.durationMin) ? s.durationMin * 60 : null))
+        .filter(isFiniteNumber);
+      const derivedActiveTodaySeconds = todayDurationSecs.length ? sumOf(todayDurationSecs) : null;
+
+      const dailyTotals = dateKeys
+        .map((k) => {
+          const durations = safeArr(dateBuckets[k]).map((x) => x.durationSec).filter(isFiniteNumber);
+          return durations.length ? sumOf(durations) : null;
+        })
+        .filter(isFiniteNumber);
+
+      const dailySessionCounts = dateKeys.map((k) => safeArr(dateBuckets[k]).length).filter(isFiniteNumber);
+      const derivedAvgSessions = averageOf(dailySessionCounts);
+      const derivedAvgActiveTimeTodaySeconds = averageOf(dailyTotals);
+
+      const interactionsFromToday = todaySource
+        .map((entry) => {
+          const s = entry.raw || entry;
+          const explicit = maybeNum(s.totalInteractions);
+          if (isFiniteNumber(explicit)) return explicit;
+          const parts = [
+            maybeNum(s.totalLikes), maybeNum(s.totalComments), maybeNum(s.totalShares), maybeNum(s.totalSaves),
+            maybeNum(s.likes), maybeNum(s.comments), maybeNum(s.shares), maybeNum(s.saves)
+          ].filter(isFiniteNumber);
+          return parts.length ? sumOf(parts) : null;
+        })
+        .filter(isFiniteNumber);
+
+      const derivedInteractionsToday = interactionsFromToday.length ? sumOf(interactionsFromToday) : null;
+      const derivedSessionsToday = todaySessions.length || null;
+      const derivedCapturedToday = todaySessionsDetailed.length
+        ? todaySessionsDetailed.filter((s) => (isFiniteNumber(s.probability) ? s.probability >= DOOM_THRESHOLD : s.isDoom)).length
+        : null;
+
+      const sessionsWithTs = sessions
+        .map((s) => ({ raw: s, startMs: pickSessionTimestampMs(s) }))
+        .filter((x) => isFiniteNumber(x.startMs))
+        .sort((a, b) => a.startMs - b.startMs);
+
+      let derivedGapMin = null;
+      if (sessionsWithTs.length >= 2) {
+        const prev = sessionsWithTs[sessionsWithTs.length - 2];
+        const last = sessionsWithTs[sessionsWithTs.length - 1];
+        const prevEndRaw = prev.raw && prev.raw.endTime;
+        let prevEndMs = null;
+        if (typeof prevEndRaw === "string" && prevEndRaw && prevEndRaw !== "Unknown") {
+          const parsed = new Date(prevEndRaw);
+          if (!Number.isNaN(parsed.getTime())) prevEndMs = parsed.getTime();
+        }
+        const gapBaseMs = isFiniteNumber(prevEndMs) ? prevEndMs : prev.startMs;
+        derivedGapMin = Math.max(0, (last.startMs - gapBaseMs) / 60000);
+      }
+
+      const payloadGapMin = maybeNum(rawData && rawData.timeSinceLastSessionMin);
+      const timeSinceLastSessionMin = (isFiniteNumber(payloadGapMin) && payloadGapMin > 0) ? payloadGapMin : derivedGapMin;
+
+      const captureRiskScoreRaw = coalesceNumber(
+        maybeNum(rawData && rawData.captureRiskScore),
+        (isFiniteNumber(maybeNum(mostRecent && mostRecent.S_t)) ? maybeNum(mostRecent && mostRecent.S_t) * 100 : null)
+      );
+      const captureRiskScore = isFiniteNumber(captureRiskScoreRaw) ? clampNum(captureRiskScoreRaw, 0, 100) : null;
+
+      function deriveRiskLabel(score) {
+        if (!isFiniteNumber(score)) return null;
+        if (score >= 70) return "CRITICAL";
+        if (score >= 45) return "ELEVATED";
+        if (score >= 25) return "STABLE";
+        return "SAFE";
+      }
+
+      const riskLabel = (typeof (rawData && rawData.riskLabel) === "string" && rawData.riskLabel)
+        ? rawData.riskLabel
+        : (deriveRiskLabel(captureRiskScore) || "SAFE");
+
+      const derivedAvgSessionDurationSec = averageOf(sessionDurations);
+      const derivedAvgReelsPerSession = averageOf(sessionReels);
+      const derivedAvgDwellTimeSec = averageOf(sessionDwells);
+
+      const derivedAllTimeCaptureRate = sessionProbabilities.length
+        ? sessionProbabilities.filter((p) => p > 0.5).length / sessionProbabilities.length
+        : null;
+
+      const lastTenProbs = sessionProbabilities.slice(-10);
+      const derivedTenSessionAvgScore = lastTenProbs.length ? averageOf(lastTenProbs) * 100 : null;
+
+      const sessionDoomPersistence = coalesceNumber(maybeNum(rawData && rawData.sessionDoomPersistence), maybeNum(transition && transition[1] && transition[1][1]));
+      const escapeRate = coalesceNumber(maybeNum(rawData && rawData.escapeRate), maybeNum(transition && transition[1] && transition[1][0]));
+      const pullIndex = coalesceNumber(
+        maybeNum(rawData && rawData.pullIndex),
+        ((isFiniteNumber(sessionDoomPersistence) && isFiniteNumber(escapeRate) && escapeRate > 0) ? (sessionDoomPersistence / escapeRate) : null)
+      );
+
+      const modelConfidence = coalesceNumber(
+        maybeNum(rawData && rawData.modelConfidence),
+        maybeNum(rawData && rawData.model_confidence),
+        maybeNum(rawData && rawData.model_confidence_breakdown && rawData.model_confidence_breakdown.overall)
+      );
+
+      const thisWindowDoomRate = coalesceNumber(maybeNum(rawData && rawData.thisWindowDoomRate), maybeNum(rawData && rawData.weekly_summary && rawData.weekly_summary.this_week_doom_rate));
+      const lastWindowDoomRate = coalesceNumber(maybeNum(rawData && rawData.lastWindowDoomRate), maybeNum(rawData && rawData.weekly_summary && rawData.weekly_summary.last_week_doom_rate));
+      const weeklyInsight =
+        ((typeof (rawData && rawData.weeklyInsight) === "string" && rawData.weeklyInsight) ||
+         (typeof (rawData && rawData.weekly_summary && rawData.weekly_summary.insight) === "string" && rawData.weekly_summary.insight) ||
+         null);
+
+      let weeklyDelta =
+        ((typeof (rawData && rawData.weeklyDelta) === "string" && rawData.weeklyDelta) ||
+         (typeof (rawData && rawData.weekly_summary && rawData.weekly_summary.delta_direction) === "string" && rawData.weekly_summary.delta_direction) ||
+         null);
+      if (!weeklyDelta && isFiniteNumber(thisWindowDoomRate) && isFiniteNumber(lastWindowDoomRate)) {
+        const diff = thisWindowDoomRate - lastWindowDoomRate;
+        weeklyDelta = diff <= -0.03 ? "Improving" : (diff >= 0.03 ? "Worsening" : "Stable");
+      }
+
+      function parseHour(v) {
+        if (isFiniteNumber(v)) return v;
+        if (typeof v === "string" && /^\d{1,2}$/.test(v.trim())) return parseInt(v.trim(), 10);
+        return null;
+      }
+
+      const circadianFromPayload = safeArr(rawData && rawData.circadianProfile).map((c) => ({
+        hour: parseHour(c && c.hour),
+        captureProb: maybeNum(c && c.captureProb)
+      }));
+      const circadianFromLegacy = safeArr(rawData && rawData.circadian).map((c) => ({
+        hour: parseHour(c && c.h),
+        captureProb: maybeNum(c && c.doom)
+      }));
+
+      const circadianProfile = (circadianFromPayload.length ? circadianFromPayload : circadianFromLegacy)
+        .filter((c) => isFiniteNumber(c.hour) && isFiniteNumber(c.captureProb))
+        .map((c) => ({
+          hour: ((Math.round(c.hour) % 24) + 24) % 24,
+          captureProb: clampNum(c.captureProb, 0, 1)
+        }))
+        .sort((a, b) => a.hour - b.hour);
+
+      const peakCircPoint = circadianProfile.reduce((best, c) => (!best || c.captureProb > best.captureProb ? c : best), null);
+      const safeCircPoint = circadianProfile.reduce((best, c) => (!best || c.captureProb < best.captureProb ? c : best), null);
+      const peakRiskWindow = ((typeof (rawData && rawData.peakRiskWindow) === "string" && rawData.peakRiskWindow) || (peakCircPoint ? formatHourWindow(peakCircPoint.hour, 2) : null));
+      const safestWindow = ((typeof (rawData && rawData.safestWindow) === "string" && rawData.safestWindow) || (safeCircPoint ? formatHourWindow(safeCircPoint.hour, 2) : null));
+
+      const componentSource = (rawData && (rawData.historical_drivers || rawData.doom_components || rawData.scorer_component_weights)) || null;
+      const componentDriverDefs = [
+        { name: "Session Length", keys: ["session_length", "length"] },
+        { name: "Rewatch Compulsion", keys: ["rewatch_compulsion", "rewatch"] },
+        { name: "Rapid Re-entry", keys: ["rapid_reentry", "rapidReentry"] },
+        { name: "Exit Conflict", keys: ["exit_conflict", "volitional_conflict"] },
+        { name: "Scroll Automaticity", keys: ["scroll_automaticity", "automaticity"] },
+        { name: "Dwell Collapse", keys: ["dwell_collapse"] },
+        { name: "Environment", keys: ["environment"] }
+      ];
+
+      function pickComponentValue(obj, keys) {
+        for (let i = 0; i < keys.length; i += 1) {
+          const candidate = maybeNum(obj && obj[keys[i]]);
+          if (isFiniteNumber(candidate)) return candidate;
+        }
+        return null;
+      }
+
+      let derivedDrivers = [];
+      if (componentSource && typeof componentSource === "object") {
+        const collected = componentDriverDefs
+          .map((d) => ({ name: d.name, value: pickComponentValue(componentSource, d.keys) }))
+          .filter((d) => isFiniteNumber(d.value));
+        const total = sumOf(collected.map((d) => d.value));
+        derivedDrivers = collected.map((d) => {
+          const normalized = total > 0 ? d.value / total : d.value;
+          return {
+            name: d.name,
+            weight: normalized,
+            contribution: normalized,
+            rawValue: null,
+            detail: driverEnglish(d.name, null)
+          };
+        });
+      }
+
+      const existingDrivers = safeArr(rawData && rawData.doomDrivers)
+        .map((d) => {
+          const contribution = coalesceNumber(maybeNum(d && d.contribution), maybeNum(d && d.weight));
+          if (!isFiniteNumber(contribution)) return null;
+          const name = (typeof (d && d.name) === "string" && d.name) ? d.name : "Unlabeled driver";
+          return {
+            name: name,
+            contribution: contribution,
+            weight: maybeNum(d && d.weight),
+            rawValue: d && d.rawValue,
+            detail: driverEnglish(name, d && d.rawValue)
+          };
+        })
+        .filter(Boolean);
+
+      const normalizedDrivers = (existingDrivers.length ? existingDrivers : derivedDrivers)
+        .sort((a, b) => safeNum(b.contribution, 0) - safeNum(a.contribution, 0));
+
+      const timelineCapture = safeArr(rawData && rawData.timeline && rawData.timeline.p_capture).map((p) => maybeNum(p)).filter(isFiniteNumber);
+      const topologyFromPayload = rawData && rawData.sessionTopology;
+      const payloadReelData = safeArr(topologyFromPayload && topologyFromPayload.reelData)
+        .map((r, idx) => {
+          const captureProb = maybeNum(r && r.captureProb);
+          if (!isFiniteNumber(captureProb)) return null;
+          return {
+            index: coalesceNumber(maybeNum(r && r.index), (idx + 1)),
+            captureProb: captureProb,
+            state: captureProb > 0.66 ? "Autopilot" : (captureProb > 0.33 ? "Borderline" : "Mindful")
+          };
+        })
+        .filter(Boolean);
+
+      const derivedTopologyData = timelineCapture.map((p, i) => ({
+        index: i + 1,
+        captureProb: p,
+        state: p > 0.66 ? "Autopilot" : (p > 0.33 ? "Borderline" : "Mindful")
+      }));
+
+      const topologyReelData = payloadReelData.length ? payloadReelData : derivedTopologyData;
+      const topologyTotal = topologyReelData.length;
+      const topologySafeCount = topologyReelData.filter((r) => r.captureProb <= 0.33).length;
+      const topologyBorderCount = topologyReelData.filter((r) => r.captureProb > 0.33 && r.captureProb <= 0.66).length;
+      const topologyDoomCount = topologyReelData.filter((r) => r.captureProb > 0.66).length;
+
+      const sessionTopology = {
+        totalReels: isFiniteNumber(maybeNum(topologyFromPayload && topologyFromPayload.totalReels)) ? topologyFromPayload.totalReels : topologyTotal,
+        sessions: sessions.length,
+        safePercent: topologyTotal ? (topologySafeCount / topologyTotal) * 100 : 0,
+        borderPercent: topologyTotal ? (topologyBorderCount / topologyTotal) * 100 : 0,
+        doomPercent: topologyTotal ? (topologyDoomCount / topologyTotal) * 100 : 0,
+        reelData: topologyReelData
+      };
+
+      const derivedCasualToDoom = maybeNum(transition && transition[0] && transition[0][1]);
+      const derivedDoomToCasual = maybeNum(transition && transition[1] && transition[1][0]);
+      const stateDynamics = {
+        casualToDoomProb: coalesceNumber(maybeNum(rawData && rawData.stateDynamics && rawData.stateDynamics.casualToDoomProb), derivedCasualToDoom),
+        doomToCasualProb: coalesceNumber(maybeNum(rawData && rawData.stateDynamics && rawData.stateDynamics.doomToCasualProb), derivedDoomToCasual),
+        recoveryWindowSessions: coalesceNumber(maybeNum(rawData && rawData.stateDynamics && rawData.stateDynamics.recoveryWindowSessions), ((isFiniteNumber(derivedDoomToCasual) && derivedDoomToCasual > 0) ? (1 / derivedDoomToCasual) : null)),
+        recoveryWindowDelta: maybeNum(rawData && rawData.stateDynamics && rawData.stateDynamics.recoveryWindowDelta),
+        modelConfidence: modelConfidence
+      };
+
+      const derivedHeatmapData = dateKeys.map((dateKey) => {
+        const bucket = dateBuckets[dateKey] || [];
+        const probs = bucket.map((e) => maybeNum(e.raw && e.raw.S_t)).filter(isFiniteNumber);
+        const avgCapture = probs.length ? (sumOf(probs) / probs.length) : null;
+        return {
+          date: dateKey,
+          dayLabel: dateKey.slice(5),
+          avgCapture: avgCapture,
+          riskLevel: null,
+          sessionCount: bucket.length
+        };
+      }).filter((d) => isFiniteNumber(d.avgCapture));
+
+      const heatmapData = safeArr(rawData && rawData.heatmapData).length
+        ? safeArr(rawData.heatmapData).map((d) => ({
+            date: d && d.date || "",
+            dayLabel: (d && (d.dayLabel || d.d)) || "",
+            avgCapture: coalesceNumber(maybeNum(d && d.avgCapture), maybeNum(d && d.v)),
+            riskLevel: d && d.riskLevel || null,
+            sessionCount: coalesceNumber(maybeNum(d && d.sessionCount), maybeNum(d && d.s))
+          }))
+        : derivedHeatmapData;
+
+      const derivedDoomStreak = (() => {
+        let streak = 0;
+        for (let i = sessions.length - 1; i >= 0; i -= 1) {
+          const p = maybeNum(sessions[i] && sessions[i].S_t);
+          if (!isFiniteNumber(p) || p < DOOM_THRESHOLD) break;
+          streak += 1;
+        }
+        return streak;
+      })();
+
+      const avgSessions = coalesceNumber(maybeNum(rawData && rawData.avgSessions), derivedAvgSessions);
+      const sessionsToday = coalesceNumber(maybeNum(rawData && rawData.sessionsToday), derivedSessionsToday);
+      const todayVsAvgDelta = coalesceNumber(maybeNum(rawData && rawData.todayVsAvgDelta),
+        ((isFiniteNumber(sessionsToday) && isFiniteNumber(avgSessions) && avgSessions > 0)
+          ? ((sessionsToday - avgSessions) / avgSessions) * 100
+          : null));
+
+      const activeTimeTodaySeconds = coalesceNumber(maybeNum(rawData && rawData.activeTimeTodaySeconds), derivedActiveTodaySeconds);
+      const activeTimeToday = (typeof (rawData && rawData.activeTimeToday) === "string" && rawData.activeTimeToday)
+        ? rawData.activeTimeToday
+        : (isFiniteNumber(activeTimeTodaySeconds) ? formatDurationSec(activeTimeTodaySeconds) : null);
+
+      const last3SessionAutopilotRates = safeArr(rawData && rawData.last3SessionAutopilotRates).filter(isFiniteNumber);
+      const derivedLast3SessionAutopilotRates = sessionProbabilities.slice(-7).map((p) => Math.round(p * 100));
+
+      return {
+        captureRiskScore: captureRiskScore,
+        riskLabel: riskLabel,
+        sessionsToday: sessionsToday,
+        activeTimeToday: activeTimeToday,
+        activeTimeTodaySeconds: activeTimeTodaySeconds,
+        interactionsToday: coalesceNumber(maybeNum(rawData && rawData.interactionsToday), derivedInteractionsToday),
+        capturedSessionsToday: coalesceNumber(maybeNum(rawData && rawData.capturedSessionsToday), derivedCapturedToday),
+        avgSessionDurationSec: coalesceNumber(maybeNum(rawData && rawData.avgSessionDurationSec), derivedAvgSessionDurationSec),
+        avgReelsPerSession: coalesceNumber(maybeNum(rawData && rawData.avgReelsPerSession), maybeNum(rawData && rawData.avgNReels), derivedAvgReelsPerSession),
+        avgDwellTimeSec: coalesceNumber(maybeNum(rawData && rawData.avgDwellTimeSec), derivedAvgDwellTimeSec),
+        timeSinceLastSessionMin: timeSinceLastSessionMin,
+        pullIndex: pullIndex,
+        totalReels: coalesceNumber(maybeNum(rawData && rawData.totalReels), (sessionReels.length ? sumOf(sessionReels) : (timelineCapture.length || null))),
+        doomRate: coalesceNumber(maybeNum(rawData && rawData.doomRate), derivedAllTimeCaptureRate),
+        tenSessionAvgScore: coalesceNumber(maybeNum(rawData && rawData.tenSessionAvgScore), derivedTenSessionAvgScore),
+        allTimeCaptureRate: coalesceNumber(maybeNum(rawData && rawData.allTimeCaptureRate), derivedAllTimeCaptureRate),
+        sessionDoomPersistence: sessionDoomPersistence,
+        escapeRate: escapeRate,
+        modelConfidence: modelConfidence,
+        weeklyInsight: weeklyInsight,
+        thisWindowDoomRate: thisWindowDoomRate,
+        lastWindowDoomRate: lastWindowDoomRate,
+        weeklyDelta: weeklyDelta,
+        circadianProfile: circadianProfile,
+        peakRiskWindow: peakRiskWindow,
+        safestWindow: safestWindow,
+        doomDrivers: normalizedDrivers,
+        sessionTopology: sessionTopology,
+        stateDynamics: stateDynamics,
+        heatmapData: heatmapData,
+        dateBuckets: dateBuckets,
+        todaySessions: todaySessions,
+        doomStreak: coalesceNumber(maybeNum(rawData && rawData.doomStreak), derivedDoomStreak),
+        currentHour: coalesceNumber(maybeNum(rawData && rawData.currentHour), new Date().getHours()),
+        todayVsAvgDelta: todayVsAvgDelta,
+        totalSessions: sessions.length,
+        avgSessions: avgSessions,
+        avgActiveTimeTodaySeconds: coalesceNumber(maybeNum(rawData && rawData.avgActiveTimeTodaySeconds), derivedAvgActiveTimeTodaySeconds),
+        last3SessionAutopilotRates: last3SessionAutopilotRates.length ? last3SessionAutopilotRates : derivedLast3SessionAutopilotRates,
+        raw: rawData,
+        dataSinceDate: (typeof (rawData && rawData.dataSinceDate) === "string" && rawData.dataSinceDate) || earliestDateKey || null
+      };
+    }
+
+    function adaptTelemetry(rawPayload, normalized) {
+      const n = normalized || {};
+      const transition = {
+        casualToDoom: safeNum(n.stateDynamics && n.stateDynamics.casualToDoomProb, 0),
+        doomToCasual: safeNum(n.stateDynamics && n.stateDynamics.doomToCasualProb, 0)
+      };
+      transition.casualStay = clampNum(1 - transition.casualToDoom, 0, 1);
+      transition.doomStay = clampNum(1 - transition.doomToCasual, 0, 1);
+
+      const driverMeta = {
+        "Session Length": { key: "session_length", color: "#C4973A", abbr: "SL" },
+        "Exit Conflict": { key: "exit_conflict", color: "#C4563A", abbr: "EC" },
+        "Rapid Re-entry": { key: "rapid_reentry", color: "#A03030", abbr: "RR" },
+        "Scroll Automaticity": { key: "scroll_automaticity", color: "#6B3FA0", abbr: "SA" },
+        "Dwell Collapse": { key: "dwell_collapse", color: "#3A9E6F", abbr: "DC" },
+        "Rewatch Compulsion": { key: "rewatch_compulsion", color: "#C4973A", abbr: "RW" },
+        "Environment": { key: "environment", color: "#4A2580", abbr: "EN" }
+      };
+
+      const drivers = safeArr(n.doomDrivers).map((d) => {
+        const meta = driverMeta[d.name] || { key: d.name.toLowerCase().replace(/\s+/g, "_"), color: "#6B3FA0", abbr: "--" };
+        const pct = Math.round(clampNum(safeNum(d.contribution, 0) * 100, 0, 100));
+        return {
+          key: meta.key,
+          name: d.name,
+          pct: pct,
+          desc: d.detail || driverEnglish(d.name, d.rawValue),
+          color: meta.color,
+          abbr: meta.abbr
+        };
+      });
+
+      const heat14 = safeArr(n.heatmapData).slice(-14);
+      const exposure14d = heat14.map((d) => {
+        const date = new Date((d.date || "") + "T00:00:00");
+        const val = Math.round(clampNum(safeNum(d.avgCapture, 0) * 100, 0, 100));
+        const level = val < 33 ? "low" : (val < 66 ? "med" : "high");
+        const day = Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString(undefined, { weekday: "short" }).slice(0, 1).toUpperCase();
+        return {
+          day: day,
+          val: val,
+          level: level,
+          date: d.date,
+          sessions: safeNum(d.sessionCount, 0)
+        };
+      });
+
+      const topology = safeArr(n.sessionTopology && n.sessionTopology.reelData).map((r, i) => ({
+        reel: safeNum(maybeNum(r.index), i + 1),
+        doom: clampNum(safeNum(r.captureProb, 0), 0, 1)
+      }));
+
+      const confRaw = (rawPayload && rawPayload.model_confidence_breakdown) || {};
+      const confidence = {
+        overall: coalesceNumber(maybeNum(confRaw.overall), maybeNum(n.modelConfidence), 0),
+        volume: coalesceNumber(maybeNum(confRaw.volume), 0),
+        separation: coalesceNumber(maybeNum(confRaw.separation), 0),
+        stability: coalesceNumber(maybeNum(confRaw.stability), 0),
+        supervision: coalesceNumber(maybeNum(confRaw.supervision), 0),
+        labelCoverage: coalesceNumber(maybeNum(confRaw.label_coverage), maybeNum(confRaw.labelCoverage), 0),
+        agreementQuality: coalesceNumber(maybeNum(confRaw.agreement_quality), maybeNum(confRaw.agreementQuality), 0)
+      };
+
+      const circadian = safeArr(n.circadianProfile).map((c) => ({ h: c.hour, p: c.captureProb }));
+      const mindfulPct = (isFiniteNumber(n.sessionsToday) && n.sessionsToday > 0 && isFiniteNumber(n.capturedSessionsToday))
+        ? Math.round(((n.sessionsToday - n.capturedSessionsToday) / n.sessionsToday) * 100)
+        : null;
+
+      return {
+        score: Math.round(clampNum(safeNum(n.captureRiskScore, 0), 0, 100)),
+        threshold: DOOM_THRESHOLD,
+        pipelineVersion: 6,
+        schemaVersion: 5,
+        modelVersion: "3.0",
+        transition: transition,
+        drivers: drivers,
+        exposure14d: exposure14d,
+        topology: topology,
+        featureWeights: safeArr(rawPayload && rawPayload.feature_weights).length ? rawPayload.feature_weights : [],
+        confidence: confidence,
+        circadian: circadian,
+        week: {
+          thisRate: maybeNum(n.thisWindowDoomRate),
+          lastRate: maybeNum(n.lastWindowDoomRate),
+          insight: n.weeklyInsight || "",
+          delta: n.weeklyDelta || ""
+        },
+        monitor: {
+          activeTime: n.activeTimeToday || formatDurationSec(safeNum(n.activeTimeTodaySeconds, 0)),
+          sessions: safeNum(n.sessionsToday, 0),
+          mindfulPct: isFiniteNumber(mindfulPct) ? mindfulPct : 0,
+          quality: {
+            safe: Math.round(clampNum(safeNum(n.sessionTopology && n.sessionTopology.safePercent, 0), 0, 100)),
+            warn: Math.round(clampNum(safeNum(n.sessionTopology && n.sessionTopology.borderPercent, 0), 0, 100)),
+            doom: Math.round(clampNum(safeNum(n.sessionTopology && n.sessionTopology.doomPercent, 0), 0, 100))
+          }
+        },
+        todaySessions: safeArr(n.todaySessions),
+        heatmapData: safeArr(n.heatmapData),
+        dateBuckets: n.dateBuckets || {},
+        normalized: n
+      };
+    }
+
+    // Representation mode: always use synthetic telemetry for every dashboard panel.
+    let currentPreset = "mixed";
+    let rawPayload = buildDemoRawPayload(currentPreset);
+    let normalizedData = normalizeData(rawPayload);
+    let telemetry = adaptTelemetry(rawPayload, normalizedData);
+
+    function renderAllDashboardPanels() {
+      renderGauge();
+      renderStateDynamics();
+      renderTodayTimeline();
+      renderDrivers();
+      renderExposure();
+      renderCircadian();
+      renderTopology();
+      renderFeatureWeights();
+      renderConfidence();
+      renderMonitor();
+      renderCalendar();
+    }
+
+    function applyPreset(presetKey) {
+      currentPreset = presetKey || "mixed";
+      rawPayload = buildDemoRawPayload(currentPreset);
+      normalizedData = normalizeData(rawPayload);
+      telemetry = adaptTelemetry(rawPayload, normalizedData);
+
+      const presetButtons = Array.from(document.querySelectorAll(".preset-tab"));
+      presetButtons.forEach((btn) => {
+        btn.classList.toggle("active", btn.getAttribute("data-preset") === currentPreset);
+      });
+
+      const modeMeta = document.getElementById("dashboard-mode-meta");
+      if (modeMeta) {
+        const label = currentPreset === "calm"
+          ? "calm"
+          : currentPreset === "high-risk"
+          ? "high-risk"
+          : "mixed";
+        modeMeta.textContent = "Synthetic demo telemetry for website representation only - " + label + " scenario";
+      }
+
+      renderAllDashboardPanels();
+    }
+
+    const monitorStatePalette = {
+      doom: {
+        bg: "#F5EDE9",
+        accent: "#C4563A",
+        label: "DOOM SCROLLING",
+        headline: "Deep in the scroll trap.",
+        sub: "Trap pressure is high. Exit conflict and rapid re-entry are dominant."
+      },
+      hooked: {
+        bg: "#F5F0E2",
+        accent: "#C4973A",
+        label: "HOOKED",
+        headline: "Running on autopilot.",
+        sub: "Behavior is elevated but recoverable with tighter stop rules."
+      },
+      aware: {
+        bg: "#E8E0F5",
+        accent: "#6B3FA0",
+        label: "AWARE",
+        headline: "Mostly in control.",
+        sub: "Some sessions drift, but awareness signals are still active."
+      },
+      mindful: {
+        bg: "#EAF3EE",
+        accent: "#3A9E6F",
+        label: "MINDFUL",
+        headline: "Scrolling with intention.",
+        sub: "Current pattern shows stable exits and lower trap carryover."
+      }
+    };
+
+    function getMonitorState(score) {
+      if (score >= 70) return "doom";
+      if (score >= 45) return "hooked";
+      if (score >= 25) return "aware";
+      return "mindful";
+    }
+
+    function stateFromCapture(prob) {
+      if (prob >= 0.70) return "doom";
+      if (prob >= 0.45) return "hooked";
+      if (prob >= 0.25) return "aware";
+      return "safe";
+    }
+
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function hexToRgb(hex) {
+      return [
+        parseInt(hex.slice(1, 3), 16),
+        parseInt(hex.slice(3, 5), 16),
+        parseInt(hex.slice(5, 7), 16)
+      ];
+    }
+
+    function drawBlobs(ctx, w, h, elapsed) {
+      const PI2 = Math.PI * 2;
+      const N = 7;
+      const T = 0.24;
+      const scale = Math.min(w, h) / 420;
+
+      const blobConfig = [
+        { cx: 0.12, cy: 0.26, r: 168, color: "#6B3FA0", alpha: 0.16, speed: 16500, phase: 0.0 },
+        { cx: 0.83, cy: 0.14, r: 150, color: "#C4973A", alpha: 0.13, speed: 14500, phase: 1.2 },
+        { cx: 0.69, cy: 0.52, r: 138, color: "#3A9E6F", alpha: 0.12, speed: 17500, phase: 2.5 },
+        { cx: 0.18, cy: 0.82, r: 130, color: "#C4563A", alpha: 0.11, speed: 15500, phase: 0.7 }
+      ];
+
+      blobConfig.forEach((blob) => {
+        const t = ((elapsed % blob.speed) / blob.speed) * PI2 + blob.phase;
+        const r = blob.r * scale;
+        const driftX = Math.cos(t * 0.7) * r * 0.06;
+        const driftY = Math.sin(t * 0.6) * r * 0.05;
+        const cx = blob.cx * w + driftX;
+        const cy = blob.cy * h + driftY;
+        const step = PI2 / N;
+        const pts = [];
+
+        for (let k = 0; k < N; k += 1) {
+          const angle = k * step + t * 0.18;
+          const wobble = r * (1 + 0.12 * Math.sin(t * 2.1 + k * 1.3));
+          pts.push({ x: cx + wobble * Math.cos(angle), y: cy + wobble * Math.sin(angle) });
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+
+        for (let k = 0; k < N; k += 1) {
+          const curr = pts[k];
+          const next = pts[(k + 1) % N];
+          const prev = pts[(k + N - 1) % N];
+          const next2 = pts[(k + 2) % N];
+          ctx.bezierCurveTo(
+            curr.x + (next.x - prev.x) * T,
+            curr.y + (next.y - prev.y) * T,
+            next.x - (next2.x - curr.x) * T,
+            next.y - (next2.y - curr.y) * T,
+            next.x,
+            next.y
+          );
+        }
+
+        ctx.closePath();
+        const [rr, gg, bb] = hexToRgb(blob.color);
+        ctx.fillStyle = "rgba(" + rr + "," + gg + "," + bb + "," + blob.alpha + ")";
+        ctx.fill();
+      });
+    }
+
+    function initBlobCanvas() {
+      const canvas = document.getElementById("blob-canvas");
+      if (!canvas) return;
+
+      const ctx = canvas.getContext("2d");
+      let rafId = null;
+      let start = performance.now();
+
+      function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        canvas.width = Math.floor(w * dpr);
+        canvas.height = Math.floor(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function loop() {
+        const elapsed = performance.now() - start;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        ctx.clearRect(0, 0, w, h);
+        drawBlobs(ctx, w, h, elapsed);
+        rafId = requestAnimationFrame(loop);
+      }
+
+      resize();
+      loop();
+
+      window.addEventListener("resize", resize);
+      window.addEventListener("beforeunload", () => {
+        if (rafId) cancelAnimationFrame(rafId);
+      });
+    }
+
+    function renderGauge() {
+      const score = telemetry.score;
+      const gaugeFill = document.getElementById("gauge-fill");
+      const scoreEl = document.getElementById("gauge-score");
+      const labelEl = document.getElementById("gauge-label");
+      const insightEl = document.getElementById("gauge-insight");
+
+      if (!gaugeFill || !scoreEl || !labelEl || !insightEl) return;
+
+      const length = gaugeFill.getTotalLength();
+      gaugeFill.style.strokeDasharray = String(length);
+      gaugeFill.style.strokeDashoffset = String(length);
+
+      let label = "Stable";
+      let color = "#C4973A";
+      let insight = "Capture pressure is moderate right now. Read this with your session timeline and driver anatomy below.";
+
+      const sessionsToday = safeNum(telemetry.normalized && telemetry.normalized.sessionsToday, 0);
+      const capturedToday = safeNum(telemetry.normalized && telemetry.normalized.capturedSessionsToday, 0);
+      const peakWindow = telemetry.normalized && telemetry.normalized.peakRiskWindow;
+
+      if (score < 25) {
+        label = "Safe";
+        color = "#3A9E6F";
+        insight = "Low capture pressure right now. Exits are mostly intentional.";
+      } else if (score < 45) {
+        label = "Aware";
+        color = "#6B3FA0";
+        insight = "Some drift is visible, but awareness signals are still active.";
+      } else if (score < 70) {
+        label = "Elevated";
+        color = "#C4973A";
+        insight = "Risk is rising. Session length and re-entry are pushing the score upward.";
+      } else {
+        label = "Critical";
+        color = "#C4563A";
+        insight = "Risk is high right now. Quick re-entry and exit conflict suggest autopilot behavior.";
+      }
+
+      if (sessionsToday > 0) {
+        const capPct = Math.round((capturedToday / sessionsToday) * 100);
+        insight += " " + capturedToday + "/" + sessionsToday + " sessions crossed doom threshold today (" + capPct + "%).";
+      }
+      if (peakWindow) {
+        insight += " Peak risk window: " + peakWindow + ".";
+      }
+
+      scoreEl.textContent = String(score);
+      scoreEl.style.color = color;
+      labelEl.textContent = label;
+      labelEl.style.color = color;
+      insightEl.textContent = insight;
+      gaugeFill.style.stroke = color;
+
+      requestAnimationFrame(() => {
+        const offset = length * (1 - score / 100);
+        gaugeFill.style.strokeDashoffset = String(offset);
+      });
+    }
+
+    function renderStateDynamics() {
+      const t = telemetry.transition;
+      const c2d = document.getElementById("dyn-c2d");
+      const d2c = document.getElementById("dyn-d2c");
+      const c2c = document.getElementById("dyn-c2c");
+      const d2d = document.getElementById("dyn-d2d");
+      const insight = document.getElementById("dyn-insight");
+
+      if (c2d) c2d.textContent = Math.round(t.casualToDoom * 100) + "%";
+      if (d2c) d2c.textContent = Math.round(t.doomToCasual * 100) + "%";
+      if (c2c) c2c.textContent = Math.round(t.casualStay * 100) + "%";
+      if (d2d) d2d.textContent = Math.round(t.doomStay * 100) + "%";
+
+      if (insight) {
+        const recovery = maybeNum(telemetry.normalized && telemetry.normalized.stateDynamics && telemetry.normalized.stateDynamics.recoveryWindowSessions);
+        let text = "This compares transition pressure into doom vs self-recovery back to mindful browsing.";
+        if (isFiniteNumber(recovery)) {
+          text += " Typical recovery window: " + recovery.toFixed(1) + " session" + (recovery >= 2 ? "s" : "") + ".";
+        }
+        insight.textContent = text;
+      }
+    }
+
+    function renderTodayTimeline() {
+      const root = document.getElementById("today-timeline");
+      const detail = document.getElementById("today-selected");
+      if (!root || !detail) return;
+
+      const timeline = safeArr(telemetry.todaySessions);
+      root.innerHTML = "";
+
+      if (!timeline.length) {
+        const empty = document.createElement("div");
+        empty.className = "timeline-empty";
+        empty.textContent = "No sessions recorded yet today.";
+        root.appendChild(empty);
+        detail.textContent = "As soon as a session is recorded, this timeline mirrors Dashboard > Today in the app.";
+        return;
+      }
+
+      function formatSessionDetail(s) {
+        const bits = [];
+        bits.push((s.startTime || "--:--").slice(0, 5));
+        if (isFiniteNumber(maybeNum(s.durationMin))) bits.push(Math.round(s.durationMin) + " min");
+        if (isFiniteNumber(maybeNum(s.reelCount))) bits.push(Math.round(s.reelCount) + " reels");
+        const survey = [];
+        if (maybeNum(s.postSessionRating) > 0) survey.push("rating " + s.postSessionRating + "/5");
+        if (maybeNum(s.regretScore) > 0) survey.push("regret " + s.regretScore + "/5");
+        if (maybeNum(s.moodAfter) > 0) survey.push("mood " + s.moodAfter + "/5");
+        if (s.intendedAction && s.intendedAction !== "0") survey.push("intent: " + s.intendedAction);
+        return bits.join(" | ") + (survey.length ? " | " + survey.join(", ") : " | no survey labels");
+      }
+
+      timeline.forEach((s, idx) => {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "timeline-cell";
+
+        const dot = document.createElement("div");
+        dot.className = "timeline-dot";
+        dot.style.background = s.isDoom ? "#C4563A" : "#3A9E6F";
+
+        const time = document.createElement("div");
+        time.className = "timeline-time";
+        time.textContent = (s.startTime || "--:--").slice(0, 5);
+
+        const badge = document.createElement("div");
+        badge.className = "timeline-badge";
+        badge.textContent = isFiniteNumber(maybeNum(s.durationMin)) ? Math.round(s.durationMin) + "m" : "--";
+
+        card.appendChild(dot);
+        card.appendChild(time);
+        card.appendChild(badge);
+
+        card.addEventListener("click", () => {
+          root.querySelectorAll(".timeline-cell").forEach((el) => el.classList.remove("active"));
+          card.classList.add("active");
+          detail.textContent = formatSessionDetail(s);
+        });
+
+        root.appendChild(card);
+
+        if (idx === timeline.length - 1) {
+          card.classList.add("active");
+          detail.textContent = formatSessionDetail(s);
+        }
+      });
+    }
+
+    function renderDrivers() {
+      const root = document.getElementById("drivers-list");
+      if (!root) return;
+
+      root.innerHTML = "";
+
+      if (!telemetry.drivers.length) {
+        const empty = document.createElement("div");
+        empty.className = "timeline-empty";
+        empty.textContent = "Driver anatomy is unavailable in this payload.";
+        root.appendChild(empty);
+        return;
+      }
+
+      telemetry.drivers.forEach((driver) => {
+        const row = document.createElement("article");
+        row.className = "driver";
+
+        const head = document.createElement("button");
+        head.className = "driver-head";
+        head.type = "button";
+
+        const left = document.createElement("div");
+        left.className = "driver-left";
+
+        const abbr = document.createElement("div");
+        abbr.className = "driver-abbr";
+        abbr.textContent = driver.abbr;
+
+        const name = document.createElement("div");
+        name.className = "driver-name";
+        name.textContent = driver.name;
+
+        left.appendChild(abbr);
+        left.appendChild(name);
+
+        const pct = document.createElement("div");
+        pct.className = "driver-pct";
+        pct.textContent = driver.pct + "%";
+        pct.style.color = driver.color;
+
+        head.appendChild(left);
+        head.appendChild(pct);
+
+        const track = document.createElement("div");
+        track.className = "driver-track";
+
+        const fill = document.createElement("div");
+        fill.className = "driver-fill";
+        fill.style.background = driver.color;
+        track.appendChild(fill);
+
+        const body = document.createElement("div");
+        body.className = "driver-body";
+        body.textContent = driver.desc;
+
+        head.addEventListener("click", () => {
+          const open = row.classList.contains("open");
+          root.querySelectorAll(".driver").forEach((r) => r.classList.remove("open"));
+          if (!open) row.classList.add("open");
+        });
+
+        row.appendChild(head);
+        row.appendChild(track);
+        row.appendChild(body);
+        root.appendChild(row);
+
+        requestAnimationFrame(() => {
+          fill.style.width = driver.pct + "%";
+        });
+      });
+    }
+
+    function renderExposure() {
+      const root = document.getElementById("exposure-bars");
+      const insight = document.getElementById("week-insight");
+      if (!root) return;
+
+      root.innerHTML = "";
+
+      const levelColor = {
+        low: "#3A9E6F",
+        med: "#C4973A",
+        high: "#C4563A"
+      };
+
+      const rows = safeArr(telemetry.exposure14d);
+      if (!rows.length) {
+        const empty = document.createElement("div");
+        empty.className = "timeline-empty";
+        empty.textContent = "Not enough weekly data yet.";
+        root.appendChild(empty);
+        if (insight) insight.textContent = "Collect a few sessions to unlock week-over-week comparison.";
+        return;
+      }
+
+      rows.forEach((d) => {
+        const col = document.createElement("div");
+        col.className = "bar-col";
+
+        const stick = document.createElement("div");
+        stick.className = "bar-stick";
+        stick.style.height = Math.max(14, d.val * 1.6) + "px";
+        stick.style.background = levelColor[d.level] || "#6B3FA0";
+
+        const day = document.createElement("div");
+        day.className = "bar-day";
+        day.textContent = d.day;
+
+        col.appendChild(stick);
+        col.appendChild(day);
+        root.appendChild(col);
+      });
+
+      if (insight) {
+        const avg = rows.reduce((sum, d) => sum + d.val, 0) / rows.length;
+        const thisRate = maybeNum(telemetry.week && telemetry.week.thisRate);
+        const lastRate = maybeNum(telemetry.week && telemetry.week.lastRate);
+        const delta = isFiniteNumber(thisRate) && isFiniteNumber(lastRate)
+          ? (thisRate - lastRate)
+          : null;
+
+        let text = "Average capture over the visible window is " + Math.round(avg) + "%.";
+        if (isFiniteNumber(thisRate) && isFiniteNumber(lastRate)) {
+          text += " This week: " + Math.round(thisRate * 100) + "% vs last week: " + Math.round(lastRate * 100) + "%.";
+          if (isFiniteNumber(delta)) {
+            text += " " + (delta < 0 ? "Trend is improving." : (delta > 0 ? "Trend is worsening." : "Trend is stable."));
+          }
+        }
+        if (telemetry.week && telemetry.week.insight) {
+          text += " " + telemetry.week.insight;
+        }
+        insight.textContent = text;
+      }
+    }
+
+    function renderCircadian() {
+      const wrap = document.getElementById("circadian-wrap");
+      const peakEl = document.getElementById("circ-peak");
+      const safeEl = document.getElementById("circ-safe");
+      const avgEl = document.getElementById("circ-avg");
+      if (!wrap) return;
+
+      const data = safeArr(telemetry.circadian);
+      if (data.length < 2) {
+        wrap.innerHTML = "<div class='timeline-empty'>Circadian profile needs more sessions.</div>";
+        if (peakEl) peakEl.textContent = "--";
+        if (safeEl) safeEl.textContent = "--";
+        if (avgEl) avgEl.textContent = "--";
+        return;
+      }
+
+      const w = 640;
+      const h = 240;
+      const padX = 36;
+      const padY = 22;
+      const innerW = w - padX * 2;
+      const innerH = h - padY * 2;
+
+      const points = data.map((d, i) => {
+        const x = padX + (i / (data.length - 1)) * innerW;
+        const y = h - padY - d.p * innerH;
+        return { x, y, h: d.h, p: d.p };
+      });
+
+      const poly = points.map((p) => p.x.toFixed(2) + "," + p.y.toFixed(2)).join(" ");
+
+      let peak = data[0];
+      let safe = data[0];
+      let sum = 0;
+      data.forEach((d) => {
+        if (d.p > peak.p) peak = d;
+        if (d.p < safe.p) safe = d;
+        sum += d.p;
+      });
+      const avg = sum / data.length;
+
+      if (peakEl) peakEl.textContent = peak.h.toString().padStart(2, "0") + ":00";
+      if (safeEl) safeEl.textContent = safe.h.toString().padStart(2, "0") + ":00";
+      if (avgEl) avgEl.textContent = Math.round(avg * 100) + "%";
+
+      const lines = [0.25, 0.55, 0.75].map((p) => {
+        const y = h - padY - p * innerH;
+        return "<line x1='" + padX + "' y1='" + y.toFixed(2) + "' x2='" + (w - padX) + "' y2='" + y.toFixed(2) + "' stroke='rgba(26,22,18,0.1)' stroke-width='1'></line>";
+      }).join("");
+
+      const labels = points.map((p) => {
+        return "<text x='" + p.x.toFixed(2) + "' y='" + (h - 6) + "' text-anchor='middle' font-family='Space Mono' font-size='10' fill='#9A8E84'>" + p.h.toString().padStart(2, "0") + "</text>";
+      }).join("");
+
+      wrap.innerHTML =
+        "<svg viewBox='0 0 " + w + " " + h + "'>" +
+          lines +
+          "<polyline fill='none' stroke='#6B3FA0' stroke-width='3' points='" + poly + "'></polyline>" +
+          points.map((p) => {
+            const color = p.p >= 0.65 ? "#C4563A" : p.p >= 0.45 ? "#C4973A" : "#3A9E6F";
+            return "<circle cx='" + p.x.toFixed(2) + "' cy='" + p.y.toFixed(2) + "' r='4' fill='" + color + "'></circle>";
+          }).join("") +
+          labels +
+        "</svg>";
+    }
+
+    function renderTopology() {
+      const wrap = document.getElementById("topology-wrap");
+      const peakEl = document.getElementById("top-peak");
+      const countEl = document.getElementById("top-count");
+      const avgEl = document.getElementById("top-avg");
+      if (!wrap) return;
+
+      const data = safeArr(telemetry.topology);
+      if (data.length < 2) {
+        wrap.innerHTML = "<div class='timeline-empty'>Session topology needs more reel history.</div>";
+        if (peakEl) peakEl.textContent = "--";
+        if (countEl) countEl.textContent = "--";
+        if (avgEl) avgEl.textContent = "--";
+        return;
+      }
+
+      const w = 680;
+      const h = 240;
+      const padX = 32;
+      const padY = 18;
+      const innerW = w - padX * 2;
+      const innerH = h - padY * 2;
+
+      const pts = data.map((d, i) => {
+        const x = padX + (i / (data.length - 1)) * innerW;
+        const y = h - padY - d.doom * innerH;
+        return { x, y, doom: d.doom, reel: d.reel };
+      });
+
+      const line = pts.map((p) => p.x.toFixed(2) + "," + p.y.toFixed(2)).join(" ");
+      const areaPath =
+        "M " + pts[0].x.toFixed(2) + " " + (h - padY).toFixed(2) +
+        " L " + pts.map((p) => p.x.toFixed(2) + " " + p.y.toFixed(2)).join(" L ") +
+        " L " + pts[pts.length - 1].x.toFixed(2) + " " + (h - padY).toFixed(2) + " Z";
+
+      const thresholdY = h - padY - telemetry.threshold * innerH;
+
+      let peak = pts[0];
+      let sum = 0;
+      let doomCount = 0;
+      pts.forEach((p) => {
+        if (p.doom > peak.doom) peak = p;
+        sum += p.doom;
+        if (p.doom >= telemetry.threshold) doomCount += 1;
+      });
+
+      const avg = sum / pts.length;
+      if (peakEl) peakEl.textContent = peak.doom.toFixed(2);
+      if (countEl) countEl.textContent = String(doomCount);
+      if (avgEl) avgEl.textContent = avg.toFixed(2);
+
+      const tickCandidates = [1, Math.round(data.length * 0.25), Math.round(data.length * 0.5), Math.round(data.length * 0.75), data.length]
+        .filter((v, i, arr) => v >= 1 && v <= data.length && arr.indexOf(v) === i)
+        .sort((a, b) => a - b);
+
+      const xLabels = tickCandidates.map((reel) => {
+        const x = padX + ((reel - 1) / (data.length - 1)) * innerW;
+        return "<text x='" + x.toFixed(2) + "' y='" + (h - 6) + "' text-anchor='middle' font-family='Space Mono' font-size='10' fill='#9A8E84'>" + reel + "</text>";
+      }).join("");
+
+      wrap.innerHTML =
+        "<svg viewBox='0 0 " + w + " " + h + "'>" +
+          "<path d='" + areaPath + "' fill='rgba(196,86,58,0.18)' stroke='none'></path>" +
+          "<line x1='" + padX + "' y1='" + thresholdY.toFixed(2) + "' x2='" + (w - padX) + "' y2='" + thresholdY.toFixed(2) + "' stroke='#C4973A' stroke-width='1.5' stroke-dasharray='5 4'></line>" +
+          "<polyline fill='none' stroke='#C4563A' stroke-width='2.5' points='" + line + "'></polyline>" +
+          "<circle cx='" + peak.x.toFixed(2) + "' cy='" + peak.y.toFixed(2) + "' r='5' fill='#A03030'></circle>" +
+          "<text x='" + (peak.x + 8).toFixed(2) + "' y='" + (peak.y - 8).toFixed(2) + "' font-family='Space Mono' font-size='10' fill='#A03030'>peak</text>" +
+          xLabels +
+        "</svg>";
+    }
+
+    function renderFeatureWeights() {
+      const root = document.getElementById("feature-weights");
+      if (!root) return;
+      root.innerHTML = "";
+
+      const rows = safeArr(telemetry.featureWeights);
+      if (!rows.length) {
+        const empty = document.createElement("div");
+        empty.className = "timeline-empty";
+        empty.textContent = "Feature weight export is not present in this payload.";
+        root.appendChild(empty);
+        return;
+      }
+
+      rows.forEach((fw) => {
+        const row = document.createElement("div");
+        row.className = "weight-row";
+
+        const head = document.createElement("div");
+        head.className = "weight-head";
+        head.innerHTML = "<span>" + fw.feature + "</span><span>" + fw.weight.toFixed(2) + "</span>";
+
+        const track = document.createElement("div");
+        track.className = "weight-track";
+        const fill = document.createElement("div");
+        fill.className = "weight-fill";
+        track.appendChild(fill);
+
+        const desc = document.createElement("div");
+        desc.style.fontSize = "12px";
+        desc.style.color = "#6A5E56";
+        desc.textContent = fw.desc;
+
+        row.appendChild(head);
+        row.appendChild(track);
+        row.appendChild(desc);
+        root.appendChild(row);
+
+        requestAnimationFrame(() => {
+          fill.style.width = Math.round(fw.weight * 100) + "%";
+        });
+      });
+    }
+
+    function renderConfidence() {
+      const root = document.getElementById("confidence-bars");
+      if (!root) return;
+      root.innerHTML = "";
+
+      const rows = [
+        { key: "overall", label: "overall" },
+        { key: "volume", label: "volume" },
+        { key: "separation", label: "separation" },
+        { key: "stability", label: "stability" },
+        { key: "supervision", label: "supervision" }
+      ];
+
+      rows.forEach((r) => {
+        const value = maybeNum(telemetry.confidence && telemetry.confidence[r.key]);
+        if (!isFiniteNumber(value)) return;
+        const row = document.createElement("div");
+        row.className = "conf-row";
+
+        const label = document.createElement("div");
+        label.textContent = r.label;
+
+        const track = document.createElement("div");
+        track.className = "conf-track";
+        const fill = document.createElement("div");
+        fill.className = "conf-fill";
+        fill.style.background = r.key === "overall" ? "#6B3FA0" : "#3A9E6F";
+        track.appendChild(fill);
+
+        const pct = document.createElement("div");
+        pct.style.textAlign = "right";
+        pct.textContent = Math.round(value * 100) + "%";
+
+        row.appendChild(label);
+        row.appendChild(track);
+        row.appendChild(pct);
+        root.appendChild(row);
+
+        requestAnimationFrame(() => {
+          fill.style.width = Math.round(value * 100) + "%";
+        });
+      });
+
+      if (!root.children.length) {
+        const empty = document.createElement("div");
+        empty.className = "timeline-empty";
+        empty.textContent = "Confidence breakdown is unavailable in this payload.";
+        root.appendChild(empty);
+      }
+    }
+
+    function renderMonitor() {
+      const stateKey = getMonitorState(telemetry.score);
+      const state = monitorStatePalette[stateKey];
+
+      const card = document.getElementById("monitor-card");
+      const label = document.getElementById("monitor-label");
+      const headline = document.getElementById("monitor-headline");
+      const sub = document.getElementById("monitor-sub");
+      const tileTime = document.getElementById("tile-time");
+      const tileSessions = document.getElementById("tile-sessions");
+      const tileMindful = document.getElementById("tile-mindful");
+      const qualitySafe = document.getElementById("quality-safe");
+      const qualityWarn = document.getElementById("quality-warn");
+      const qualityDoom = document.getElementById("quality-doom");
+      const insight = document.getElementById("monitor-insight");
+
+      if (card) card.style.background = state.bg;
+      if (label) {
+        label.textContent = state.label;
+        label.style.color = state.accent;
+      }
+      if (headline) headline.textContent = state.headline;
+      if (sub) sub.textContent = state.sub;
+      if (tileTime) tileTime.textContent = telemetry.monitor.activeTime;
+      if (tileSessions) tileSessions.textContent = String(telemetry.monitor.sessions);
+      if (tileMindful) tileMindful.textContent = telemetry.monitor.mindfulPct + "%";
+
+      if (qualitySafe) qualitySafe.style.width = telemetry.monitor.quality.safe + "%";
+      if (qualityWarn) qualityWarn.style.width = telemetry.monitor.quality.warn + "%";
+      if (qualityDoom) qualityDoom.style.width = telemetry.monitor.quality.doom + "%";
+
+      if (insight) {
+        insight.textContent =
+          "All-time split: " + telemetry.monitor.quality.safe + "% mindful, " +
+          telemetry.monitor.quality.warn + "% borderline, " +
+          telemetry.monitor.quality.doom + "% autopilot. Use this as a trend signal, not a label.";
+      }
+    }
+
+    function renderCalendar() {
+      const root = document.getElementById("calendar-grid");
+      const monthLabel = document.getElementById("calendar-month");
+      if (!root || !monthLabel) return;
+
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const first = new Date(year, month, 1);
+      const last = new Date(year, month + 1, 0);
+      const startDow = first.getDay();
+      const days = last.getDate();
+
+      const monthNames = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ];
+      monthLabel.textContent = monthNames[month] + " " + year;
+
+      const labels = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+      const dateLookup = {};
+      safeArr(telemetry.heatmapData).forEach((d) => {
+        if (d && d.date) dateLookup[d.date] = d;
+      });
+
+      root.innerHTML = "";
+      labels.forEach((d) => {
+        const el = document.createElement("div");
+        el.className = "cal-label";
+        el.textContent = d;
+        root.appendChild(el);
+      });
+
+      for (let i = 0; i < startDow; i += 1) {
+        const empty = document.createElement("div");
+        empty.className = "cal-day cal-empty";
+        root.appendChild(empty);
+      }
+
+      for (let day = 1; day <= days; day += 1) {
+        const iso = year + "-" + String(month + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+        const entry = dateLookup[iso] || null;
+        const risk = entry ? maybeNum(entry.avgCapture) : null;
+        const state = isFiniteNumber(risk) ? stateFromCapture(risk) : null;
+
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "cal-day";
+        if (state === "safe") cell.classList.add("safe");
+        if (state === "aware") cell.classList.add("aware");
+        if (state === "hooked") cell.classList.add("hooked");
+        if (state === "doom") cell.classList.add("doom");
+        cell.textContent = String(day);
+
+        if (!state) {
+          cell.style.background = "#F9F6F1";
+          cell.style.color = "#9A8E84";
+        }
+
+        cell.addEventListener("click", () => {
+          const selected = document.getElementById("cal-selected");
+          const stateEl = document.getElementById("cal-state");
+          const riskEl = document.getElementById("cal-risk");
+          const detailText = document.getElementById("calendar-detail-text");
+          const bucket = telemetry.dateBuckets && telemetry.dateBuckets[iso] ? telemetry.dateBuckets[iso] : [];
+          const sessions = safeArr(bucket).length;
+
+          const stateLabel = state === "safe"
+            ? "MINDFUL"
+            : state === "aware"
+            ? "AWARE"
+            : state === "hooked"
+            ? "HOOKED"
+            : state === "doom"
+            ? "DOOM"
+            : "NO DATA";
+
+          if (selected) selected.textContent = iso;
+          if (stateEl) stateEl.textContent = stateLabel;
+          if (riskEl) riskEl.textContent = isFiniteNumber(risk) ? Math.round(risk * 100) + "%" : "--";
+          if (detailText) {
+            if (isFiniteNumber(risk)) {
+              detailText.textContent =
+                "Selected day: " + Math.round(risk * 100) +
+                "% average capture risk across " + sessions + " session" + (sessions !== 1 ? "s" : "") +
+                ". This follows the same day-bucket averaging used in the app calendar.";
+            } else {
+              detailText.textContent = "No session data for this day yet.";
+            }
+          }
+        });
+
+        root.appendChild(cell);
+      }
+
+      const latest = safeArr(telemetry.heatmapData)
+        .filter((d) => d && typeof d.date === "string" && d.date.startsWith(year + "-" + String(month + 1).padStart(2, "0") + "-"))
+        .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+        .pop();
+
+      if (latest && latest.date) {
+        const dayNum = parseInt(String(latest.date).slice(-2), 10);
+        if (isFiniteNumber(dayNum)) {
+          const buttons = Array.from(root.querySelectorAll(".cal-day"));
+          const target = buttons.find((btn) => btn.textContent === String(dayNum));
+          if (target) target.click();
+        }
+      }
+    }
+
+    function setupTabs() {
+      const tabs = Array.from(document.querySelectorAll(".dash-tab"));
+      const panels = Array.from(document.querySelectorAll(".dashboard-panel"));
+
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const target = tab.getAttribute("data-tab");
+          tabs.forEach((t) => t.classList.toggle("active", t === tab));
+          panels.forEach((p) => {
+            p.classList.toggle("active", p.getAttribute("data-panel") === target);
+          });
+        });
+      });
+    }
+
+    function setupPresetTabs() {
+      const presetTabs = Array.from(document.querySelectorAll(".preset-tab"));
+      presetTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const key = tab.getAttribute("data-preset") || "mixed";
+          applyPreset(key);
+        });
+      });
+    }
+
+    function setupReveal() {
+      const items = document.querySelectorAll(".reveal");
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) entry.target.classList.add("visible");
+        });
+      }, { threshold: 0.12 });
+
+      items.forEach((el) => observer.observe(el));
+    }
+
+    function setupSmoothNav() {
+      const links = document.querySelectorAll("a[href^='#']");
+      links.forEach((a) => {
+        a.addEventListener("click", (e) => {
+          const id = a.getAttribute("href");
+          const target = document.querySelector(id);
+          if (!target) return;
+          e.preventDefault();
+          const nav = document.querySelector("nav");
+          const offset = (nav ? nav.offsetHeight : 0) + 10;
+          const top = target.getBoundingClientRect().top + window.scrollY - offset;
+          window.scrollTo({ top: top, behavior: "smooth" });
+        });
+      });
+    }
+
+    function init() {
+      initBlobCanvas();
+      setupReveal();
+      setupSmoothNav();
+      setupTabs();
+      setupPresetTabs();
+      applyPreset(currentPreset);
+    }
+
+    window.addEventListener("load", init);
+  </script>
+</body>
+
+</html>
