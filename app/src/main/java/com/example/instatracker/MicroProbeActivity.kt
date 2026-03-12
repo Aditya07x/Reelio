@@ -199,7 +199,9 @@ class MicroProbeActivity : Activity() {
         options.forEachIndexed { index, (label, color) ->
             layout.addView(
                 SurveyUIUtils.createOptionButton(this, label, accentColor = color) {
-                    comparativeRating = index + 1
+                    // Keep comparative scale aligned with postSessionRating:
+                    // 5 = best session, 1 = worst session.
+                    comparativeRating = 5 - index
                     finalizeProbe()
                 }
             )

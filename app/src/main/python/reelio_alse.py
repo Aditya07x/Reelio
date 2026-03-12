@@ -108,7 +108,7 @@ def validate_csv_schema(df):
 def normalize_comparative_rating(raw_value) -> float:
     """
     Normalize comparative/session-experience signal to [0, 1], higher = worse.
-    Current encoding: 1..5 (best..worst), with 0 reserved for skipped/no response.
+    Current encoding: 1..5 (worst..best), with 0 reserved for skipped/no response.
     Legacy fallback values are clipped safely into [0,1].
     """
     try:
@@ -119,7 +119,8 @@ def normalize_comparative_rating(raw_value) -> float:
     if val <= 0:
         return 0.0
     if 1.0 <= val <= 5.0:
-        return float(np.clip((val - 1.0) / 4.0, 0.0, 1.0))
+        # Survey semantics: 5=best, 1=worst. Convert to doom-space (higher=worse).
+        return float(np.clip((5.0 - val) / 4.0, 0.0, 1.0))
     if 0.0 < val < 1.0:
         return float(np.clip(val, 0.0, 1.0))
     if val <= 4.0:
