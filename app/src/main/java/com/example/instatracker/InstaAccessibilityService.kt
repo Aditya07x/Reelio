@@ -64,6 +64,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     private var reelCount = 0
     private var cumulativeReels = 0
     private var lastReelStartTime = 0L
+    private var lastInteractionGestureAt = 0L
     @Volatile private var currentReelIndex: Int? = null
     private var lastReelSettleJob: Job? = null
     private var settleTargetIndex: Int = -1
@@ -107,6 +108,10 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     private var hashtagTaps = 0
     private var notificationsDismissed = 0
     private var notificationsActedOn = 0
+    
+    // Layer 1.5
+    private var isOverlaySheetOpen = false
+    private var overlayOpenTimeMs = 0L
     
     // Layer 2
     private lateinit var sensorManager: SensorManager
@@ -245,9 +250,11 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     companion object {
         private const val WINDOW_SIZE = 5
         private const val PREFS_NAME = "InstaTrackerPrefs"
+        private const val ACTION_LOG_TAG = "ReelioAction"
         const val SURVEY_CHANNEL_ID = "survey_channel"
         const val SURVEY_NOTIF_ID_BASE = 90000
         private const val REENTRY_NEW_SESSION_GAP_MS = 5_000L
+        private const val STATEFUL_INTERACTION_WINDOW_MS = 1_500L
         private const val SURVEY_ACTIVITY_STALE_MS = 15 * 60 * 1000L
         private const val POST_SURVEY_DELAY_MIN_MS = 30_000L
         private const val POST_SURVEY_DELAY_MAX_MS = 45_000L
@@ -290,6 +297,10 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         val GLOBAL_PYTHON_LOCK = Any()
 
         fun showPostSurveyNotification(context: Context, sessionNum: Int) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("notifications_enabled", true)) {
+                return
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel(
                     SURVEY_CHANNEL_ID,
@@ -339,7 +350,10 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         info.eventTypes = AccessibilityEvent.TYPE_VIEW_SCROLLED or
                          AccessibilityEvent.TYPE_VIEW_CLICKED or
                          AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
-                         AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+                         AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+                         AccessibilityEvent.TYPE_ANNOUNCEMENT or
+                         AccessibilityEvent.TYPE_VIEW_SELECTED or
+                         0x00000080 // TYPE_VIEW_DOUBLE_CLICKED — API 28+, defined as literal to compile on any minSdk
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
         serviceInfo = info
         lastActiveTime = System.currentTimeMillis()
@@ -388,13 +402,36 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             if (type != AccessibilityEvent.TYPE_VIEW_SCROLLED &&
                 type != AccessibilityEvent.TYPE_VIEW_CLICKED &&
                 type != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
-                type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+                type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+                type != AccessibilityEvent.TYPE_ANNOUNCEMENT &&
+                type != AccessibilityEvent.TYPE_VIEW_SELECTED &&
+                type != 0x00000080) return // TYPE_VIEW_DOUBLE_CLICKED
 
             val now = System.currentTimeMillis()
             val packageName = event.packageName?.toString() ?: ""
         
             if (packageName != "com.instagram.android") {
                 if (sessionStartTime != null) {
+                    val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    val surveyOpen = prefs.getBoolean("survey_activity_open", false)
+                    if (surveyOpen) {
+                        val surveyOpenSince = prefs.getLong("survey_activity_open_since", 0L)
+                        val ageMs = if (surveyOpenSince > 0L) now - surveyOpenSince else Long.MAX_VALUE
+                        if (ageMs <= SURVEY_ACTIVITY_STALE_MS) {
+                            // While a survey is visible, keep the same Instagram session alive.
+                            // This prevents an immediate re-entry split and duplicate pre-session prompt.
+                            lastExitTime = 0L
+                            resetSessionTimer(now)
+                            return
+                        }
+
+                        Log.w("ReelioDiag", "Clearing stale survey_activity_open in background branch. ageMs=$ageMs")
+                        prefs.edit()
+                            .putBoolean("survey_activity_open", false)
+                            .remove("survey_activity_open_since")
+                            .apply()
+                    }
+
                     if (lastExitTime == 0L) lastExitTime = now
                     checkSessionTimeout(now, packageName)
                 }
@@ -416,60 +453,189 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
 
             if (sessionStartTime == null) startNewSession(now)
 
-            if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+            if (type != AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+                ensureActiveReelStarted(now)
+            }
+
+            val hasActiveReel = currentReelIndex != null && reelCount > 0 && lastReelStartTime > 0L
+            if (hasActiveReel &&
+                type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+                lastInteractionGestureAt > 0L &&
+                now - lastInteractionGestureAt <= STATEFUL_INTERACTION_WINDOW_MS) {
+                val stateAction = InteractionDetector.detectStateChange(event)
+                val stateSummary = InteractionDetector.describeEvent(event)
+                logAction(
+                    "state_probe",
+                    "event=${eventTypeName(type)} detected=${stateAction ?: "NONE"} latencyMs=${now - lastReelStartTime} snapshot='${compactLogValue(stateSummary, 240)}'"
+                )
+                when (stateAction) {
+                    InteractionType.LIKE -> recordInteraction(InteractionType.LIKE, now - lastReelStartTime, "state_change", stateSummary)
+                    InteractionType.SAVE -> recordInteraction(InteractionType.SAVE, now - lastReelStartTime, "state_change", stateSummary)
+                    else -> Unit
+                }
+            }
+
+            if (type == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+                
                 val desc = event.contentDescription?.toString()?.lowercase() ?: ""
                 val text = event.text?.joinToString(" ")?.lowercase() ?: ""
                 val latency = now - lastReelStartTime
 
-                val hasActiveReel = currentReelIndex != null && reelCount > 0 && lastReelStartTime > 0L
                 if (hasActiveReel) {
-                    when (InteractionDetector.detectInteraction(event)) {
-                        InteractionType.LIKE -> {
-                            liked = true
-                            savedWithoutLike = false
-                            if (likeLatencyMs == -1L) likeLatencyMs = latency
-                            likeStreakLength++
-                            if (likeStreakLength > maxLikeStreakLength) maxLikeStreakLength = likeStreakLength
-                            halfSessionInteractions.add(reelCount)
+                    lastInteractionGestureAt = now
+                    val match = InteractionDetector.detectInteraction(event)
+                    
+                    if (match.type != null || match.isCommentSubmit || type == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+                        logAction(
+                            "interaction_probe",
+                            "event=${eventTypeName(type)} detected=${match.type ?: "NONE"} submit=${if (match.isCommentSubmit) 1 else 0} latencyMs=$latency text='${compactLogValue(text)}' desc='${compactLogValue(desc)}' snapshot='${compactLogValue(match.debugSummary, 240)}'"
+                        )
+                    }
+
+                    match.type?.let { interactionType ->
+                        recordInteraction(interactionType, latency, "probe", match.debugSummary)
+                        // Set overlay flag immediately on comment/share button tap — don't wait for
+                        // TYPE_WINDOW_STATE_CHANGED which Instagram fires with an empty title, making
+                        // the title-based detection in the window handler always miss.
+                        if ((interactionType == InteractionType.COMMENT && !match.isCommentSubmit) ||
+                             interactionType == InteractionType.SHARE) {
+                            isOverlaySheetOpen = true
+                            overlayOpenTimeMs = now
+                            logAction("overlay_open", "type=$interactionType isOverlaySheetOpen=true")
                         }
-                        InteractionType.COMMENT -> {
-                            commented = true
-                            if (commentLatencyMs == -1L) commentLatencyMs = latency
-                            commentAbandoned = true
-                            halfSessionInteractions.add(reelCount)
-                        }
-                        InteractionType.SHARE -> {
-                            shared = true
-                            if (shareLatencyMs == -1L) shareLatencyMs = latency
-                            halfSessionInteractions.add(reelCount)
-                        }
-                        InteractionType.SAVE -> {
-                            saved = true
-                            if (saveLatencyMs == -1L) saveLatencyMs = latency
-                            if (!liked) savedWithoutLike = true
-                            halfSessionInteractions.add(reelCount)
-                        }
-                        null -> {
-                            // No recognized interaction for this click.
-                        }
+                    }
+                    if (match.isCommentSubmit) {
+                        commentAbandoned = false
+                        logAction(
+                            "comment_submit_confirmed",
+                            "latencyMs=$latency state='${compactLogValue(currentInteractionStateForLog(), 240)}' snapshot='${compactLogValue(match.debugSummary, 240)}'"
+                        )
                     }
                 }
 
-                if (text == "more" || desc.contains("expand")) {
-                    captionExpanded = true
-                }
-                if (desc.contains("profile") || text.contains("profile")) {
-                    profileVisits++
-                }
-                if (text.startsWith("#") || desc.startsWith("#")) {
-                    hashtagTaps++
+                if (type == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+                    if (text == "more" || desc.contains("expand")) {
+                        captionExpanded = true
+                    }
+                    if (desc.contains("profile") || text.contains("profile")) {
+                        profileVisits++
+                    }
+                    if (text.startsWith("#") || desc.startsWith("#")) {
+                        hashtagTaps++
+                    }
                 }
                 
                 resetSessionTimer(now)
                 return
             }
 
+            // Handle announcements (like/save/unlike/unsave fired by Instagram's accessibility layer)
+            // and double-tap (TYPE_VIEW_DOUBLE_CLICKED = 0x80).
+            // Both route directly to recordInteraction — the liked/saved flags dedup any double-fires.
+            if (type == AccessibilityEvent.TYPE_ANNOUNCEMENT ||
+                type == AccessibilityEvent.TYPE_VIEW_SELECTED ||
+                type == 0x00000080) {
+                if (hasActiveReel) {
+                    lastInteractionGestureAt = now
+                    val match = InteractionDetector.detectInteraction(event)
+                    logAction(
+                        "announce_probe",
+                        "eventType=${eventTypeName(type)} detected=${match.type ?: "NONE"} latencyMs=${now - lastReelStartTime} debug='${compactLogValue(match.debugSummary, 240)}'"
+                    )
+                    match.type?.let { recordInteraction(it, now - lastReelStartTime, "announcement", match.debugSummary) }
+                }
+                resetSessionTimer(now)
+                return
+            }
+
+            // Handle window state changes: detect comment/share sheet open/close.
+            // When a sheet is open, set isOverlaySheetOpen so the scroll handler ignores
+            // reel-segmentation logic (scroll inside the comment list ≠ reel swipe).
+            if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                val pkg = event.packageName?.toString() ?: ""
+                val title = event.text?.firstOrNull()?.toString()?.lowercase()?.trim() ?: ""
+                val className = event.className?.toString()?.lowercase() ?: ""
+                
+                val isCommentSheet = title.contains("comment") || className.contains("comment") ||
+                                     title.contains("comentar") || title.contains("commentaire")
+                val isShareSheet   = title.contains("share") || className.contains("share") ||
+                                     title.contains("send to") || title.contains("direct") ||
+                                     title.contains("forward")
+
+                when {
+                    isCommentSheet || isShareSheet -> {
+                        // Sheet opened via window change (backup path — primary is the click handler above)
+                        if (!isOverlaySheetOpen) {
+                            isOverlaySheetOpen = true
+                            overlayOpenTimeMs = now
+                        }
+                        if (hasActiveReel && isCommentSheet && !commented) {
+                            recordInteraction(InteractionType.COMMENT, now - lastReelStartTime, "window_state_sheet", "sheet_open title=$title cls=$className")
+                        }
+                    }
+                    pkg == "com.instagram.android" && isOverlaySheetOpen -> {
+                        // Debounce by 1.5s to prevent immediate closure by empty overlay rendering events
+                        if (now - overlayOpenTimeMs > 1500L) {
+                            isOverlaySheetOpen = false
+                            logAction("overlay_close", "isOverlaySheetOpen=false title=$title")
+                        }
+                    }
+                }
+                resetSessionTimer(now)
+                return
+            }
+
             if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+                // If we think an overlay is open, and debounce has passed, verify it's still open on any scroll.
+                // This catches the case where the user closed the comment sheet but Instagram
+                // didn't fire a TYPE_WINDOW_STATE_CHANGED event, leaving our flag stuck as true.
+                if (isOverlaySheetOpen && (now - overlayOpenTimeMs > 1500L)) {
+                    val root = rootInActiveWindow?.let { AccessibilityNodeInfo.obtain(it) }
+                    if (root != null) {
+                        val overlayStillPresent = ReelContextDetector.isOverlayVisible(root)
+                        root.recycle()
+                        if (!overlayStillPresent) {
+                            isOverlaySheetOpen = false
+                            logAction("overlay_close", "isOverlaySheetOpen=false verified by root inspection on scroll")
+                        }
+                    }
+                }
+
+                // Filter out non-fullscreen scrolls (e.g. comment section scrolling)
+                var isFullScreenScroll = true
+                val sourceNode = event.source
+                if (sourceNode != null) {
+                    val rect = android.graphics.Rect()
+                    sourceNode.getBoundsInScreen(rect)
+                    val screenHeight = resources.displayMetrics.heightPixels
+                    if (rect.height() > 0 && rect.height() < (0.6f * screenHeight)) {
+                        isFullScreenScroll = false
+                    }
+                    val viewId = sourceNode.viewIdResourceName?.lowercase() ?: ""
+                    if (viewId.contains("comment") || viewId.contains("bottom_sheet")) {
+                        isFullScreenScroll = false
+                    }
+                    sourceNode.recycle()
+                }
+
+                if (!isFullScreenScroll) {
+                    // Fallback: If we detect a partial-screen scroll, we are definitely in an overlay.
+                    if (!isOverlaySheetOpen) {
+                        isOverlaySheetOpen = true
+                        overlayOpenTimeMs = now
+                        logAction("overlay_open", "fallback: isOverlaySheetOpen=true via non-fullscreen scroll")
+                    }
+                    resetSessionTimer(now)
+                    return
+                }
+
+                // If it's a full-screen scroll but the overlay is verified to be open (e.g. a 100% height comment sheet),
+                // we drop the scroll event so it doesn't trigger a reel boundary.
+                if (isOverlaySheetOpen) {
+                    resetSessionTimer(now)
+                    return
+                }
+
                 swipeAttempts++
                 val fromIdx = event.fromIndex
                 if (fromIdx > -1) {
@@ -523,7 +689,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                 val fromIdxEvent = event.fromIndex
                 val newIndex = if (toIdx != -1) toIdx else fromIdxEvent
 
-                if (newIndex != -1) {
+                if (newIndex != -1 && !isOverlaySheetOpen) {
                     if (currentReelIndex == null) {
                         currentReelIndex = newIndex
                         startNextReel(now)
@@ -640,12 +806,76 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         }
     }
 
+    private fun ensureActiveReelStarted(now: Long) {
+        if (sessionStartTime == null || currentReelIndex != null || reelCount > 0) return
+
+        val rootNode = rootInActiveWindow?.let { AccessibilityNodeInfo.obtain(it) } ?: return
+        if (!ReelContextDetector.isInReelContext(rootNode, resources)) return
+
+        currentReelIndex = 0
+        startNextReel(now)
+        logAction(
+            "reel_bootstrap",
+            "reason=visible_without_scroll state='${compactLogValue(currentInteractionStateForLog(), 240)}'"
+        )
+    }
+
+    private fun recordInteraction(type: InteractionType, latency: Long, origin: String, detectorSummary: String = "") {
+        val beforeState = currentInteractionStateForLog()
+        when (type) {
+            InteractionType.LIKE -> {
+                if (!liked) {
+                    liked = true
+                    if (likeLatencyMs == -1L) likeLatencyMs = latency
+                    likeStreakLength++
+                    if (likeStreakLength > maxLikeStreakLength) maxLikeStreakLength = likeStreakLength
+                    halfSessionInteractions.add(reelCount)
+                }
+                savedWithoutLike = false
+            }
+
+            InteractionType.COMMENT -> {
+                if (!commented) {
+                    commented = true
+                    if (commentLatencyMs == -1L) commentLatencyMs = latency
+                    halfSessionInteractions.add(reelCount)
+                }
+                commentAbandoned = true
+            }
+
+            InteractionType.SHARE -> {
+                if (!shared) {
+                    shared = true
+                    if (shareLatencyMs == -1L) shareLatencyMs = latency
+                    halfSessionInteractions.add(reelCount)
+                }
+            }
+
+            InteractionType.SAVE -> {
+                if (!saved) {
+                    saved = true
+                    if (saveLatencyMs == -1L) saveLatencyMs = latency
+                    halfSessionInteractions.add(reelCount)
+                }
+                if (!liked) savedWithoutLike = true
+            }
+        }
+
+        val afterState = currentInteractionStateForLog()
+        val stage = if (beforeState != afterState) "action_recorded" else "action_ignored_duplicate"
+        logAction(
+            stage,
+            "origin=$origin type=$type latencyMs=$latency before='${compactLogValue(beforeState, 240)}' after='${compactLogValue(afterState, 240)}' detector='${compactLogValue(detectorSummary, 240)}'"
+        )
+    }
+
     private fun startNextReel(now: Long) {
         val previousReelLiked = liked
         reelCount++
         cumulativeReels++
         
         lastReelStartTime = now
+        lastInteractionGestureAt = 0L
         
         scrollDistances.clear()
         accelMagnitudes.clear()
@@ -707,12 +937,48 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         val eStats = updateEnvironmentStats(now, dwell.sec)
         
         val line = buildCsvLine(dwell, wStats, iStats, sStats, eStats, now)
-        appendToCsv(line)
+        serviceScope.launch(Dispatchers.IO) {
+            appendToCsv(line)
+        }
+        logAction(
+            "reel_flush",
+            "dwellSec=${String.format("%.2f", dwell.sec)} state='${compactLogValue(currentInteractionStateForLog(), 240)}'"
+        )
 
         // Reset per-reel metrics after they are written to CSV
         backScrollCount = 0
         ambientLuxStart = ambientLuxEnd
         appExitAttempts = 0
+    }
+
+    private fun currentInteractionStateForLog(): String {
+        return "liked=${if (liked) 1 else 0} commented=${if (commented) 1 else 0} shared=${if (shared) 1 else 0} saved=${if (saved) 1 else 0} likeLatencyMs=$likeLatencyMs commentLatencyMs=$commentLatencyMs shareLatencyMs=$shareLatencyMs saveLatencyMs=$saveLatencyMs savedWithoutLike=${if (savedWithoutLike) 1 else 0} commentAbandoned=${if (commentAbandoned) 1 else 0}"
+    }
+
+    private fun compactLogValue(value: String, maxLen: Int = 120): String {
+        val normalized = value
+            .replace(Regex("\\s+"), " ")
+            .replace("'", "\"")
+            .trim()
+        if (normalized.isBlank()) return "-"
+        return if (normalized.length <= maxLen) normalized else normalized.take(maxLen - 3) + "..."
+    }
+
+    private fun eventTypeName(eventType: Int): String {
+        return when (eventType) {
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> "VIEW_CLICKED"
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> "VIEW_SCROLLED"
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> "WINDOW_CONTENT_CHANGED"
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> "WINDOW_STATE_CHANGED"
+            else -> eventType.toString()
+        }
+    }
+
+    private fun logAction(stage: String, details: String) {
+        Log.i(
+            ACTION_LOG_TAG,
+            "stage=$stage session=$currentSessionNumber reel=$reelCount idx=${currentReelIndex ?: -1} $details"
+        )
     }
 
     private fun calculateVariance(mags: List<Float>): Float {
@@ -904,6 +1170,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         
         cumulativeReels = 0
         reelCount = 0
+        lastInteractionGestureAt = 0L
         lastWrittenSessionNum = -1
         lastWrittenCumulativeReel = -1
         continuousScrollCount = 0
@@ -1133,13 +1400,15 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             if (savedReelCount > longestSessionTodayReels) longestSessionTodayReels = savedReelCount
             if (getTimePeriod() == "Morning") morningSessionExists = true
             
-            prefs.edit()
-                .putLong("last_session_end", endTime)
-                .putInt("sessions_today", sessionsToday)
-                .putFloat("total_dwell_today", totalDwellTodayMin)
-                .putInt("longest_session_today", longestSessionTodayReels)
-                .putBoolean("morning_session_exists", morningSessionExists)
-                .apply()
+            serviceScope.launch(Dispatchers.IO) {
+                prefs.edit()
+                    .putLong("last_session_end", endTime)
+                    .putInt("sessions_today", sessionsToday)
+                    .putFloat("total_dwell_today", totalDwellTodayMin)
+                    .putInt("longest_session_today", longestSessionTodayReels)
+                    .putBoolean("morning_session_exists", morningSessionExists)
+                    .apply()
+            }
             
             // schedulePostSessionProbes uses setExactAndAllowWhileIdle which throws
             // SecurityException if the user hasn't granted SCHEDULE_EXACT_ALARM in
@@ -1221,7 +1490,9 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
         }
 
-        prefs.edit().putLong("pending_post_survey_trigger_at", triggerAt).apply()
+        serviceScope.launch(Dispatchers.IO) {
+            prefs.edit().putLong("pending_post_survey_trigger_at", triggerAt).apply()
+        }
         return delayMs
     }
 
@@ -1314,16 +1585,25 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
 
                         val result = reelioModule.callAttr("run_inference_on_latest", cappedCsv, statePath, pyDict)
                         val resultMap = result.asMap()
-                        
+
                         val scoreObj = resultMap[py.getBuiltins().callAttr("str", "doom_score")]
                         if (scoreObj != null) doomScore = scoreObj.toFloat()
-                        
+
                         val labelObj = resultMap[py.getBuiltins().callAttr("str", "doom_label")]
                         if (labelObj != null) doomLabel = labelObj.toString()
-                        
+
                         val confObj = resultMap[py.getBuiltins().callAttr("str", "model_confidence")]
                         if (confObj != null) modelConf = confObj.toFloat()
-                        
+
+                        // Log explicit validation warning if present
+                        val validationWarningObj = resultMap[py.getBuiltins().callAttr("str", "validation_warning")]
+                        if (validationWarningObj != null) {
+                            val warningMsg = validationWarningObj.toString()
+                            if (warningMsg.isNotBlank()) {
+                                Log.w("ALSE", "Model validation warning: $warningMsg")
+                            }
+                        }
+
                         android.util.Log.d("ALSE", "HMM Result: label=$doomLabel score=$doomScore conf=$modelConf")
 
                         getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
@@ -1439,7 +1719,13 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     }
 
     private fun updateInteractionStats(dwell: DwellResult): InteractionResult {
-        val interactionDwellRatio = if (likeLatencyMs > 0 && dwell.ms > 0) likeLatencyMs.toFloat() / dwell.ms.toFloat() else 0f
+        // Use the earliest recorded interaction latency, regardless of type.
+        // Previously only likeLatencyMs was used, which gave 0 for reels where the
+        // user shared/commented/saved but did not like.
+        val firstInteractionLatency = listOf(likeLatencyMs, commentLatencyMs, shareLatencyMs, saveLatencyMs)
+            .filter { it > 0L }
+            .minOrNull() ?: -1L
+        val interactionDwellRatio = if (firstInteractionLatency > 0 && dwell.ms > 0) firstInteractionLatency.toFloat() / dwell.ms.toFloat() else 0f
         val swipeCompletionRatio = if (swipeAttempts > 0) cleanSwipes.toFloat() / swipeAttempts.toFloat() else 1.0f
         val interactionRate = halfSessionInteractions.size.toFloat() / wDwellN.coerceAtLeast(1)
 

@@ -106,9 +106,21 @@ class MainActivity : ComponentActivity() {
 
     private fun scheduleWeeklyNotificationWorker() {
         try {
+            val now = java.util.Calendar.getInstance()
+            val nextSunday = now.clone() as java.util.Calendar
+            nextSunday.set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.SUNDAY)
+            nextSunday.set(java.util.Calendar.HOUR_OF_DAY, 9)
+            nextSunday.set(java.util.Calendar.MINUTE, 0)
+            nextSunday.set(java.util.Calendar.SECOND, 0)
+            nextSunday.set(java.util.Calendar.MILLISECOND, 0)
+            if (nextSunday.before(now)) {
+                nextSunday.add(java.util.Calendar.WEEK_OF_YEAR, 1)
+            }
+            val initialDelayMs = nextSunday.timeInMillis - now.timeInMillis
+
             val weeklyWorkRequest = PeriodicWorkRequestBuilder<WeeklyNotificationWorker>(
                 7, TimeUnit.DAYS
-            ).build()
+            ).setInitialDelay(initialDelayMs, TimeUnit.MILLISECONDS).build()
             
             WorkManager.getInstance(this).enqueueUniquePeriodicWork(
                 "weekly_doom_summary",
@@ -337,8 +349,8 @@ class MainActivity : ComponentActivity() {
                     .setTitle("Clear Behavioral Data")
                     .setMessage("Are you sure you want to permanently delete all tracked UI events? The behavioral model will reset.")
                     .setPositiveButton("Delete Data") { _, _ ->
-                        val file = File(filesDir, "insta_data.csv")
-                        if (file.exists()) file.delete()
+                        listOf("insta_data.csv", "alse_model_state.json", "hmm_results.json")
+                            .forEach { name -> File(filesDir, name).takeIf { it.exists() }?.delete() }
                         // Force a refresh of the webview
                         injectDataWithDebounce(webView)
                     }
@@ -442,7 +454,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // Check circadian value is not empty — reject: "circadian": [] or "circadian": {}
-                val emptyCircadian = Regex("\"circadian\"\\s*:\\s*[\\[{]\\s*[\\];}]")
+                val emptyCircadian = Regex("\"circadian\"\\s*:\\s*[\\[{]\\s*[\\]{}]")
                 if (emptyCircadian.containsMatchIn(text)) {
                     android.util.Log.d("ReactDashboard", "Cache has empty circadian array, forcing recompute")
                     hmmFile.delete()
@@ -452,6 +464,12 @@ class MainActivity : ComponentActivity() {
                 // Migration FIX: Ensure cache contains new endTime metric for live ticker
                 if (!text.contains("\"endTime\"")) {
                     android.util.Log.d("ReactDashboard", "Cache missing endTime for Live Ticker, forcing recompute")
+                    hmmFile.delete()
+                    return false
+                }
+
+                if (!text.contains("\"pipeline_version\"")) {
+                    android.util.Log.d("ReactDashboard", "Cache missing pipeline_version, forcing recompute")
                     hmmFile.delete()
                     return false
                 }
@@ -471,39 +489,37 @@ class MainActivity : ComponentActivity() {
                 webView.evaluateJavascript("if(window.showReportLoading) window.showReportLoading(true);", null)
                 val result = withContext(Dispatchers.IO) {
                     try {
-                        // Use the pre-computed JSON (hmm_results.json) — no CSV re-parsing
-                        val jsonFile = File(filesDir, "hmm_results.json")
-                        val csvFile = File(filesDir, "insta_data.csv")
-                        val jsonContent = when {
-                            jsonFile.exists() && jsonFile.length() > 10 && isCacheValid(jsonFile, csvFile) -> jsonFile.readText()
-                            else -> {
-                                // Fallback: run dashboard first to build json
-                                val csvFile = File(filesDir, "insta_data.csv")
-                                if (!csvFile.exists() || csvFile.length() < 10)
-                                    return@withContext "{\"error\": \"No session data found. Scroll some Reels first!\"}"
-                                if (!Python.isStarted()) Python.start(AndroidPlatform(mContext))
-                                val py = Python.getInstance()
-                                val mod = py.getModule("reelio_alse")
-                                val statePath = File(filesDir, "alse_model_state.json").absolutePath
-                                val freshJson = mod.callAttr("run_dashboard_payload", csvFile.readText(), statePath).toString()
-                                jsonFile.writeText(freshJson)
-                                freshJson
-                            }
-                        }
-                        if (!Python.isStarted()) Python.start(AndroidPlatform(mContext))
-                        
                         val mainLockWait2 = System.currentTimeMillis()
                         android.util.Log.i("ReelioDiag", "MainActivity awaiting PYTHON_LOCK (report_payload). time=$mainLockWait2")
                         synchronized(InstaAccessibilityService.GLOBAL_PYTHON_LOCK) {
                             android.util.Log.i("ReelioDiag", "MainActivity acquired PYTHON_LOCK (report_payload). waited=${System.currentTimeMillis() - mainLockWait2}ms")
+                            
+                            val jsonFile = File(filesDir, "hmm_results.json")
+                            val csvFile = File(filesDir, "insta_data.csv")
+                            val jsonContent = when {
+                                jsonFile.exists() && jsonFile.length() > 10 && isCacheValid(jsonFile, csvFile) -> jsonFile.readText()
+                                else -> {
+                                    // Fallback: run dashboard first to build json
+                                    if (!csvFile.exists() || csvFile.length() < 10)
+                                        return@withContext "{\"error\": \"No session data found. Scroll some Reels first!\"}"
+                                    if (!Python.isStarted()) Python.start(AndroidPlatform(mContext))
+                                    val py = Python.getInstance()
+                                    val mod = py.getModule("reelio_alse")
+                                    val statePath = File(filesDir, "alse_model_state.json").absolutePath
+                                    val freshJson = mod.callAttr("run_dashboard_payload", csvFile.readText(), statePath).toString()
+                                    jsonFile.writeText(freshJson)
+                                    freshJson
+                                }
+                            }
+                            
+                            if (!Python.isStarted()) Python.start(AndroidPlatform(mContext))
                             val py = Python.getInstance()
                             val alseModule = py.getModule("reelio_alse")
                             // Pass both json and csv — csv needed for dates, times, top driver
-                            val csvFile = File(filesDir, "insta_data.csv")
                             val csvContent = if (csvFile.exists()) csvFile.readText() else ""
-                            val result = alseModule.callAttr("run_report_payload", jsonContent, csvContent).toString()
+                            val resultStr = alseModule.callAttr("run_report_payload", jsonContent, csvContent).toString()
                             android.util.Log.i("ReelioDiag", "MainActivity releasing PYTHON_LOCK (report_payload). time=${System.currentTimeMillis()}")
-                            result
+                            resultStr
                         }
                     } catch (e: Exception) {
                         "{\"error\": \"${e.message}\"}"

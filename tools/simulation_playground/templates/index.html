@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reélio ALSE Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: #0a0d12;
+            color: #e2e8f0;
+        }
+
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+
+        details>summary {
+            cursor: pointer;
+            user-select: none;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 0;
+        }
+
+        details>summary::-webkit-details-marker {
+            display: none;
+        }
+
+        details>summary::after {
+            content: '▶';
+            font-size: 9px;
+            color: #64748b;
+            transition: transform .2s;
+        }
+
+        details[open]>summary::after {
+            transform: rotate(90deg);
+        }
+
+        details>.sect-body {
+            padding-top: 4px;
+        }
+
+        .p-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+
+        .p-lbl {
+            font-size: 10px;
+            color: #94a3b8;
+            margin-bottom: 1px;
+        }
+
+        .p-inp {
+            width: 100%;
+            padding: 4px 6px;
+            font-size: 11px;
+            border: 1px solid #1e293b;
+            border-radius: 5px;
+            background: #111827;
+            color: #e2e8f0;
+        }
+
+        .p-inp:focus {
+            outline: none;
+            border-color: #6366f1;
+        }
+
+        select.p-inp {
+            appearance: auto;
+        }
+
+        .tab-btn {
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            color: #94a3b8;
+        }
+
+        .tab-btn.active {
+            border-color: #6366f1;
+            color: #c7d2fe;
+        }
+
+        #pipeline-panel {
+            display: none;
+        }
+
+        .pillar {
+            background: #111827;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+        }
+
+        .pillar-title {
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #64748b;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .pillar-title .badge {
+            font-size: 8px;
+            background: #1e293b;
+            color: #818cf8;
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
+
+        .kv-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 2px;
+        }
+
+        .kv {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .kv .k {
+            color: #64748b;
+        }
+
+        .kv .v {
+            color: #e2e8f0;
+            font-weight: 500;
+        }
+
+        .kv .v.hi {
+            color: #ef4444;
+        }
+
+        .kv .v.lo {
+            color: #22c55e;
+        }
+
+        .kv .v.mid {
+            color: #eab308;
+        }
+
+        .bar-bg {
+            height: 5px;
+            background: #1e293b;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width .15s ease;
+        }
+
+        .doom-gradient {
+            background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+        }
+
+        @keyframes glow {
+
+            0%,
+            100% {
+                border-color: rgba(99, 102, 241, 0.15);
+            }
+
+            50% {
+                border-color: rgba(99, 102, 241, 0.5);
+            }
+        }
+
+        .glow {
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        #csv-container {
+            max-height: 420px;
+            overflow: auto;
+        }
+
+        #csv-table {
+            font-size: 10px;
+            border-collapse: collapse;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        #csv-table th {
+            position: sticky;
+            top: 0;
+            background: #111827;
+            color: #c7d2fe;
+            padding: 3px 5px;
+            font-weight: 500;
+            white-space: nowrap;
+            border-bottom: 2px solid #1e293b;
+        }
+
+        #csv-table td {
+            padding: 2px 5px;
+            border: 1px solid #0a0d12;
+            white-space: nowrap;
+            color: #cbd5e1;
+        }
+
+        #csv-table td[contenteditable]:focus {
+            outline: 2px solid #6366f1;
+            background: #1e1b4b;
+        }
+
+        #csv-table tr:nth-child(even) {
+            background: #0f1117;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen">
+    <header class="border-b border-gray-800/60 px-5 py-2 flex items-center justify-between bg-gray-900/30">
+        <div class="flex items-center gap-2">
+            <div
+                class="w-7 h-7 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">
+                R</div>
+            <span class="text-base font-semibold text-gray-100">ALSE <span
+                    class="font-normal text-gray-500 text-sm">Pipeline Lab</span></span>
+        </div>
+        <span class="text-[9px] text-gray-600 border border-gray-800 rounded-full px-2 py-0.5">v4.0</span>
+    </header>
+
+    <div class="flex" style="height:calc(100vh - 44px);">
+        <!-- ========= SIDEBAR ========= -->
+        <aside class="w-64 bg-gray-900/50 border-r border-gray-800/40 overflow-y-auto p-3 flex flex-col gap-0.5"
+            style="min-width:250px;">
+
+            <details open>
+                <summary><span
+                        class="text-[9px] font-semibold text-indigo-400 uppercase tracking-widest">Scenario</span>
+                </summary>
+                <div class="sect-body space-y-1.5">
+                    <div><label class="p-lbl">Scenario</label>
+                        <select id="scenario" class="p-inp">
+                            <option value="improving">Improving</option>
+                            <option value="worsening">Worsening</option>
+                            <option value="late_night_clusters">Late Night Clusters</option>
+                            <option value="stable_casual">Stable Casual</option>
+                            <optgroup label="Stress Tests">
+                                <option value="ad_heavy">Ad-Heavy (43% ad rate)</option>
+                                <option value="survey_sparse">Survey-Sparse (real 40% fill)</option>
+                                <option value="false_positive_trap">False Positive Trap</option>
+                                <option value="exit_conflict_extreme">Exit Conflict Extreme</option>
+                                <option value="regime_shift">Life Event Regime Shift</option>
+                                <option value="cold_start_race">Cold Start Race</option>
+                                <option value="flood_corrupted">Pre-Fix Corrupted Data</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="p-row">
+                        <div><label class="p-lbl">Sessions</label><input type="number" id="sessions" value="60" min="3"
+                                max="500" class="p-inp" /></div>
+                        <div><label class="p-lbl">Seed</label><input type="number" id="seed" value="42" class="p-inp" />
+                        </div>
+                    </div>
+                    <div><label class="p-lbl">Personality</label>
+                        <select id="personality" class="p-inp">
+                            <option value="neutral">Neutral</option>
+                            <option value="binge_prone">Binge Prone</option>
+                            <option value="avoidant">Avoidant</option>
+                            <option value="hunter">Hunter</option>
+                            <option value="zombie">Zombie</option>
+                            <option value="night_owl">Night Owl</option>
+                        </select>
+                    </div>
+                </div>
+            </details>
+            <hr class="border-gray-800/40" />
+
+            <details>
+                <summary><span class="text-[9px] font-semibold text-indigo-400 uppercase tracking-widest">Session
+                        Shape</span></summary>
+                <div class="sect-body space-y-1.5">
+                    <div class="p-row">
+                        <div><label class="p-lbl">Reels μ</label><input type="number" id="session_reels_mu" value="22"
+                                step="1" class="p-inp" /></div>
+                        <div><label class="p-lbl">Reels σ</label><input type="number" id="session_reels_sigma" value="8"
+                                step="0.5" class="p-inp" /></div>
+                    </div>
+                    <div class="p-row">
+                        <div><label class="p-lbl">Dwell μ</label><input type="number" id="dwell_mu" value="7.0"
+                                step="0.1" class="p-inp" /></div>
+                        <div><label class="p-lbl">Dwell σ</label><input type="number" id="dwell_sigma" value="6.8"
+                                step="0.1" class="p-inp" /></div>
+                    </div>
+                    <div class="p-row">
+                        <div><label class="p-lbl">Speed μ</label><input type="number" id="speed_mu" value="10.4"
+                                step="0.5" class="p-inp" /></div>
+                        <div><label class="p-lbl">Speed σ</label><input type="number" id="speed_sigma" value="8.0"
+                                step="0.5" class="p-inp" /></div>
+                    </div>
+                </div>
+            </details>
+            <hr class="border-gray-800/40" />
+
+            <details>
+                <summary><span class="text-[9px] font-semibold text-indigo-400 uppercase tracking-widest">Gaps &
+                        Rates</span></summary>
+                <div class="sect-body space-y-1.5">
+                    <div class="p-row">
+                        <div><label class="p-lbl">Gap Q10</label><input type="number" id="gap_q10" value="6"
+                                class="p-inp" /></div>
+                        <div><label class="p-lbl">Gap Q50</label><input type="number" id="gap_q50" value="35"
+                                class="p-inp" /></div>
+                    </div>
+                    <div class="p-row">
+                        <div><label class="p-lbl">Gap Q90</label><input type="number" id="gap_q90" value="240"
+                                class="p-inp" /></div>
+                        <div><label class="p-lbl">Exit Rate</label><input type="number" id="exit_rate_base" value="0.06"
+                                step="0.01" class="p-inp" /></div>
+                    </div>
+                    <div><label class="p-lbl">Rewatch Rate</label><input type="number" id="rewatch_rate_base"
+                            value="0.08" step="0.01" class="p-inp" /></div>
+                </div>
+            </details>
+            <hr class="border-gray-800/40" />
+
+            <details>
+                <summary><span class="text-[9px] font-semibold text-amber-400 uppercase tracking-widest">⚡
+                        Realism</span></summary>
+                <div class="sect-body space-y-1.5">
+                    <div class="p-row">
+                        <div><label class="p-lbl">Binge % <span data-for="binge_probability"
+                                    class="rv text-amber-300">5</span></label><input type="range" id="binge_probability"
+                                min="0" max="50" value="5" class="w-full" data-display="binge_probability" /></div>
+                        <div><label class="p-lbl">Burst % <span data-for="burst_session_rate"
+                                    class="rv text-amber-300">15</span></label><input type="range"
+                                id="burst_session_rate" min="0" max="50" value="15" class="w-full"
+                                data-display="burst_session_rate" /></div>
+                    </div>
+                    <div class="p-row">
+                        <div><label class="p-lbl">Interrupt % <span data-for="interruption_rate"
+                                    class="rv text-amber-300">8</span></label><input type="range" id="interruption_rate"
+                                min="0" max="50" value="8" class="w-full" data-display="interruption_rate" /></div>
+                        <div><label class="p-lbl">Dwell Spike % <span data-for="dwell_spike_rate"
+                                    class="rv text-amber-300">5</span></label><input type="range" id="dwell_spike_rate"
+                                min="0" max="30" value="5" class="w-full" data-display="dwell_spike_rate" /></div>
+                    </div>
+                    <div class="p-row">
+                        <div><label class="p-lbl">Dishonesty % <span data-for="dishonesty_rate"
+                                    class="rv text-amber-300">0</span></label><input type="range" id="dishonesty_rate"
+                                min="0" max="30" value="0" class="w-full" data-display="dishonesty_rate" /></div>
+                        <div><label class="p-lbl">Weekend ×</label><input type="number" id="weekend_multiplier"
+                                value="1.0" step="0.1" min="1" max="3" class="p-inp" /></div>
+                    </div>
+                </div>
+            </details>
+            <hr class="border-gray-800/40" />
+
+            <details>
+                <summary><span class="text-[9px] font-semibold text-cyan-400 uppercase tracking-widest">🔬 Sensor &
+                        Content</span></summary>
+                <div class="sect-body space-y-1.5">
+                    <div class="p-row">
+                        <div><label class="p-lbl">Lux Mode</label>
+                            <select id="lux_mode" class="p-inp">
+                                <option value="bimodal">Bimodal</option>
+                                <option value="dark">Dark Room</option>
+                                <option value="bright">Bright</option>
+                                <option value="uniform">Uniform</option>
+                            </select>
+                        </div>
+                        <div><label class="p-lbl">Charging %</label><input type="number" id="is_charging_rate"
+                                value="46" min="0" max="100" class="p-inp" /></div>
+                    </div>
+                    <div class="p-row">
+                        <div><label class="p-lbl">Ad Rate %</label><input type="number" id="ad_rate" value="12" min="0"
+                                max="100" step="1" class="p-inp" /></div>
+                        <div><label class="p-lbl">Ad Skip μ ms</label><input type="number" id="ad_skip_latency_mu"
+                                value="9214" class="p-inp" /></div>
+                    </div>
+                    <div><label class="p-lbl">Ad Skip σ ms</label><input type="number" id="ad_skip_latency_sigma"
+                            value="8000" class="p-inp" /></div>
+                </div>
+            </details>
+            <hr class="border-gray-800/40" />
+
+            <details>
+                <summary><span class="text-[9px] font-semibold text-rose-400 uppercase tracking-widest">🐛 Data
+                        Bugs</span></summary>
+                <div class="sect-body space-y-1.5">
+                    <div class="flex items-center gap-1.5"><input type="checkbox" id="simulate_flood_bug"
+                            class="accent-rose-500" /><label for="simulate_flood_bug" class="p-lbl"
+                            style="margin:0;">Flood Bug</label></div>
+                    <div class="p-row">
+                        <div><label class="p-lbl">Flood % <span data-for="flood_probability"
+                                    class="rv text-rose-300">3</span></label><input type="range" id="flood_probability"
+                                min="0" max="30" value="3" class="w-full" data-display="flood_probability" /></div>
+                        <div><label class="p-lbl">Flood Count</label><input type="number" id="flood_repeat_count"
+                                value="100" min="2" max="1000" class="p-inp" /></div>
+                    </div>
+                    <div class="flex items-center gap-1.5"><input type="checkbox" id="simulate_double_write"
+                            class="accent-rose-500" /><label for="simulate_double_write" class="p-lbl"
+                            style="margin:0;">Double Write</label></div>
+                    <div><label class="p-lbl">Completion Factor</label><input type="number"
+                            id="double_write_completion_factor" value="0.7" step="0.05" min="0.1" max="1"
+                            class="p-inp" /></div>
+                </div>
+            </details>
+            <hr class="border-gray-800/40" />
+
+            <details>
+                <summary><span class="text-[9px] font-semibold text-indigo-400 uppercase tracking-widest">Survey</span>
+                </summary>
+                <div class="sect-body space-y-1.5">
+                    <div class="p-row">
+                        <div><label class="p-lbl">Mood Before %</label><input type="number" id="mood_before_fill_rate"
+                                value="60" min="0" max="100" class="p-inp" /></div>
+                        <div><label class="p-lbl">PostRating %</label><input type="number"
+                                id="post_session_rating_fill_rate" value="40" min="0" max="100" class="p-inp" /></div>
+                    </div>
+                    <div class="p-row">
+                        <div><label class="p-lbl">Regret %</label><input type="number" id="regret_score_fill_rate"
+                                value="40" min="0" max="100" class="p-inp" /></div>
+                        <div><label class="p-lbl">Mood After %</label><input type="number" id="mood_after_fill_rate"
+                                value="40" min="0" max="100" class="p-inp" /></div>
+                    </div>
+                    <div class="p-row">
+                        <div><label class="p-lbl">Comparative %</label><input type="number"
+                                id="comparative_rating_fill_rate" value="13" min="0" max="100" class="p-inp" /></div>
+                        <div><label class="p-lbl">Actual/Intent %</label><input type="number"
+                                id="actual_vs_intended_fill_rate" value="13" min="0" max="100" class="p-inp" /></div>
+                    </div>
+                    <div><label class="p-lbl">Fatigue Decay <span data-for="survey_fatigue_decay"
+                                class="rv text-indigo-300">0</span></label><input type="range" id="survey_fatigue_decay"
+                            min="0" max="100" value="0" class="w-full" data-display="survey_fatigue_decay" /></div>
+                    <div class="flex items-center gap-1.5"><input type="checkbox" id="correlated_survey_skip"
+                            class="accent-indigo-500" /><label for="correlated_survey_skip" class="p-lbl"
+                            style="margin:0;">Correl. skip</label></div>
+                    <div class="p-row">
+                        <div><label class="p-lbl">Override Regret</label><input type="number" id="override_regret"
+                                placeholder="—" min="1" max="5" class="p-inp" /></div>
+                        <div><label class="p-lbl">Override Mood</label><input type="number" id="override_mood_before"
+                                placeholder="—" class="p-inp" /></div>
+                    </div>
+                    <div><label class="p-lbl">Override Comparative</label><input type="number" id="override_comparative"
+                            placeholder="—" min="1" max="5" class="p-inp" /></div>
+                </div>
+            </details>
+            <hr class="border-gray-800/40" />
+
+            <details>
+                <summary><span class="text-[9px] font-semibold text-emerald-400 uppercase tracking-widest">🔄 Feedback
+                        Loops</span></summary>
+                <div class="sect-body space-y-1.5">
+                    <div class="p-row">
+                        <div><label class="p-lbl">Narrowing <span data-for="content_narrowing_rate"
+                                    class="rv text-emerald-300">0</span></label><input type="range"
+                                id="content_narrowing_rate" min="0" max="100" value="0" class="w-full"
+                                data-display="content_narrowing_rate" /></div>
+                        <div><label class="p-lbl">Mood Carry <span data-for="mood_carryover_strength"
+                                    class="rv text-emerald-300">0</span></label><input type="range"
+                                id="mood_carryover_strength" min="0" max="100" value="0" class="w-full"
+                                data-display="mood_carryover_strength" /></div>
+                    </div>
+                    <div class="flex items-center gap-1.5"><input type="checkbox" id="sleep_debt_enabled"
+                            class="accent-emerald-500" /><label for="sleep_debt_enabled" class="p-lbl"
+                            style="margin:0;">Sleep Debt</label></div>
+                    <div><label class="p-lbl">Exit Conflict Shape</label>
+                        <select id="exit_conflict_shape" class="p-inp">
+                            <option value="flat">Flat</option>
+                            <option value="early_spike">Early Spike</option>
+                            <option value="doom_collapse">Doom Collapse</option>
+                        </select>
+                    </div>
+                </div>
+            </details>
+
+            <div class="mt-auto pt-2">
+                <button id="run-btn" onclick="runSimulation()"
+                    class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all">▶
+                    Run</button>
+                <p id="status-text" class="text-[9px] text-center text-gray-600 mt-1">Ready</p>
+            </div>
+        </aside>
+
+        <!-- ========= MAIN ========= -->
+        <main class="flex-1 overflow-y-auto p-4">
+
+            <!-- PIPELINE PANEL -->
+            <div id="pipeline-panel" class="mb-3">
+                <div class="pillar glow">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="pillar-title" id="pipeline-status">Connecting...</span>
+                        <span class="text-xs text-indigo-300 font-mono" id="pp-progress">0/0</span>
+                    </div>
+                    <div class="bar-bg">
+                        <div id="pp-bar" class="bar-fill doom-gradient" style="width:0%"></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-1.5">
+                    <div>
+                        <div class="pillar">
+                            <div class="pillar-title">Input Features</div>
+                            <div class="kv-grid" id="pp-features"></div>
+                        </div>
+                        <div class="pillar">
+                            <div class="pillar-title">Composite Doom Score <span class="badge">P9</span></div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <div class="flex-1">
+                                    <div class="bar-bg">
+                                        <div id="pp-doom-bar" class="bar-fill doom-gradient" style="width:50%"></div>
+                                    </div>
+                                </div>
+                                <span id="pp-doom-val" class="text-lg font-bold font-mono text-indigo-300">—</span>
+                            </div>
+                            <div class="kv-grid" id="pp-doom-comp"></div>
+                        </div>
+                        <div class="pillar">
+                            <div class="pillar-title">Forward-Backward Posteriors <span class="badge">E-Step</span>
+                            </div>
+                            <div class="kv-grid" id="pp-gamma"></div>
+                            <div style="height:50px;margin-top:4px;"><canvas id="chart-gamma-traj"></canvas></div>
+                        </div>
+                        <!-- Data Quality panel -->
+                        <div class="pillar">
+                            <div class="pillar-title">Data Quality <span class="badge">DQ</span></div>
+                            <div class="kv-grid" id="pp-dq"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="pillar">
+                            <div class="pillar-title">Emission Model <span class="badge">P2</span></div>
+                            <div class="kv-grid" id="pp-emission"></div>
+                        </div>
+                        <div class="pillar">
+                            <div class="pillar-title">Transition & CTMC <span class="badge">P4</span></div>
+                            <div class="kv-grid" id="pp-transition"></div>
+                        </div>
+                        <div class="pillar">
+                            <div class="pillar-title">Context & Survival <span class="badge">P5/P8</span></div>
+                            <div class="kv-grid" id="pp-context"></div>
+                        </div>
+                        <div class="pillar">
+                            <div class="pillar-title">Feature Weights (KL) <span class="badge">P2</span></div>
+                            <div class="kv-grid" id="pp-fw"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-4 gap-1.5">
+                    <div class="pillar">
+                        <div class="pillar-title">Supervised Layer</div>
+                        <div id="pp-supervised" class="space-y-0.5"></div>
+                    </div>
+                    <div class="pillar">
+                        <div class="pillar-title">Regime <span class="badge">P6</span></div>
+                        <div id="pp-regime" class="space-y-0.5"></div>
+                    </div>
+                    <div class="pillar">
+                        <div class="pillar-title">Model Confidence <span class="badge">P7</span></div>
+                        <div id="pp-conf" class="space-y-0.5"></div>
+                    </div>
+                    <div class="pillar">
+                        <div class="pillar-title">Baseline <span class="badge">P1</span></div>
+                        <div id="pp-baseline" class="space-y-0.5"></div>
+                    </div>
+                </div>
+
+                <div class="pillar">
+                    <div class="flex items-center justify-between">
+                        <div class="pillar-title">S_t (Reported Blended Prob)</div>
+                        <span id="pp-st-val" class="text-2xl font-bold font-mono text-indigo-300">—</span>
+                    </div>
+                    <div style="height:70px;"><canvas id="chart-live"></canvas></div>
+                </div>
+            </div>
+
+            <!-- TABS -->
+            <div class="flex gap-1 border-b border-gray-800/50 mb-3">
+                <button class="tab-btn active" onclick="switchTab('charts',this)">📊 Charts</button>
+                <button class="tab-btn" onclick="switchTab('csv',this)">📋 CSV</button>
+            </div>
+
+            <div id="tab-charts">
+                <div id="empty-state" class="text-center py-12 text-gray-600">
+                    <p class="text-base">Configure parameters → <strong class="text-indigo-400">Run</strong></p>
+                    <p class="text-xs mt-1">Watch every ALSE pillar compute live</p>
+                </div>
+                <div id="results-area" style="display:none;">
+                    <div class="bg-gray-900/50 rounded-lg border border-gray-800/40 p-3 mb-3">
+                        <h3 class="text-[9px] font-semibold text-gray-500 mb-1 uppercase">Doom Probability (S_t)</h3>
+                        <canvas id="chart-st" height="160"></canvas>
+                    </div>
+                    <div class="bg-gray-900/50 rounded-lg border border-gray-800/40 p-3 mb-3">
+                        <h3 class="text-[9px] font-semibold text-gray-500 mb-1 uppercase">Reels Per Session</h3><canvas
+                            id="chart-reels" height="100"></canvas>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3" id="metrics-grid"></div>
+                    <div class="bg-gray-900/50 rounded-lg border border-gray-800/40 p-3" id="checks-area"></div>
+                </div>
+            </div>
+            <div id="tab-csv" style="display:none;">
+                <div class="flex items-center justify-between mb-2">
+                    <p class="text-xs text-gray-500" id="csv-info">Run a simulation first.</p>
+                    <div class="flex gap-2"><button onclick="downloadCsv()"
+                            class="text-[10px] bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded border border-gray-700">⬇
+                            Download</button>
+                        <button onclick="repredictFromTable()"
+                            class="text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded">🔄
+                            Re-run</button>
+                    </div>
+                </div>
+                <div id="csv-container" class="bg-gray-900/50 rounded-lg border border-gray-800/40">
+                    <table id="csv-table">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        // Delegated slider → display listener
+        const qs = s => document.querySelector(s);
+        const qsa = s => document.querySelectorAll(s);
+        document.querySelector('aside').addEventListener('input', e => {
+            const id = e.target.dataset?.display || e.target.id;
+            if (id) {
+                const span = document.querySelector(`[data-for="${id}"]`);
+                if (span) span.textContent = e.target.value;
+            }
+        });
+    </script>
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

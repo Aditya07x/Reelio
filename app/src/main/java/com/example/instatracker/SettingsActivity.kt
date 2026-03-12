@@ -42,9 +42,6 @@ class SettingsActivity : AppCompatActivity() {
         // Notifications Toggle
         layout.addView(createNotificationToggle())
 
-        // Theme Toggle
-        layout.addView(createThemeToggle())
-
         // Clear Data Button
         layout.addView(createClearDataButton())
 
@@ -167,33 +164,6 @@ class SettingsActivity : AppCompatActivity() {
         return container
     }
 
-    private fun createThemeToggle(): LinearLayout {
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            setPadding(0, 16, 0, 16)
-        }
-
-        container.addView(TextView(this).apply {
-            text = "Dark Theme"
-            textSize = 14f
-            setTextColor(0xFFF3F4F6.toInt())
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        })
-
-        container.addView(Switch(this).apply {
-            isChecked = prefs.darkThemeEnabled
-            setOnCheckedChangeListener { _, isChecked ->
-                prefs.darkThemeEnabled = isChecked
-                // Would restart activity here in a real app
-            }
-        })
-
-        return container
-    }
 
     private fun createClearDataButton(): TextView {
         return TextView(this).apply {

@@ -268,7 +268,7 @@ class MicroProbeActivity : Activity() {
 
     private fun applyRetroactiveSurveyUpdate(actualMatch: Int) {
         val prefs = getSharedPreferences("InstaTrackerPrefs", MODE_PRIVATE)
-        val sessionUuid = prefs.getString("pending_survey_session_uuid", null) ?: return
+        val sessionUuid = prefs.getString("pending_survey_session_uuid", null)
 
         thread {
             try {
@@ -327,15 +327,17 @@ class MicroProbeActivity : Activity() {
                 }
 
                 val db = DatabaseProvider.getDatabase(this)
-                db.sessionDao().updateSurveyFields(
-                    sessionId = sessionUuid,
-                    rating = postSessionRating,
-                    regret = regretScore,
-                    focusAfter = moodAfter,
-                    intentMatch = actualMatch == 1,
-                    doomScore = updatedDoomScore
-                )
-                Log.d("ALSE", "Retroactive DB update done for session=$sessionUuid")
+                if (sessionUuid != null) {
+                    db.sessionDao().updateSurveyFields(
+                        sessionId = sessionUuid,
+                        rating = postSessionRating,
+                        regret = regretScore,
+                        focusAfter = moodAfter,
+                        intentMatch = actualMatch == 1,
+                        doomScore = updatedDoomScore
+                    )
+                    Log.d("ALSE", "Retroactive DB update done for session=$sessionUuid")
+                }
 
                 val targetSessionNum = prefs.getInt("pending_survey_session_num", -1).toString()
                 retroactivelyUpdateCsv(targetSessionNum, actualMatch, prefs)

@@ -1372,6 +1372,18 @@ class ReelioCLSE:
             self.q_01 = np.clip(mid + 0.01, 0.02, 5.0)
             self.q_10 = np.clip(mid - 0.01, 0.01, 4.99)
 
+        # Enforce dwell/speed ordering: Doom Dwell mu < Casual Dwell mu, Doom Speed mu > Casual Speed mu
+        # Dwell: mu[0, 1] (doom) < mu[0, 0] (casual)
+        if self.mu[0, 1] >= self.mu[0, 0]:
+            mid = 0.5 * (self.mu[0, 0] + self.mu[0, 1])
+            self.mu[0, 0] = mid + 0.01
+            self.mu[0, 1] = mid - 0.01
+        # Speed: mu[1, 1] (doom) > mu[1, 0] (casual)
+        if self.mu[1, 1] <= self.mu[1, 0]:
+            mid = 0.5 * (self.mu[1, 0] + self.mu[1, 1])
+            self.mu[1, 0] = mid - 0.01
+            self.mu[1, 1] = mid + 0.01
+
     def _clip_params(self):
         self.sigma = np.clip(self.sigma, 0.05, None)
         self.A = np.clip(self.A, 1e-9, 1.0)
@@ -1888,7 +1900,9 @@ def run_inference_on_latest(csv_data: str, model_state_path: str, survey_data: d
     session_df = preprocess_session(session_df)
     
     model, baseline, detector, scorer, prev_gamma = load_full_state(model_state_path)
-    validate_model_soft(model, "run_inference_on_latest:load")
+
+    if model.n_sessions_seen > 0:
+        validate_model_soft(model, "run_inference_on_latest:load")
     
     if len(session_df) < 2:
         return {"doom_score": 0.0, "doom_label": "UNSCORED", "model_confidence": 0.0}
@@ -2062,7 +2076,12 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
     if preserved_disagreement is not None:
         model.running_disagreement = preserved_disagreement
 
-    validate_model_soft(model, "run_dashboard_payload:init")
+    # Only validate initialized models — a fresh ReelioCLSE() has zero-filled mu and
+    # equal p_bern values that trivially fail all ordering checks before _initialize_from_data
+    # runs. Calling validate here on n_sessions_seen=0 produces false-alarm warnings and
+    # corrupts the prior via _enforce_architectural_constraints before the first session sees data.
+    if model.n_sessions_seen > 0:
+        validate_model_soft(model, "run_dashboard_payload:init")
     
     if 'SessionNum' not in df.columns:
         return json.dumps({"error": "Schema missing SessionNum", "sessions": []})

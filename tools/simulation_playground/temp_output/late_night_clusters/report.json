@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "scenario": "late_night_clusters",
+    "n_sessions": 214,
+    "seed": 42,
+    "latent_risk_mean": 0.5217309534963734,
+    "latent_risk_first": 0.5106926580047488,
+    "latent_risk_last": 0.4884852662323418
+  },
+  "evaluation": {
+    "scenario": "late_night_clusters",
+    "sessions_generated": 214,
+    "sessions_scored": 214,
+    "mean_first_window": 0.8675,
+    "mean_last_window": 0.8,
+    "delta_last_minus_first": -0.0675,
+    "model_confidence": 0.8924873026621117,
+    "model_confidence_pipeline": 0.8924870560496639,
+    "night_mean_doom": 0.8780769230769231,
+    "day_mean_doom": 0.5622448979591836,
+    "session_transition_matrix": [
+      [
+        0.4,
+        0.6
+      ],
+      [
+        0.16071428571428573,
+        0.8392857142857143
+      ]
+    ],
+    "checks": {
+      "confidence_reaches_minimum": true,
+      "pipeline_confidence_matches_payload": true,
+      "non_trivial_scoring": true,
+      "threshold_crossings_observed": true,
+      "night_risk_higher_than_day": true,
+      "trend_direction_expected": true
+    },
+    "notes": {
+      "mean_all_sessions": 0.783177570093458,
+      "std_all_sessions": 0.21923496178498061,
+      "doom_share": 0.7897196261682243
+    },
+    "pass_ratio": "6/6"
+  },
+  "files": {
+    "csv_plain": "C:\\Android Projects\\InstagramTracker\\tools\\simulation_playground\\temp_output\\late_night_clusters\\synthetic_plain.csv",
+    "csv_with_schema": "C:\\Android Projects\\InstagramTracker\\tools\\simulation_playground\\temp_output\\late_night_clusters\\synthetic_with_schema.csv"
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "scenario": "improving",
+    "n_sessions": 150,
+    "seed": 42,
+    "latent_risk_mean": 0.5114838456637094,
+    "latent_risk_first": 0.8135907163392015,
+    "latent_risk_last": 0.19005369843598477
+  },
+  "evaluation": {
+    "scenario": "improving",
+    "sessions_generated": 150,
+    "sessions_scored": 150,
+    "mean_first_window": 0.9875,
+    "mean_last_window": 0.28500000000000003,
+    "delta_last_minus_first": -0.7025,
+    "model_confidence": 0.8039316127543875,
+    "model_confidence_pipeline": 0.8039257534435373,
+    "night_mean_doom": 0.6771551724137932,
+    "day_mean_doom": 0.6385,
+    "session_transition_matrix": [
+      [
+        0.7413793103448276,
+        0.25862068965517243
+      ],
+      [
+        0.17582417582417584,
+        0.8241758241758241
+      ]
+    ],
+    "checks": {
+      "confidence_reaches_minimum": true,
+      "pipeline_confidence_matches_payload": true,
+      "non_trivial_scoring": true,
+      "threshold_crossings_observed": true,
+      "trend_direction_expected": true,
+      "last_window_healthier": true
+    },
+    "notes": {
+      "mean_all_sessions": 0.6609999999999999,
+      "std_all_sessions": 0.24456560128794347,
+      "doom_share": 0.6066666666666667
+    },
+    "pass_ratio": "6/6"
+  },
+  "files": {
+    "csv_plain": "C:\\Android Projects\\InstagramTracker\\tools\\simulation_playground\\temp_output\\improving\\synthetic_plain.csv",
+    "csv_with_schema": "C:\\Android Projects\\InstagramTracker\\tools\\simulation_playground\\temp_output\\improving\\synthetic_with_schema.csv"
+  }
+}

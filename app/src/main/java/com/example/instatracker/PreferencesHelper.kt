@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 
 class PreferencesHelper(context: Context) {
-    private val prefs: SharedPreferences = context.getSharedPreferences("reelio_prefs", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences = context.getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
 
     // Daily usage limit in minutes (0 = disabled)
     var dailyLimitMinutes: Int

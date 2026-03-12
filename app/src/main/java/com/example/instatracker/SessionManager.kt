@@ -44,6 +44,7 @@ object SessionManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private lateinit var sessionDao: SessionDao
+    private lateinit var appContext: Context
 
     @Volatile
     private var currentSessionId: String? = null
@@ -81,6 +82,8 @@ object SessionManager {
         private set
     var shareCount: Int = 0
         private set
+    var saveCount: Int = 0
+        private set
 
     private var idleJob: Job? = null
 
@@ -90,6 +93,7 @@ object SessionManager {
     fun init(context: Context) {
         val db = DatabaseProvider.getDatabase(context)
         sessionDao = db.sessionDao()
+        appContext = context.applicationContext
     }
 
     fun startSession() {
@@ -121,6 +125,7 @@ object SessionManager {
                 likeCount = 0
                 commentClickCount = 0
                 shareCount = 0
+                saveCount = 0
 
                 isActive = true
                 scheduleIdleCheckLocked()
@@ -167,9 +172,7 @@ object SessionManager {
                     InteractionType.LIKE -> likeCount++
                     InteractionType.COMMENT -> commentClickCount++
                     InteractionType.SHARE -> shareCount++
-                    InteractionType.SAVE -> {
-                        // SessionManager does not currently persist a save counter.
-                    }
+                    InteractionType.SAVE -> saveCount++
                 }
             }
         }
@@ -214,6 +217,7 @@ object SessionManager {
             likeCount = 0
             commentClickCount = 0
             shareCount = 0
+            saveCount = 0
 
             isActive = true
             scheduleIdleCheckLocked()
@@ -228,10 +232,14 @@ object SessionManager {
     private fun scheduleIdleCheckLocked() {
         idleJob?.cancel()
         idleJob = scope.launch {
-            delay(IDLE_TIMEOUT_MS)
+            val prefs = appContext.getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
+            val timeoutSec = prefs.getInt("session_timeout_seconds", 20)
+            val timeoutMs = timeoutSec * 1000L
+            
+            delay(timeoutMs)
             mutex.withLock {
                 val now = System.currentTimeMillis()
-                if (isActive && now - lastActivityTime >= IDLE_TIMEOUT_MS) {
+                if (isActive && now - lastActivityTime >= timeoutMs) {
                     finalizeAndPersistSessionLocked(now)
                 }
             }
@@ -439,6 +447,7 @@ object SessionManager {
             likeCount = likeCount,
             commentClickCount = commentClickCount,
             shareCount = shareCount,
+            saveCount = saveCount,
             immersionScore = immersionScore,
             totalReelsViewed = totalReelsViewedInternal,
             avgReelExposure = avgReelExposureSeconds,

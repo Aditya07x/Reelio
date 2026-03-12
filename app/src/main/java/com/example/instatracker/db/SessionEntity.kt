@@ -19,6 +19,7 @@ data class SessionEntity(
     val likeCount: Int,
     val commentClickCount: Int,
     val shareCount: Int,
+    val saveCount: Int = 0,
     val immersionScore: Float,
     val totalReelsViewed: Int,
     val avgReelExposure: Float,

@@ -9,7 +9,8 @@ import androidx.room.RoomDatabase
         ReelEntity::class,
         ScrollEventEntity::class
     ],
-    version = 1
+    version = 2,
+    exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun sessionDao(): SessionDao

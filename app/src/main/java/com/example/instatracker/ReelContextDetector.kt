@@ -89,5 +89,39 @@ object ReelContextDetector {
             isInReelContext = inReelContext
         )
     }
+
+    fun isOverlayVisible(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            try {
+                val viewId = node.viewIdResourceName?.lowercase() ?: ""
+                val text = node.text?.toString()?.lowercase() ?: ""
+                val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+                
+                if (viewId.contains("bottom_sheet") || 
+                    viewId.contains("comment_layout") ||
+                    viewId.contains("share_sheet") ||
+                    viewId.contains("direct_share") ||
+                    text == "comments" || text == "comentarios" || text == "commentaires" ||
+                    text == "share" || text == "share to" || text == "send to") {
+                    return true
+                }
+
+                for (i in 0 until node.childCount) {
+                    node.getChild(i)?.let { queue.add(it) }
+                }
+            } finally {
+                if (node !== root) {
+                    node.recycle()
+                }
+            }
+        }
+        return false
+    }
 }
 

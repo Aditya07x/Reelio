@@ -40,11 +40,11 @@ class WeeklyNotificationWorker(
             val py = Python.getInstance()
             
             // Call Python function to compute weekly summary
-            val reelio = py.getModule("reelio_alse")
-            val summaryObj = reelio.callAttr("compute_weekly_summary", modelStatePath)
-            
-            // Convert Python dict to Kotlin data
-            val summaryJson = convertPythonDictToJson(summaryObj)
+            val summaryJson = synchronized(InstaAccessibilityService.GLOBAL_PYTHON_LOCK) {
+                val reelio = py.getModule("reelio_alse")
+                val summaryObj = reelio.callAttr("compute_weekly_summary", modelStatePath)
+                convertPythonDictToJson(summaryObj)
+            }
             Log.d("WeeklyWorker", "Summary: $summaryJson")
             
             // Parse and extract key fields
@@ -68,22 +68,26 @@ class WeeklyNotificationWorker(
         }
     }
 
-    private fun convertPythonDictToJson(pythonDict: Any?): JSONObject {
-        /**
-         * Converts Python dict returned by compute_weekly_summary into JSONObject.
-         * Handles both attrs and item access patterns.
-         */
+    private fun convertPythonDictToJson(pythonDict: com.chaquo.python.PyObject?): JSONObject {
+        if (pythonDict == null) return JSONObject()
         return try {
-            if (pythonDict != null) {
-                // For now, create empty JSON and parse from string representation
-                // Python's str() gives us {'key': 'value'} format
-                val dictStr = pythonDict.toString()
-                JSONObject(dictStr)
-            } else {
-                JSONObject()
+            val result = JSONObject()
+            val map = pythonDict.asMap()
+            for ((k, v) in map) {
+                val key = k.toString()
+                when {
+                    v == null                         -> result.put(key, JSONObject.NULL)
+                    v.toString() == "True"            -> result.put(key, true)
+                    v.toString() == "False"           -> result.put(key, false)
+                    else -> {
+                        val s = v.toString()
+                        result.put(key, s.toDoubleOrNull() ?: s.toIntOrNull() ?: s)
+                    }
+                }
             }
+            result
         } catch (e: Exception) {
-            Log.w("WeeklyWorker", "Failed to convert Python dict: ${e.message}")
+            Log.w("WeeklyWorker", "PyObject→JSON failed: ${e.message}")
             JSONObject()
         }
     }

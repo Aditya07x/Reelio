@@ -80,12 +80,12 @@ def _to_jsonable(obj):
 
 @dataclass
 class CalibrationProfile:
-    session_reels_mu: float = 18.0
+    session_reels_mu: float = 22.0
     session_reels_sigma: float = 8.0
-    dwell_mu: float = 3.2
-    dwell_sigma: float = 1.8
-    speed_mu: float = 6.0
-    speed_sigma: float = 2.0
+    dwell_mu: float = 7.0           # real mean=6.9s
+    dwell_sigma: float = 6.8        # real std=6.8s
+    speed_mu: float = 10.4          # real mean (capped outliers at 30)
+    speed_sigma: float = 8.0        # real std is wide
     gap_q10: float = 6.0
     gap_q50: float = 35.0
     gap_q90: float = 240.0
@@ -406,10 +406,11 @@ def _build_session_rows(
         app_exit_attempt = 1 if rng.random() < session_exit_rate else 0
         back_scroll = int(rng.poisson(session_rewatch_rate))
 
-        liked = 1 if rng.random() < (0.08 + 0.10 * (1.0 - risk)) else 0
-        commented = 1 if rng.random() < (0.015 + 0.03 * (1.0 - risk)) else 0
-        shared = 1 if rng.random() < (0.01 + 0.02 * (1.0 - risk)) else 0
-        saved = 1 if rng.random() < (0.03 + 0.04 * (0.6 - abs(risk - 0.6))) else 0
+        # Dead columns — always zero in real data
+        liked = 0
+        commented = 0
+        shared = 0
+        saved = 0
 
         likes_total += liked
         comments_total += commented
@@ -443,15 +444,15 @@ def _build_session_rows(
             "RollingStd": round(rolling_std, 3),
             "CumulativeReels": cumulative_reels,
             "ScrollStreak": reel_idx if rng.random() < 0.6 else max(0, reel_idx - 2),
-            "Liked": liked,
-            "Commented": commented,
-            "Shared": shared,
-            "Saved": saved,
-            "LikeLatency": round(_clip(dwell * rng.uniform(0.2, 0.9), 0.1, 60.0), 2) if liked else -1,
-            "CommentLatency": round(_clip(dwell * rng.uniform(0.2, 0.95), 0.1, 60.0), 2) if commented else -1,
-            "ShareLatency": round(_clip(dwell * rng.uniform(0.2, 0.95), 0.1, 60.0), 2) if shared else -1,
-            "SaveLatency": round(_clip(dwell * rng.uniform(0.2, 0.95), 0.1, 60.0), 2) if saved else -1,
-            "InteractionDwellRatio": round((liked + commented + shared + saved) / max(dwell, 0.2), 4),
+            "Liked": 0,
+            "Commented": 0,
+            "Shared": 0,
+            "Saved": 0,
+            "LikeLatency": -1,
+            "CommentLatency": -1,
+            "ShareLatency": -1,
+            "SaveLatency": -1,
+            "InteractionDwellRatio": 0,
             "ScrollDirection": 1,
             "BackScrollCount": back_scroll,
             "ScrollPauseCount": scroll_pause_count,
@@ -464,8 +465,8 @@ def _build_session_rows(
             "AdSkipLatencyMs": int(_clip(rng.normal(1000.0 + 900.0 * risk, 650.0), 120.0, 12000.0)) if is_ad else -1,
             "AppExitAttempts": app_exit_attempt,
             "ReturnLatencyS": round(float(_clip(rng.normal(4.0, 2.5), 0.0, 40.0)), 2) if app_exit_attempt else 0.0,
-            "NotificationsDismissed": int(rng.poisson(0.15 + 0.25 * risk)),
-            "NotificationsActedOn": 1 if rng.random() < (0.02 + 0.06 * (1.0 - risk)) else 0,
+            "NotificationsDismissed": 0,
+            "NotificationsActedOn": 0,
             "ProfileVisits": 1 if rng.random() < (0.01 + 0.03 * (1.0 - risk)) else 0,
             "ProfileVisitDurationS": round(float(_clip(rng.normal(4.0, 2.0), 0.0, 40.0)), 2),
             "HashtagTaps": 1 if rng.random() < (0.005 + 0.02 * (1.0 - risk)) else 0,
@@ -474,63 +475,63 @@ def _build_session_rows(
             "LuxDelta": 0.0,  # backfilled below
             "IsScreenInDarkRoom": 1 if ambient_lux_start < 15 else 0,
             "AccelVariance": round(float(_clip(rng.normal(0.05 + 0.08 * risk, 0.04), 0.0, 1.2)), 4),
-            "MicroMovementRms": round(float(_clip(rng.normal(0.06 + 0.08 * risk, 0.04), 0.0, 1.2)), 4),
+            "MicroMovementRms": 0,
             "PostureShiftCount": int(rng.poisson(0.2 + 0.8 * risk)),
             "IsStationary": 1 if rng.random() < (0.6 + 0.3 * risk) else 0,
-            "DeviceOrientation": int(rng.choice([1, 2], p=[0.85, 0.15])),
+            "DeviceOrientation": 1,  # always portrait in real data
             "BatteryStart": round(float(battery_start), 1),
             "BatteryDeltaPerSession": 0.0,  # backfilled per session
-            "IsCharging": 1 if rng.random() < (0.2 + 0.35 * (1 if is_dark_window else 0)) else 0,
-            "Headphones": 1 if rng.random() < 0.35 else 0,
-            "AudioOutputType": str(rng.choice(AUDIO_OUTPUTS, p=[0.62, 0.10, 0.28])),
-            "PreviousApp": "com.example.app",
-            "PreviousAppDurationS": round(float(_clip(rng.normal(85.0, 70.0), 5.0, 1200.0)), 2),
-            "PreviousAppCategory": str(rng.choice(["other", "social", "productivity", "video"], p=[0.45, 0.20, 0.25, 0.10])),
-            "DirectLaunch": 1 if rng.random() < 0.55 else 0,
+            "IsCharging": 1 if rng.random() < 0.46 else 0,  # real=46%
+            "Headphones": 0,
+            "AudioOutputType": "SPEAKER",
+            "PreviousApp": "unknown",
+            "PreviousAppDurationS": 0,
+            "PreviousAppCategory": "unknown",
+            "DirectLaunch": 0,
             "TimeSinceLastSessionMin": round(float(gap_min), 2),
             "DayOfWeek": day_of_week,
             "IsHoliday": 0,
-            "ScreenOnCount1hr": int(np.clip(np.round(rng.normal(5.0 + 5.0 * risk, 2.5)), 0, 35)),
-            "ScreenOnDuration1hr": int(np.clip(np.round(rng.normal(700.0 + 900.0 * risk, 350.0)), 30, 3600)),
-            "NightMode": 1 if (hour >= 19 or hour < 6) else 0,
-            "DND": 1 if (hour >= 22 or hour < 6) and rng.random() < 0.65 else 0,
-            "SessionTriggeredByNotif": 1 if rng.random() < (0.08 + 0.12 * risk) else 0,
+            "ScreenOnCount1hr": 0,
+            "ScreenOnDuration1hr": 0,
+            "NightMode": 1,  # always 1 in real data
+            "DND": 0,
+            "SessionTriggeredByNotif": 0,
             "DwellTimeZscore": 0.0,  # backfilled below
             "DwellTimePctile": 0.0,  # backfilled below
             "DwellAcceleration": 0.0,  # backfilled below
             "SessionDwellTrend": 0.0,  # backfilled below
             "EarlyVsLateRatio": 0.0,  # backfilled below
             "InteractionRate": 0.0,  # backfilled below
-            "InteractionBurstiness": round(float(_clip(rng.normal(0.4 + 0.6 * risk, 0.25), 0.0, 3.0)), 4),
+            "InteractionBurstiness": 0,
             "LikeStreakLength": 0,  # backfilled below
             "InteractionDropoff": 0.0,  # backfilled below
-            "SavedWithoutLike": 1 if (saved == 1 and liked == 0) else 0,
-            "CommentAbandoned": 1 if (rng.random() < 0.03 and commented == 0) else 0,
+            "SavedWithoutLike": 0,
+            "CommentAbandoned": 0,
             "ScrollIntervalCV": round(float(_clip(rng.normal(1.9 - 0.9 * risk, 0.45), 0.2, 5.0)), 4),
             "ScrollBurstDuration": int(np.clip(np.round(rng.normal(260.0 + 140.0 * risk, 95.0)), 20, 1500)),
             "InterBurstRestDuration": int(np.clip(np.round(rng.normal(210.0 - 70.0 * risk, 80.0)), 5, 1200)),
             "ScrollRhythmEntropy": round(float(session_entropy + rng.normal(0.0, 0.12)), 4),
             "UniqueAudioCount": int(np.clip(np.round(rng.normal(2.5 + 2.0 * (1.0 - risk), 1.8)), 1, 20)),
-            "RepeatContentFlag": 1 if rng.random() < (0.05 + 0.22 * risk) else 0,
-            "ContentRepeatRate": round(float(_clip(rng.normal(0.08 + 0.45 * risk, 0.12), 0.0, 1.0)), 4),
+            "RepeatContentFlag": 0,
+            "ContentRepeatRate": 0,
             "CircadianPhase": round(float(circadian_phase), 4),
-            "SleepProxyScore": round(float(_clip((6 - hour) / 6.0 if hour < 6 else 0.0, 0.0, 1.0)), 3),
-            "EstimatedSleepDurationH": round(float(_clip(rng.normal(7.0 - 1.8 * risk, 1.0), 3.0, 10.0)), 2),
-            "ConsistencyScore": round(float(_clip(rng.normal(0.82 - 0.30 * risk, 0.12), 0.0, 1.0)), 3),
-            "IsWeekend": is_weekend,
+            "SleepProxyScore": 0,
+            "EstimatedSleepDurationH": 0,
+            "ConsistencyScore": 0,
+            "IsWeekend": 0,
             "PostSessionRating": post_session_rating,
             "IntendedAction": intended_action,
             "ActualVsIntendedMatch": actual_vs_intended,
             "RegretScore": regret_score,
             "MoodBefore": mood_before,
             "MoodAfter": mood_after,
-            "MoodDelta": mood_delta,
+            "MoodDelta": 0,
             "SleepStart": 23,
             "SleepEnd": 7,
             "PreviousContext": str(rng.choice(PREVIOUS_CONTEXTS)),
-            "DelayedRegretScore": delayed_regret,
+            "DelayedRegretScore": 0,
             "ComparativeRating": comparative_rating,
-            "MorningRestScore": round(float(_clip(rng.normal(0.70 - 0.40 * risk, 0.15), 0.0, 1.0)), 3),
+            "MorningRestScore": 0,
         }
 
         rows.append(row)
