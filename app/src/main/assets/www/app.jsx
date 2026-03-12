@@ -389,7 +389,11 @@ function normalizeData(rawData) {
     const sessionDurations = sessions.map((s) => deriveSessionDurationSec(s)).filter(isFiniteNumber);
     const sessionReels = sessions.map((s) => maybeNum(s.nReels)).filter(isFiniteNumber);
     const sessionDwells = sessions.map((s) => maybeNum(s.avgDwell)).filter(isFiniteNumber);
+    // transition_matrix = reel-level HMM A (within-session reel-to-reel, typically 0.85–0.95).
+    // session_transition_matrix = session-level dominant-state transitions (behaviorally meaningful).
+    // NEVER mix the two: session-level metrics must use sessTransition.
     const transition = rawData?.model_parameters?.transition_matrix;
+    const sessTransition = rawData?.model_parameters?.session_transition_matrix;
 
     const dateBuckets = {};
     sessions.forEach((s, idx) => {
@@ -562,6 +566,10 @@ function normalizeData(rawData) {
         ? payloadGapMin
         : derivedGapMin;
 
+    // True current idle time: now − last session end. Python computes this on
+    // each dashboard call. Used by the header chip and the inactivity guard.
+    const idleSinceLastSessionMin = maybeNum(rawData?.idleSinceLastSessionMin);
+
     const captureRiskScoreRaw = maybeNum(rawData?.captureRiskScore) ?? (isFiniteNumber(maybeNum(mostRecent?.S_t)) ? maybeNum(mostRecent?.S_t) * 100 : null);
     const captureRiskScore = isFiniteNumber(captureRiskScoreRaw) ? Math.max(0, Math.min(100, captureRiskScoreRaw)) : null;
 
@@ -581,15 +589,19 @@ function normalizeData(rawData) {
     const derivedAvgReelsPerSession = averageOf(sessionReels);
     const derivedAvgDwellTimeSec = averageOf(sessionDwells);
 
+    // Threshold must match Python's DOOM_PROBABILITY_THRESHOLD = 0.55 exactly.
+    // Using > 0.5 here would classify S_t ∈ (0.50, 0.55) as doom — inconsistent with backend.
     const derivedAllTimeCaptureRate = sessionProbabilities.length
-        ? sessionProbabilities.filter((p) => p > 0.5).length / sessionProbabilities.length
+        ? sessionProbabilities.filter((p) => p >= DOOM_THRESHOLD).length / sessionProbabilities.length
         : null;
 
     const lastTenProbs = sessionProbabilities.slice(-10);
     const derivedTenSessionAvgScore = lastTenProbs.length ? averageOf(lastTenProbs) * 100 : null;
 
-    const sessionDoomPersistence = maybeNum(rawData?.sessionDoomPersistence) ?? maybeNum(transition?.[1]?.[1]);
-    const escapeRate = maybeNum(rawData?.escapeRate) ?? maybeNum(transition?.[1]?.[0]);
+    // Session-level persistence/escape come from sess_A (session_transition_matrix), not the
+    // reel-level A matrix.  A[1][1] ≈ 0.90 (next reel likely doom) ≠ sess_A[1][1] (next SESSION).
+    const sessionDoomPersistence = maybeNum(rawData?.sessionDoomPersistence) ?? maybeNum(sessTransition?.[1]?.[1]);
+    const escapeRate = maybeNum(rawData?.escapeRate) ?? maybeNum(sessTransition?.[1]?.[0]);
     const pullIndex = maybeNum(rawData?.pullIndex) ?? ((isFiniteNumber(sessionDoomPersistence) && isFiniteNumber(escapeRate) && escapeRate > 0) ? (sessionDoomPersistence / escapeRate) : null);
 
     const modelConfidence =
@@ -775,8 +787,9 @@ function normalizeData(rawData) {
         reelData: topologyReelData
     };
 
-    const derivedCasualToDoom = maybeNum(transition?.[0]?.[1]);
-    const derivedDoomToCasual = maybeNum(transition?.[1]?.[0]);
+    // State transition probabilities are session-level; derive from sessTransition, not transition.
+    const derivedCasualToDoom = maybeNum(sessTransition?.[0]?.[1]);
+    const derivedDoomToCasual = maybeNum(sessTransition?.[1]?.[0]);
     const stateDynamics = {
         casualToDoomProb: maybeNum(rawData?.stateDynamics?.casualToDoomProb) ?? derivedCasualToDoom,
         doomToCasualProb: maybeNum(rawData?.stateDynamics?.doomToCasualProb) ?? derivedDoomToCasual,
@@ -865,6 +878,7 @@ function normalizeData(rawData) {
         avgReelsPerSession: maybeNum(rawData?.avgReelsPerSession) ?? maybeNum(rawData?.avgNReels) ?? derivedAvgReelsPerSession,
         avgDwellTimeSec: maybeNum(rawData?.avgDwellTimeSec) ?? derivedAvgDwellTimeSec,
         timeSinceLastSessionMin,
+        idleSinceLastSessionMin,
         pullIndex,
         totalReels: maybeNum(rawData?.totalReels) ?? (sessionReels.length ? sumOf(sessionReels) : (timelineCapture.length || null)),
         doomRate: maybeNum(rawData?.doomRate) ?? derivedAllTimeCaptureRate,
@@ -919,9 +933,16 @@ const getHeaderState = (s) =>
 
 // ─── REELIO HEADER ────────────────────────────────────────────────────────────
 function ReelioHeader({ data, isAccessibilityActive, openAccessibilitySettings }) {
-    const score = safeNum(data?.captureRiskScore, 0);
+    const rawScore = safeNum(data?.captureRiskScore, 0);
+    // Prefer true idle time (now − last session end) for the chip; fall back to
+    // the historical inter-session gap when the new field isn't present yet.
+    const timeSince = maybeNum(data?.idleSinceLastSessionMin) ?? maybeNum(data?.timeSinceLastSessionMin);
+    // Inactivity guard: if no sessions today and user has been away 2+ hours,
+    // show MINDFUL state so yesterday's DOOM score doesn't linger in the header.
+    const isIdleStale = safeNum(data?.sessionsToday, 1) === 0
+        && isFiniteNumber(timeSince) && timeSince > 120;
+    const score = isIdleStale ? 0 : rawScore;
     const st = getHeaderState(score);
-    const timeSince = maybeNum(data?.timeSinceLastSessionMin);
     const activeSeconds = maybeNum(data?.activeTimeTodaySeconds);
     const peakWindow = data?.peakRiskWindow;
     const currentHour = safeNum(data?.currentHour, new Date().getHours());

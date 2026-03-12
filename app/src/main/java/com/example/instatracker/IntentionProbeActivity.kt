@@ -24,7 +24,21 @@ class IntentionProbeActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
         window.statusBarColor = Color.parseColor("#EDE8DF")
+        getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("survey_activity_open", true)
+            .putLong("survey_activity_open_since", System.currentTimeMillis())
+            .apply()
         showMoodPrompt()
+    }
+
+    override fun onDestroy() {
+        getSharedPreferences("InstaTrackerPrefs", MODE_PRIVATE)
+            .edit()
+            .putBoolean("survey_activity_open", false)
+            .remove("survey_activity_open_since")
+            .apply()
+        super.onDestroy()
     }
 
     // ── Step 1: Mood / Stress State ───────────────────────────────────────────

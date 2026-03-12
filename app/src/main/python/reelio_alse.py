@@ -164,6 +164,60 @@ def normalize_prestate_risk(raw_value) -> float:
     return float(np.clip(val / 100.0, 0.0, 1.0))
 
 
+def compute_supervised_doom_label(
+    regret_score: float = 0.0,
+    delayed_regret: float = 0.0,
+    comparative_rating: float = 0.0,
+    post_session_rating: float = 0.0,
+    intended_action: str = ""
+) -> float:
+    """
+    Compute a supervised doom target in [0, 1] using the shared priority chain:
+      Delayed Regret > Comparative > Immediate Regret > PostSessionRating.
+
+    This helper is used by both preprocess_session and apply_delayed_label to
+    avoid training-target drift across pathways.
+    """
+    imm = float(np.clip(float(regret_score) / 5.0, 0.0, 1.0)) if float(regret_score) > 0 else 0.0
+    del_reg = float(np.clip(float(delayed_regret) / 5.0, 0.0, 1.0)) if float(delayed_regret) > 0 else 0.0
+
+    comp_raw = float(comparative_rating)
+    has_comp = comp_raw > 0
+    comp = normalize_comparative_rating(comp_raw) if has_comp else 0.0
+
+    post_raw = float(post_session_rating)
+    has_post = post_raw > 0
+    post_doom = (5.0 - post_raw) / 4.0 if has_post else 0.0
+
+    label_score = 0.0
+    if del_reg > 0:
+        if has_comp and has_post:
+            label_score = 0.50 * del_reg + 0.30 * comp + 0.20 * post_doom
+        elif has_comp:
+            label_score = 0.60 * del_reg + 0.40 * comp
+        elif has_post:
+            label_score = 0.75 * del_reg + 0.25 * post_doom
+        else:
+            label_score = del_reg
+    elif has_comp:
+        if has_post:
+            label_score = 0.55 * comp + 0.25 * imm + 0.20 * post_doom
+        else:
+            label_score = 0.70 * comp + 0.30 * imm
+    elif imm > 0 and has_post:
+        label_score = 0.60 * imm + 0.40 * post_doom
+    elif has_post:
+        # Affective-only labels are capped because they do not include cognitive anchor.
+        label_score = min(post_doom, 0.60)
+    else:
+        label_score = imm
+
+    if str(intended_action) in ("Stressed / Avoidance", "Bored / Nothing to do", "Procrastinating something"):
+        label_score = min(1.0, label_score + 0.25)
+
+    return float(np.clip(label_score, 0.0, 1.0))
+
+
 def effective_session_reel_count(df: pd.DataFrame) -> int:
     """
     Count true reels the user actually dwelled on.
@@ -232,8 +286,8 @@ def preprocess_session(df):
         'MorningRestScore': 0.0,
         # NOTE: TimeSinceLastSessionMin = 0 means "gap not tracked by Kotlin" (session end time not
         # persisted), NOT "instant re-entry". The DoomScorer.score() gap_min == 0 branch handles this.
-        # The default 60.0 below only fires when the COLUMN is entirely absent (schema upgrade path).
-        'TimeSinceLastSessionMin': 60.0,
+        # If schema is missing this column, default to 0 (unknown gap) rather than assuming 60 minutes.
+        'TimeSinceLastSessionMin': 0.0,
         'DayOfWeek': 0.0,
         'StartTime': '2026-01-01T12:00:00Z',
         'SleepStart': 23,
@@ -258,54 +312,13 @@ def preprocess_session(df):
         df['swipe_incomplete'] = np.clip(1.0 - completion_ratio, 0.0, 1.0)
         
     if 'supervised_doom' not in df.columns:
-        # Ground Truth Labeling Layer: Weighted blend of all self-report signals.
-        # Higher score = more evidence of a "Doom" state.
-        imm = df['RegretScore'].iloc[0] / 5.0 if 'RegretScore' in df.columns else 0.0
-        # Delayed regret (1hr later) is more honest/accurate (hedonic decay)
-        del_reg = df['DelayedRegretScore'].iloc[0] / 5.0 if 'DelayedRegretScore' in df.columns else 0.0
-        comp_raw = df['ComparativeRating'].iloc[0] if 'ComparativeRating' in df.columns else 0.0
-        has_comp = float(comp_raw) > 0
-        # Session experience/comparative score normalized to [0,1], higher=worse
-        comp = normalize_comparative_rating(comp_raw) if has_comp else 0.0
-        # PostSessionRating (Step 1 affective): 1=very bad → 5=very good → invert to doom scale.
-        # Weakest signal (affective state, not cognitive self-evaluation) but broadens coverage
-        # to sessions where only Step 1 was completed.
-        post_raw = float(df['PostSessionRating'].iloc[0]) if 'PostSessionRating' in df.columns else 0.0
-        has_post = post_raw > 0
-        post_doom = (5.0 - post_raw) / 4.0 if has_post else 0.0  # 5→0.0, 3→0.5, 1→1.0
-
-        # Priority: Delayed Regret > Comparative > Immediate Regret > PostSessionRating (affective)
-        label_score = 0.0
-        if del_reg > 0:
-            if has_comp and has_post:
-                label_score = 0.50 * del_reg + 0.30 * comp + 0.20 * post_doom
-            elif has_comp:
-                label_score = 0.60 * del_reg + 0.40 * comp
-            elif has_post:
-                label_score = 0.75 * del_reg + 0.25 * post_doom
-            else:
-                label_score = del_reg
-        elif has_comp:
-            if has_post:
-                label_score = 0.55 * comp + 0.25 * imm + 0.20 * post_doom
-            else:
-                label_score = 0.70 * comp + 0.30 * imm
-        elif imm > 0 and has_post:
-            label_score = 0.60 * imm + 0.40 * post_doom
-        elif has_post:
-            # Affective-only: cap at 0.60 — can't distinguish "bad content" from "lost control"
-            # without a cognitive anchor (regret / intent mismatch). Reserves full doom classification
-            # for sessions with explicit cognitive self-evaluation.
-            label_score = min(post_doom, 0.60)
-        else:
-            label_score = imm
-        
-        # Intent-based boost: avoidance/boredom intent + completed session is a strong doom signal
-        intended = str(df['IntendedAction'].iloc[0]) if 'IntendedAction' in df.columns else ""
-        if intended in ("Stressed / Avoidance", "Bored / Nothing to do", "Procrastinating something"):
-            label_score = min(1.0, label_score + 0.25)
-            
-        df['supervised_doom'] = float(np.clip(label_score, 0.0, 1.0))
+        df['supervised_doom'] = compute_supervised_doom_label(
+            regret_score=float(df['RegretScore'].iloc[0]) if 'RegretScore' in df.columns else 0.0,
+            delayed_regret=float(df['DelayedRegretScore'].iloc[0]) if 'DelayedRegretScore' in df.columns else 0.0,
+            comparative_rating=float(df['ComparativeRating'].iloc[0]) if 'ComparativeRating' in df.columns else 0.0,
+            post_session_rating=float(df['PostSessionRating'].iloc[0]) if 'PostSessionRating' in df.columns else 0.0,
+            intended_action=str(df['IntendedAction'].iloc[0]) if 'IntendedAction' in df.columns else ""
+        )
     
     # Intent-behavior mismatch signal
     # When stated intent was low-risk but behavior was high-capture, 
@@ -314,7 +327,8 @@ def preprocess_session(df):
         intended = str(df['IntendedAction'].iloc[0]) if 'IntendedAction' in df.columns else ""
         low_risk_intents = ['Quick break (intentional)', 'Specific content lookup']
         if intended in low_risk_intents:
-            reels = len(df)
+            # FIXED: Use effective_session_reel_count for consistency with CumulativeReels tracking
+            reels = max(1, effective_session_reel_count(df))
             exit_rate = df['AppExitAttempts'].mean() if 'AppExitAttempts' in df.columns else 0.0
             # Mismatch: said quick break but session was long with high exit conflict
             intent_mismatch = 1.0 if (reels > 20 or exit_rate > 0.05) else 0.0
@@ -450,13 +464,14 @@ class RegimeDetector:
     """
     def __init__(self):
         self.doom_history = []
+        self.doom_timestamps = []
         self.dwell_history = []
         self.len_history = []
         self.hour_history = []
         self.regime_alert = False
         self.alert_duration = 0
 
-    def update(self, S_t, session_df, baseline: UserBaseline) -> bool:
+    def update(self, S_t, session_df, baseline: UserBaseline, session_timestamp: str = "") -> bool:
         if len(session_df) == 0:
             return self.regime_alert
             
@@ -470,12 +485,14 @@ class RegimeDetector:
             hr = 12
             
         self.doom_history.append(S_t)
+        self.doom_timestamps.append(str(session_timestamp or ""))
         self.dwell_history.append(m_dwell)
         self.len_history.append(sess_len)
         self.hour_history.append(hr)
         
         if len(self.doom_history) > 30:
             self.doom_history.pop(0)
+            self.doom_timestamps.pop(0)
             self.dwell_history.pop(0)
             self.len_history.pop(0)
             self.hour_history.pop(0)
@@ -522,10 +539,14 @@ class RegimeDetector:
 
     def _cusum_check(self, series: list, threshold: float = 4.0, drift: float = 0.01) -> bool:
         """CUSUM changepoint test. Better false-alarm rate than z-score when doom_std is outlier-inflated.
-        threshold and drift are tunable — revisit once multi-week per-user data is available."""
-        mu = float(np.mean(series))
+        threshold and drift are tunable — revisit once multi-week per-user data is available.
+        FIXED: Use first-half mean only, apply CUSUM to second-half to avoid self-cancellation."""
+        if len(series) < 4:
+            return False
+        # Compute baseline from first half; test for shift in second half
+        mu = float(np.mean(series[:len(series)//2]))
         s_pos, s_neg = 0.0, 0.0
-        for x in series:
+        for x in series[len(series)//2:]:
             s_pos = max(0.0, s_pos + (x - mu) - drift)
             s_neg = max(0.0, s_neg + (mu - x) - drift)
         return s_pos > threshold or s_neg > threshold
@@ -547,7 +568,8 @@ class RegretValidator:
     Tracks predicted doom scores vs actual RegretScore values (post-hoc self-report).
     Detects systematic mis-calibration of the HMM and provides recommendations for model tuning.
     
-    Regret is normalized to [0, 1] from the 1-5 Likert scale: regret_norm = (RegretScore - 1) / 4.0
+    Regret is stored internally as normalized [0, 1].
+    Default input contract expects raw 1-5 Likert via regret_scale='raw_1_5'.
     
     Usage:
       validator.add_observation(predicted_doom, actual_regret_score)
@@ -556,26 +578,41 @@ class RegretValidator:
     """
     def __init__(self):
         self.predicted_history = []      # predicted doom probabilities
-        self.regret_history = []         # actual regret scores (1-5)
+        self.regret_history = []         # normalized regret in [0,1]
         self.calibration_history = []    # running calibration deltas
         self.session_regret_pairs = []   # (predicted, regret_norm, timestamp) tuples
         self.systematic_bias = 0.0       # running correction factor
         self.n_validations = 0
         
-    def add_observation(self, predicted_doom: float, regret_score: float, timestamp: str = None):
+    def add_observation(
+        self,
+        predicted_doom: float,
+        regret_score: float,
+        timestamp: str = None,
+        regret_scale: str = "raw_1_5"
+    ):
         """
         Add a (predicted_doom, actual_regret) pair.
         
         Args:
             predicted_doom: HMM posterior P(S_t = DOOM), range [0, 1]
-            regret_score: User self-report on 1-5 Likert scale
+            regret_score: User regret score in the specified scale
             timestamp: ISO timestamp string (optional)
+            regret_scale: 'raw_1_5' (default) or 'normalized_0_1'
         """
-        if not (0 <= predicted_doom <= 1) or not (1 <= regret_score <= 5):
+        if not (0 <= predicted_doom <= 1):
             return  # Skip invalid observations
-            
-        # Normalize regret to [0, 1]: low regret (1) → 0, high regret (5) → 1
-        regret_norm = (regret_score - 1.0) / 4.0
+
+        if regret_scale == "raw_1_5":
+            if not (1 <= regret_score <= 5):
+                return
+            regret_norm = (regret_score - 1.0) / 4.0
+        elif regret_scale == "normalized_0_1":
+            if not (0 <= regret_score <= 1):
+                return
+            regret_norm = float(regret_score)
+        else:
+            return
         
         self.predicted_history.append(float(predicted_doom))
         self.regret_history.append(float(regret_norm))
@@ -653,6 +690,7 @@ class RegretValidator:
             'predicted_history': self.predicted_history,
             'regret_history': self.regret_history,
             'calibration_history': self.calibration_history,
+            'session_regret_pairs': self.session_regret_pairs,
             'systematic_bias': self.systematic_bias,
             'n_validations': self.n_validations
         }
@@ -664,6 +702,7 @@ class RegretValidator:
         obj.predicted_history = d.get('predicted_history', [])
         obj.regret_history = d.get('regret_history', [])
         obj.calibration_history = d.get('calibration_history', [])
+        obj.session_regret_pairs = d.get('session_regret_pairs', [])
         obj.systematic_bias = d.get('systematic_bias', 0.0)
         obj.n_validations = d.get('n_validations', 0)
         return obj
@@ -874,6 +913,7 @@ class ReelioCLSE:
         self.disagreement_lr = 0.05
         self.max_disagreement_bias = 0.10
         self.last_label_conf = 0.0  # tracks confidence of most recent label for decay modulation
+        self.last_label_snapshot = {}
 
     def _empty_bank(self):
         return {
@@ -932,16 +972,24 @@ class ReelioCLSE:
             'labeled_sessions': int(self.labeled_sessions),
             'running_disagreement': float(self.running_disagreement),
             'last_label_conf': float(self.last_label_conf),
+            'last_label_snapshot': dict(self.last_label_snapshot),
             'q_01': float(self.q_01),
             'q_10': float(self.q_10),
+            'SS_recent': {k: v.tolist() for k, v in self.SS_recent.items()},
+            'SS_medium': {k: v.tolist() for k, v in self.SS_medium.items()},
+            'SS_long': {k: v.tolist() for k, v in self.SS_long.items()},
         }
 
     def _rollback(self):
         # FIX (Bug 2): explicitly cast JSON-deserialized lists back to numpy arrays
         ARRAY_KEYS = {'mu', 'sigma', 'A', 'pi', 'h', 'p_bern', 'feature_weights', 'rho_dwell_speed', 'logistic_weights'}
+        BANK_KEYS = {'SS_recent', 'SS_medium', 'SS_long'}
         for k, v in self._checkpoint_dict.items():
             if k in ARRAY_KEYS:
                 setattr(self, k, np.array(v))
+            elif k in BANK_KEYS and isinstance(v, dict):
+                restored_bank = {bk: np.array(bv) for bk, bv in v.items()}
+                setattr(self, k, restored_bank)
             else:
                 setattr(self, k, v)
 
@@ -1266,9 +1314,13 @@ class ReelioCLSE:
         step = 0.01
         grad_01 = (L_gap(self.q_01 + step, self.q_10) - L_gap(self.q_01 - step, self.q_10)) / (2*step)
         grad_10 = (L_gap(self.q_01, self.q_10 + step) - L_gap(self.q_01, self.q_10 - step)) / (2*step)
+        grad_01 = float(np.clip(grad_01, -1.0, 1.0))
+        grad_10 = float(np.clip(grad_10, -1.0, 1.0))
         
         self.q_01 += 0.05 * grad_01
         self.q_10 += 0.05 * grad_10
+        self.q_01 = max(1e-6, self.q_01)
+        self.q_10 = max(1e-6, self.q_10)
 
     def _compute_contextual_pi(self, ctx: np.ndarray) -> np.ndarray:
         # Gradual activation instead of hard cutoff at session 5
@@ -1414,6 +1466,10 @@ class ReelioCLSE:
     def process_session(self, df: pd.DataFrame, baseline: UserBaseline, regime_detector: RegimeDetector, prev_gamma: np.ndarray = None):
         if len(df) < 2:
             return None, None, None
+
+        session_timestamp = ""
+        if 'StartTime' in df.columns and pd.notna(df['StartTime'].iloc[0]):
+            session_timestamp = str(df['StartTime'].iloc[0])
             
         obs = df[['log_dwell', 'log_speed', 'rhythm_dissociation', 'rewatch_flag', 'exit_flag', 'swipe_incomplete']].values
         
@@ -1428,6 +1484,16 @@ class ReelioCLSE:
         
         intended    = str(df['IntendedAction'].iloc[0]) if 'IntendedAction' in df.columns else ""
         prev_ctx    = str(df['PreviousContext'].iloc[0]) if 'PreviousContext' in df.columns else ""
+
+        # Persist latest survey/label context so delayed-label updates can reuse
+        # the same priority chain inputs as preprocess_session.
+        self.last_label_snapshot = {
+            'PostSessionRating': float(df['PostSessionRating'].iloc[0]) if 'PostSessionRating' in df.columns else 0.0,
+            'RegretScore': float(df['RegretScore'].iloc[0]) if 'RegretScore' in df.columns else 0.0,
+            'ComparativeRating': float(df['ComparativeRating'].iloc[0]) if 'ComparativeRating' in df.columns else 0.0,
+            'DelayedRegretScore': float(df['DelayedRegretScore'].iloc[0]) if 'DelayedRegretScore' in df.columns else 0.0,
+            'IntendedAction': intended
+        }
         
         # Pre-session Risk Flag: replaces old UsageStats logic (Work/Study) and captures intended avoidance
         risk_indicators = [
@@ -1509,7 +1575,12 @@ class ReelioCLSE:
         reported_blended_prob = float(np.clip(reported_blended_prob, 0.0, 1.0))
         
         # Internal updates use the blended probability
-        reg_alert = regime_detector.update(reported_blended_prob, df, baseline)
+        reg_alert = regime_detector.update(
+            reported_blended_prob,
+            df,
+            baseline,
+            session_timestamp=session_timestamp
+        )
         if reg_alert:
             self.n_regime_alerts += 1
             
@@ -1567,6 +1638,27 @@ def validate_model(model: ReelioCLSE) -> list:
         
     return errors
 
+
+def validate_model_soft(model: ReelioCLSE, context: str):
+    """
+    Production-safe validation: log issues and attempt clipping-based self-heal.
+    Does not raise exceptions.
+    """
+    errs = validate_model(model)
+    if not errs:
+        return
+
+    print(f"MODEL_VALIDATION_WARN[{context}]: {len(errs)} issue(s) detected")
+    for err in errs:
+        print(f"  - {err}")
+
+    model._clip_params()
+    post_errs = validate_model(model)
+    if post_errs:
+        print(f"MODEL_VALIDATION_PERSIST[{context}]: {len(post_errs)} issue(s) remain after _clip_params")
+        for err in post_errs:
+            print(f"  - {err}")
+
 def load_full_state(state_path: str):
     if not os.path.exists(state_path):
         detector = RegimeDetector()
@@ -1612,6 +1704,7 @@ def load_full_state(state_path: str):
     detector.dwell_history = d_state.get('dwell_history', [])
     detector.len_history = d_state.get('len_history', [])
     detector.hour_history = d_state.get('hour_history', [])
+    detector.doom_timestamps = d_state.get('doom_timestamps', [])
     detector.regime_alert = d_state.get('regime_alert', False)
     
     # Load regret validator
@@ -1650,6 +1743,7 @@ def save_full_state(state_path: str, model, baseline, detector, scorer, prev_gam
             'baseline_state': baseline.to_dict(),
             'detector_state': {
                 'doom_history': detector.doom_history,
+                'doom_timestamps': detector.doom_timestamps,
                 'dwell_history': detector.dwell_history,
                 'len_history': detector.len_history,
                 'hour_history': detector.hour_history,
@@ -1678,20 +1772,33 @@ def apply_delayed_label(state_path: str, delayed_regret: int, comparative: int) 
     """
     try:
         model, baseline, detector, scorer, prev_gamma = load_full_state(state_path)
-        
-        # Recompute supervised_doom with delayed data
-        del_reg = delayed_regret / 5.0
+
+        has_delayed = delayed_regret > 0
         has_comp = comparative > 0
-        comp = normalize_comparative_rating(comparative) if has_comp else 0.0
-        if del_reg > 0:
-            supervised_doom = 0.6 * del_reg + 0.4 * comp if has_comp else del_reg
-        elif has_comp:
-            supervised_doom = comp
-        else:
+        if not has_delayed and not has_comp:
             return json.dumps({"status": "no_update", "reason": "no delayed or comparative data"})
-        
-        # Label confidence is now much higher
-        label_conf = 1.0 if (del_reg > 0 and has_comp) else 0.85
+
+        snapshot = model.last_label_snapshot if isinstance(getattr(model, 'last_label_snapshot', {}), dict) else {}
+        post_raw = float(snapshot.get('PostSessionRating', 0.0) or 0.0)
+        imm_raw = float(snapshot.get('RegretScore', 0.0) or 0.0)
+        intended = str(snapshot.get('IntendedAction', '') or '')
+
+        # Use the exact same label-priority chain as preprocess_session.
+        supervised_doom = compute_supervised_doom_label(
+            regret_score=imm_raw,
+            delayed_regret=float(delayed_regret),
+            comparative_rating=float(comparative),
+            post_session_rating=post_raw,
+            intended_action=intended
+        )
+
+        # Label confidence follows the same hierarchy semantics.
+        if has_delayed and has_comp:
+            label_conf = 1.00
+        elif has_delayed:
+            label_conf = 0.85
+        else:
+            label_conf = 0.70
         
         # Last session's raw HMM doom is stored in detector history
         if not detector.doom_history:
@@ -1704,7 +1811,30 @@ def apply_delayed_label(state_path: str, delayed_regret: int, comparative: int) 
             model.running_disagreement * model.disagreement_decay + bias,
             -0.25, 0.25
         ))
+
+        # Preserve enriched snapshot for future delayed/calibration updates.
+        model.last_label_snapshot = {
+            **snapshot,
+            'DelayedRegretScore': float(delayed_regret),
+            'ComparativeRating': float(comparative),
+            'supervised_doom': float(supervised_doom)
+        }
         
+        # FIXED: Update regret_validator with delayed label (highest-confidence signal)
+        # Delayed regret is label_conf=1.0, the best calibration signal we have
+        if hasattr(detector, 'regret_validator') and detector.regret_validator:
+            try:
+                detector.regret_validator.add_observation(
+                    last_hmm_doom,
+                    delayed_regret,
+                    timestamp="delayed_probe",
+                    regret_scale="raw_1_5"
+                )
+                delayed_calib = detector.regret_validator.get_calibration_quality()
+                print(f"DELAYED_LABEL_REGRET_VALIDATOR: n_samples={delayed_calib['n_samples']}, "
+                      f"mae={delayed_calib['mae']:.3f}, bias={delayed_calib['systematic_bias']:.3f}")
+            except Exception as rv_err:
+                print(f"DELAYED_LABEL_REGRET_VALIDATOR_FAILED: {rv_err}")
         
         save_full_state(state_path, model, baseline, detector, scorer, prev_gamma)
         print(f"DELAYED_LABEL_APPLIED: conf={label_conf} bias={bias:.4f} disagreement={model.running_disagreement:.4f}")
@@ -1757,18 +1887,14 @@ def run_inference_on_latest(csv_data: str, model_state_path: str, survey_data: d
     session_df = preprocess_session(session_df)
     
     model, baseline, detector, scorer, prev_gamma = load_full_state(model_state_path)
+    validate_model_soft(model, "run_inference_on_latest:load")
     
     if len(session_df) < 2:
         return {"doom_score": 0.0, "doom_label": "UNSCORED", "model_confidence": 0.0}
         
     gamma, blended_prob = model.process_session(session_df, baseline, detector, prev_gamma)
     doom_prob = blended_prob
-    # Apply regret-validator calibration correction — closes the feedback loop
-    # (bias was computed by RegretValidator but never applied to the returned score until now)
-    if hasattr(detector, 'regret_validator'):
-        bias = detector.regret_validator.get_calibration_bias()
-        doom_prob = float(np.clip(doom_prob - bias, 0.0, 1.0))
-
+    
     # Now that Kotlin passes high-precision timeSinceLastSessionMin, ensure we use it correctly
     gap_min = float(session_df['TimeSinceLastSessionMin'].iloc[0]) if 'TimeSinceLastSessionMin' in session_df else 120.0
     
@@ -1781,12 +1907,18 @@ def run_inference_on_latest(csv_data: str, model_state_path: str, survey_data: d
     
     # Pillar 10 (Extended): Regret Validation
     # Track post-hoc regret scores to detect model mis-calibration
+    # FIXED: Pass blended_prob BEFORE bias correction to avoid feedback loop corruption
     if 'RegretScore' in session_df.columns:
         regret_score = session_df['RegretScore'].iloc[0]
         if regret_score > 0:  # Only record if user provided a regret response
             try:
                 timestamp = session_df['StartTime'].iloc[0] if 'StartTime' in session_df.columns else ""
-                detector.regret_validator.add_observation(doom_prob, regret_score, timestamp)
+                detector.regret_validator.add_observation(
+                    blended_prob,
+                    regret_score,
+                    timestamp,
+                    regret_scale="raw_1_5"
+                )
                 calibration_quality = detector.regret_validator.get_calibration_quality()
                 print(f"REGRET_VALIDATION: n_samples={calibration_quality['n_samples']}, "
                       f"mae={calibration_quality['mae']:.3f}, "
@@ -1794,6 +1926,14 @@ def run_inference_on_latest(csv_data: str, model_state_path: str, survey_data: d
                       f"calibrated={calibration_quality['calibrated']}")
             except Exception as e:
                 print(f"REGRET_VALIDATION_FAILED: {e}")
+
+    validate_model_soft(model, "run_inference_on_latest:post_session")
+    
+    # Apply regret-validator calibration correction AFTER recording the blended probability
+    # This closes the feedback loop correctly: record raw signal, then correct output
+    if hasattr(detector, 'regret_validator'):
+        bias = detector.regret_validator.get_calibration_bias()
+        doom_prob = float(np.clip(doom_prob - bias, 0.0, 1.0))
     
     save_full_state(model_state_path, model, baseline, detector, scorer, gamma)
     
@@ -1825,6 +1965,7 @@ def run_full_pipeline(csv_path: str, state_path: str = None) -> ReelioCLSE:
     model = ReelioCLSE()
     baseline = UserBaseline()
     detector = RegimeDetector()
+    detector.regret_validator = RegretValidator()
     scorer = DoomScorer()
     
     df['_session_key'] = df.apply(make_session_key, axis=1)
@@ -1845,6 +1986,7 @@ def run_full_pipeline(csv_path: str, state_path: str = None) -> ReelioCLSE:
         prev_gamma = gamma
         
         s_obj = scorer.score(s_df, baseline, s_df['TimeSinceLastSessionMin'].iloc[0] if 'TimeSinceLastSessionMin' in s_df else 60.0)
+        scorer.update_weights(s_obj['components'], blended_prob)
         
     val_errs = validate_model(model)
     if val_errs:
@@ -1852,8 +1994,7 @@ def run_full_pipeline(csv_path: str, state_path: str = None) -> ReelioCLSE:
             print(e)
             
     if state_path:
-        with open(state_path, 'w') as f:
-            json.dump(model._checkpoint_dict, f, default=lambda x: x.tolist() if isinstance(x, np.ndarray) else x)
+        save_full_state(state_path, model, baseline, detector, scorer, prev_gamma)
             
     return model
 
@@ -1882,23 +2023,45 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
         df = pd.read_csv(io.StringIO(csv_data))
     except Exception as e:
         return json.dumps({"error": f"CSV parse error: {str(e)}", "sessions": []})
+    
+    # FIXED: Validate schema early to catch column name mismatches instead of silent NaN propagation
+    try:
+        validate_csv_schema(df)
+    except SchemaError as se:
+        return json.dumps({"error": f"CSV schema error: {str(se)}", "sessions": []})
         
     # Preserve delayed-label supervision signals across dashboard replays.
     preserved_disagreement = None
     preserved_labeled_sessions = None
+    preserved_regret_validator = None
     if state_path and os.path.exists(state_path):
         try:
-            saved_model, _, _, _, _ = load_full_state(state_path)
+            saved_model, _, saved_detector, _, _ = load_full_state(state_path)
             preserved_disagreement = float(saved_model.running_disagreement)
             preserved_labeled_sessions = int(saved_model.labeled_sessions)
+            # FIXED: Preserve regret_validator across dashboard replays
+            if hasattr(saved_detector, 'regret_validator'):
+                preserved_regret_validator = saved_detector.regret_validator
         except Exception:
             preserved_disagreement = None
             preserved_labeled_sessions = None
+            preserved_regret_validator = None
 
     model = ReelioCLSE()
     baseline = UserBaseline()
     detector = RegimeDetector()
+    # FIXED: Initialize regret_validator on fresh detector to avoid wipe on replay
+    detector.regret_validator = RegretValidator()
+    # Restore preserved regret_validator if available
+    if preserved_regret_validator:
+        detector.regret_validator = preserved_regret_validator
     scorer = DoomScorer()
+
+    # Carry forward disagreement as prior so replay can update from it.
+    if preserved_disagreement is not None:
+        model.running_disagreement = preserved_disagreement
+
+    validate_model_soft(model, "run_dashboard_payload:init")
     
     if 'SessionNum' not in df.columns:
         return json.dumps({"error": "Schema missing SessionNum", "sessions": []})
@@ -2045,6 +2208,8 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
             
         except Exception as e:
             continue
+
+    validate_model_soft(model, "run_dashboard_payload:replay")
             
     # Normalize Historical Drivers
     if total_st_weight > 0:
@@ -2144,8 +2309,6 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
         }
     }
 
-    if preserved_disagreement is not None:
-        model.running_disagreement = preserved_disagreement
     if preserved_labeled_sessions is not None:
         model.labeled_sessions = max(model.labeled_sessions, preserved_labeled_sessions)
 
@@ -2154,6 +2317,37 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
     # delayed-label supervision signals that are not present in CSV.
     if state_path:
         save_full_state(state_path, model, baseline, detector, scorer, prev_gamma)
+
+    # ── Inactivity-aware summary fields ─────────────────────────────────────
+    # idle_since_min: time from last session end to NOW (current wall-clock).
+    # This is NOT the inter-session gap stored in TimeSinceLastSessionMin — it
+    # represents how long the user has been away from Instagram right now.
+    _idle_since_min = None
+    if results:
+        _last_end_str = results[-1].get('endTime', 'Unknown')
+        if _last_end_str and _last_end_str not in ('Unknown', ''):
+            try:
+                _last_end_dt = pd.to_datetime(_last_end_str, errors='coerce')
+                if pd.notna(_last_end_dt):
+                    _idle_since_min = max(0.0, (pd.Timestamp.now() - _last_end_dt).total_seconds() / 60.0)
+            except Exception:
+                pass
+
+    _today_str = pd.Timestamp.now().strftime('%Y-%m-%d')
+    _sessions_today = sum(
+        1 for r in results
+        if isinstance(r.get('startTime'), str) and r['startTime'].startswith(_today_str)
+    )
+
+    output_payload.update({
+        # Most-recent session's S_t on a 0-100 scale — used by header ring
+        "captureRiskScore": round(float(results[-1]['S_t']) * 100, 1) if results else None,
+        # Count of sessions tracked today — used by inactivity guard
+        "sessionsToday": _sessions_today,
+        # Current idle duration (now − last session end); null if endTime unknown
+        "idleSinceLastSessionMin": round(_idle_since_min, 1) if _idle_since_min is not None else None,
+        "weekly_summary": _compute_weekly_summary_from_detector(detector),
+    })
 
     return json.dumps(output_payload)
 
@@ -2833,6 +3027,90 @@ def run_report_payload(json_data: str, csv_data: str = "") -> str:
         return json.dumps({"error": str(err_msg)})
 
 
+def _compute_weekly_summary_from_detector(detector) -> dict:
+    """
+    Core weekly-summary calculation from an already-loaded RegimeDetector.
+    Shared by run_dashboard_payload (inline, every dashboard call) and
+    compute_weekly_summary (WorkManager notification path, once per week).
+    """
+    doom_history = list(detector.doom_history) if getattr(detector, 'doom_history', None) else []
+    if not doom_history:
+        return {
+            'this_week_doom_rate': 0.0, 'last_week_doom_rate': 0.0, 'delta_pct': 0.0,
+            'session_count_this_week': 0, 'session_count_last_week': 0,
+            'insight': 'Not enough data yet for weekly summary.', 'regret_calibration': {}
+        }
+
+    doom_timestamps = list(getattr(detector, 'doom_timestamps', []) or [])
+    if len(doom_timestamps) > len(doom_history):
+        doom_timestamps = doom_timestamps[-len(doom_history):]
+    elif len(doom_timestamps) < len(doom_history):
+        doom_timestamps = ([''] * (len(doom_history) - len(doom_timestamps))) + doom_timestamps
+
+    timestamped = []
+    for doom, ts in zip(doom_history, doom_timestamps):
+        dt = pd.to_datetime(ts, errors='coerce') if ts else pd.NaT
+        if pd.isna(dt):
+            continue
+        try:
+            if getattr(dt, 'tzinfo', None) is not None:
+                dt = dt.tz_convert('UTC').tz_localize(None)
+        except Exception:
+            try:
+                dt = dt.tz_localize(None)
+            except Exception:
+                pass
+        timestamped.append((float(doom), dt))
+
+    if len(timestamped) < 3:
+        return {
+            'this_week_doom_rate': 0.0, 'last_week_doom_rate': 0.0, 'delta_pct': 0.0,
+            'session_count_this_week': len(timestamped), 'session_count_last_week': 0,
+            'insight': f'Building baseline ({len(timestamped)} timestamped sessions tracked so far).',
+            'regret_calibration': {}
+        }
+
+    anchor_ts = pd.Timestamp.now()
+    this_week_start = anchor_ts - pd.Timedelta(days=7)
+    last_week_start = anchor_ts - pd.Timedelta(days=14)
+
+    this_week = [d for d, ts in timestamped if this_week_start < ts <= anchor_ts]
+    last_week = [d for d, ts in timestamped if last_week_start < ts <= this_week_start]
+
+    this_week_doom = float(np.mean(this_week)) if this_week else 0.0
+    last_week_doom = float(np.mean(last_week)) if last_week else 0.0
+    delta_pct_pts = (last_week_doom - this_week_doom) * 100.0
+
+    if len(this_week) == 0:
+        insight = 'Not enough data for this week.'
+    elif len(last_week) == 0:
+        insight = f'This week doom rate: {this_week_doom*100:.0f}% (no prior-week baseline yet).'
+    elif abs(delta_pct_pts) < 3:
+        insight = f'Your doom rate remained stable at {this_week_doom*100:.0f}% this week.'
+    elif delta_pct_pts >= 12:
+        insight = f'Great progress! Your doom rate dropped {delta_pct_pts:.0f}% this week (from {last_week_doom*100:.0f}% to {this_week_doom*100:.0f}%).'
+    elif delta_pct_pts >= 5:
+        insight = f'Your doom rate improved by {delta_pct_pts:.0f}% this week, keep it up.'
+    elif delta_pct_pts <= -12:
+        insight = f'Your doom rate increased by {abs(delta_pct_pts):.0f}% this week. Consider your triggers.'
+    elif delta_pct_pts <= -5:
+        insight = f'Your doom rate rose by {abs(delta_pct_pts):.0f}% this week. Small changes can help.'
+    else:
+        insight = f'Your doom rate shifted {abs(delta_pct_pts):.0f}%, stay aware.'
+
+    rv = getattr(detector, 'regret_validator', None)
+    regret_calib = rv.get_calibration_quality() if rv else {}
+    return {
+        'this_week_doom_rate': this_week_doom,
+        'last_week_doom_rate': last_week_doom,
+        'delta_pct': delta_pct_pts,
+        'session_count_this_week': len(this_week),
+        'session_count_last_week': len(last_week),
+        'insight': insight,
+        'regret_calibration': regret_calib
+    }
+
+
 def compute_weekly_summary(state_path: str) -> dict:
     """
     Compute week-over-week doom rate statistics for the weekly notification.
@@ -2850,75 +3128,7 @@ def compute_weekly_summary(state_path: str) -> dict:
     """
     try:
         model, baseline, detector, scorer, prev_gamma = load_full_state(state_path)
-        
-        # Get doom history (last ~70 sessions, ~2 weeks if 5 sessions/day)
-        if not detector.doom_history:
-            return {
-                'this_week_doom_rate': 0.0,
-                'last_week_doom_rate': 0.0,
-                'delta_pct': 0.0,
-                'session_count_this_week': 0,
-                'session_count_last_week': 0,
-                'insight': 'Not enough data yet for weekly summary.',
-                'regret_calibration': {}
-            }
-        
-        # Assume ~5-7 sessions per week (1-2 per day typical range)
-        # Get last 14 days of data (~35-70 sessions)
-        recent_history = detector.doom_history[-70:] if len(detector.doom_history) > 70 else detector.doom_history
-        
-        if len(recent_history) < 10:
-            return {
-                'this_week_doom_rate': 0.0,
-                'last_week_doom_rate': 0.0,
-                'delta_pct': 0.0,
-                'session_count_this_week': len(recent_history),
-                'session_count_last_week': 0,
-                'insight': f'Building baseline ({len(recent_history)} sessions tracked so far).',
-                'regret_calibration': {}
-            }
-        
-        # Split into this week (last ~35 sessions) and last week (prior ~35)
-        # Estimate session length from detector history
-        cutoff = len(recent_history) // 2
-        
-        last_week = recent_history[:cutoff]
-        this_week = recent_history[cutoff:]
-        
-        this_week_doom  = float(np.mean(this_week)) if this_week else 0.0
-        last_week_doom  = float(np.mean(last_week)) if last_week else 0.0
-        
-        # Delta: positive = improvement (lower doom), negative = worsening
-        delta_pct_pts = (last_week_doom - this_week_doom) * 100
-        
-        # Generate insight text
-        if len(this_week) == 0:
-            insight = "Not enough data for this week."
-        elif abs(delta_pct_pts) < 3:
-            insight = f"Your doom rate remained stable at {this_week_doom*100:.0f}% this week."
-        elif delta_pct_pts >= 12:
-            insight = f"Great progress! Your doom rate dropped {delta_pct_pts:.0f}% this week (from {last_week_doom*100:.0f}% to {this_week_doom*100:.0f}%)."
-        elif delta_pct_pts >= 5:
-            insight = f"Your doom rate improved by {delta_pct_pts:.0f}% this week — keep it up!"
-        elif delta_pct_pts <= -12:
-            insight = f"Your doom rate increased by {abs(delta_pct_pts):.0f}% this week. Consider your triggers."
-        elif delta_pct_pts <= -5:
-            insight = f"Your doom rate rose by {abs(delta_pct_pts):.0f}% this week. Small changes can help."
-        else:
-            insight = f"Your doom rate shifted {abs(delta_pct_pts):.0f}% — stay aware."
-        
-        # Include regret calibration diagnostics if available
-        regret_calib = detector.regret_validator.get_calibration_quality() if detector.regret_validator else {}
-        
-        return {
-            'this_week_doom_rate': this_week_doom,
-            'last_week_doom_rate': last_week_doom,
-            'delta_pct': delta_pct_pts,
-            'session_count_this_week': len(this_week),
-            'session_count_last_week': len(last_week),
-            'insight': insight,
-            'regret_calibration': regret_calib
-        }
+        return _compute_weekly_summary_from_detector(detector)
     except Exception as e:
         print(f"WEEKLY_SUMMARY_FAILED: {e}")
         return {

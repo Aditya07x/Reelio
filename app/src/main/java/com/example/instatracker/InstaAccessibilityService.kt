@@ -42,6 +42,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 import kotlin.jvm.Volatile
 import java.util.UUID
 import com.chaquo.python.Python
@@ -244,9 +245,14 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     companion object {
         private const val WINDOW_SIZE = 5
         private const val PREFS_NAME = "InstaTrackerPrefs"
+        const val SURVEY_CHANNEL_ID = "survey_channel"
         const val SURVEY_NOTIF_ID_BASE = 90000
         private const val REENTRY_NEW_SESSION_GAP_MS = 5_000L
         private const val SURVEY_ACTIVITY_STALE_MS = 15 * 60 * 1000L
+        private const val POST_SURVEY_DELAY_MIN_MS = 30_000L
+        private const val POST_SURVEY_DELAY_MAX_MS = 45_000L
+        private const val POST_SURVEY_REQUEST_CODE_OFFSET = 2_000
+        private const val MIN_REELS_FOR_POST_SURVEY = 1
         private const val MAX_DWELL_HISTORY = 200
         private const val MAX_SCROLL_INTERVALS = 200
         private const val MAX_INTERACTION_HISTORY = 200
@@ -282,11 +288,49 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         // accessibility service (background) and Dashboard activity (foreground) when 
         // reading/writing CSV or model state via Python.
         val GLOBAL_PYTHON_LOCK = Any()
+
+        fun showPostSurveyNotification(context: Context, sessionNum: Int) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    SURVEY_CHANNEL_ID,
+                    "Survey Requests",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Post-session micro probes"
+                }
+                (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                    .createNotificationChannel(channel)
+            }
+
+            val intent = Intent(context, MicroProbeActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val notifId = SURVEY_NOTIF_ID_BASE + sessionNum
+
+            val builder = NotificationCompat.Builder(context, SURVEY_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_aware_notification)
+                .setContentTitle("Reelio Check-In")
+                .setContentText("Tap to record your post-session mood rating.")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setTimeoutAfter(10 * 60 * 1000L)
+
+            Log.i("ReelioDiag", "Showing post survey notification id=$notifId session=$sessionNum")
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .notify(notifId, builder.build())
+        }
     }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-    private val CHANNEL_ID = "survey_channel"
+    private val CHANNEL_ID = SURVEY_CHANNEL_ID
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -1018,6 +1062,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             lastReelStartTime = 0L
             reelCount = 0
             dwellWindow.clear()
+            val hasMeaningfulReelActivity = savedReelCount >= MIN_REELS_FOR_POST_SURVEY
             
             val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             
@@ -1048,13 +1093,14 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                 "Post survey gate: session=$currentSessionNumber surveySessionNum=$surveySessionNum isSurvey=$isSurvey completedFor=$completedForSession alreadyCompleted=$alreadyCompleted surveyOpen=$surveyAlreadyOpen pending=${prefs.getInt("pending_survey_session_num", -1)}"
             )
 
-            if (isSurvey && !alreadyCompleted && !surveyAlreadyOpen) {
+            if (isSurvey && !alreadyCompleted && !surveyAlreadyOpen && hasMeaningfulReelActivity) {
                 // Cancel any stale survey notification from a previous session
                 // that the user never completed, so notifications don't stack.
                 val prevPending = prefs.getInt("pending_survey_session_num", -1)
                 if (prevPending >= 0 && prevPending != currentSessionNumber) {
                     val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     nm.cancel(SURVEY_NOTIF_ID_BASE + prevPending)
+                    cancelPostSurveyAlarm(prevPending)
                 }
                 // Generate UUID synchronously BEFORE firing the notification,
                 // so MicroProbeActivity always reads the correct session UUID.
@@ -1068,9 +1114,15 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                     .putInt("survey_session_num", -1)
                     .apply()
                 pendingSessionUuid = sessionUuid
-                Log.i("ReelioDiag", "Post survey prompt queued for session=$currentSessionNumber")
-                showSurveyPrompt()
+                val delayMs = schedulePostSurveyPrompt(endTime, currentSessionNumber)
+                Log.i(
+                    "ReelioDiag",
+                    "Post survey prompt queued for session=$currentSessionNumber delayMs=$delayMs"
+                )
             } else {
+                if (!hasMeaningfulReelActivity) {
+                    Log.i("ReelioDiag", "Post survey skipped: no reel activity for session=$currentSessionNumber")
+                }
                 Log.i("ReelioDiag", "Post survey skipped for session=$currentSessionNumber")
             }
             
@@ -1110,7 +1162,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     
     private fun schedulePostSessionProbes(sessionEndTime: Long) {
         // Only schedule delayed probe if this was a survey session
-        // (pendingSessionUuid is set when survey notification fires)
+        // (pendingSessionUuid is set when post-survey is queued)
         if (pendingSessionUuid == null) return
         
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -1145,6 +1197,44 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                 )
             }
         }
+    }
+
+    private fun schedulePostSurveyPrompt(sessionEndTime: Long, sessionNum: Int): Long {
+        val delayMs = Random.nextLong(POST_SURVEY_DELAY_MIN_MS, POST_SURVEY_DELAY_MAX_MS + 1)
+        val triggerAt = sessionEndTime + delayMs
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(this, PostSurveyReceiver::class.java).apply {
+            putExtra("session_num", sessionNum)
+        }
+        val pending = PendingIntent.getBroadcast(
+            this,
+            sessionNum + POST_SURVEY_REQUEST_CODE_OFFSET,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+            Log.w("InstaTracker", "Exact alarm permission not granted - using inexact post-survey alarm")
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
+        } else {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
+        }
+
+        prefs.edit().putLong("pending_post_survey_trigger_at", triggerAt).apply()
+        return delayMs
+    }
+
+    private fun cancelPostSurveyAlarm(sessionNum: Int) {
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(this, PostSurveyReceiver::class.java)
+        val pending = PendingIntent.getBroadcast(
+            this,
+            sessionNum + POST_SURVEY_REQUEST_CODE_OFFSET,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(pending)
     }
     
     private fun injectSessionToDatabase(startTime: Long, endTime: Long, preGeneratedUuid: String? = null) {
@@ -1498,22 +1588,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     private fun showSurveyPrompt() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val sessNum = prefs.getInt("pending_survey_session_num", currentSessionNumber)
-        val intent = Intent(this, MicroProbeActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        // Use a fixed notification ID so MicroProbeActivity can cancel it reliably
-        val notifId = SURVEY_NOTIF_ID_BASE + sessNum
-        val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_aware_notification)
-            .setContentTitle("Reelio Check-In")
-            .setContentText("Tap to record your post-session mood rating.")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setTimeoutAfter(10 * 60 * 1000L) // auto-dismiss after 10 min
-        Log.i("ReelioDiag", "Showing post survey notification id=$notifId session=$sessNum")
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(notifId, builder.build())
+        showPostSurveyNotification(this, sessNum)
     }
     
     private fun showIntentionPrompt() {
