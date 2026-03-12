@@ -57,26 +57,166 @@ function LoadingState() {
 
 // ─── ONBOARDING QUOTES ────────────────────────────────────────────────────────
 const ONBOARD_QUOTES = [
-    { text: "You have power over your mind, not outside events. Realise this and you will find strength. The algorithm has power over your mind. It found strength first.", tag: "Marcus Aurelius · Meditations" },
-    { text: "The definition of insanity is doing the same thing over and over and expecting different results. You have opened this app 8 times today. Each time you opened it, you expected to feel fine. Results have been consistent.", tag: "Einstein · misattributed, applicable" },
-    { text: "One must imagine Sisyphus happy. One must also imagine you closing the app. Both require the same suspension of disbelief.", tag: "Camus · The Myth of Sisyphus" },
-    { text: "The unexamined life is not worth living. You have examined 74 strangers' lives this session alone. Yours remains, as yet, unscheduled.", tag: "Socrates · The Apology" },
-    { text: "When you gaze long into the abyss, the abyss gazes back into you. The abyss has 1.2 million followers, a podcast, and a Patreon.", tag: "Nietzsche · Beyond the Algorithm" },
-    { text: "We are what we repeatedly do. Excellence, then, is a habit. You have repeatedly, without fail, opened this app within 12 minutes of waking. You have become very excellent at something.", tag: "Aristotle · Nicomachean Ethics" },
-    { text: "All the world's a stage, and all the men and women merely players. Some have more followers than others. This was not what Jaques meant but it is what happened.", tag: "Shakespeare · As You Like It" },
-    { text: "I think, therefore I am. You scroll, therefore you are somewhere between awake and not. Cogito ergo doom.", tag: "Descartes · Discourse on the Method" },
-    { text: "Not all those who wander are lost. All those who scroll without intention are. This is a meaningful distinction that Tolkien did not need to make but we do.", tag: "Tolkien · The Fellowship of the Ring" },
-    { text: "A journey of a thousand miles begins with a single step. A doom session of three hours begins with a single tap. The mechanics are identical. The destination is not.", tag: "Lao Tzu · Tao Te Ching" },
-    { text: "Peace comes from within. Do not seek it without. You have sought it in approximately 2,800 videos this month. This is a large sample size with a consistent null result. Adjust methodology.", tag: "Buddha · Dhammapada" },
-    { text: "An object in motion stays in motion unless acted upon by an outside force. You are an object in motion through an infinite scroll. Reelio is attempting to be the outside force. It is trying its best.", tag: "Newton · First Law of Motion" },
-    { text: "Know thyself. Before you do, however, allow this 15-second ad for something you whispered about near your phone two days ago.", tag: "Oracle of Delphi · 400 BC" },
-    { text: "The road goes ever on and on. So does the feed. Tolkien meant this as an invitation to adventure. Instagram means it as a business model. These are not the same invitation.", tag: "Tolkien · The Hobbit" },
-    { text: "I can resist everything except temptation. The notification badge is not a temptation. It is an engineered stimulus. Wilde did not have this distinction available. You do. Use it.", tag: "Oscar Wilde · Lady Windermere's Fan" },
-    { text: "Big Brother is watching you. Big Brother has also noted your re-watch pattern on dog content at 11:47pm and reclassified you accordingly. This detail was not in the first edition.", tag: "Orwell · 1984" },
-    { text: "Vindica te tibi. Claim yourself for yourself. This is the inscription above Seneca's mantelpiece, figuratively speaking. It is the opposite instruction from the one you are currently following.", tag: "Seneca · Letters to Lucilius" },
-    { text: "The mind is everything. What you think, you become. You have been thinking about a raccoon stealing a churro for three days. Proceed accordingly.", tag: "Buddha · Dhammapada" },
-    { text: "Slot machines were redesigned in the 1980s to maximise the time between pulls. Short-form video was designed in the 2010s with identical intent and a considerably larger sample size.", tag: "game theory" },
-    { text: "Your screen time report arrives every Sunday morning like a small, honest accountant who you continue to ignore. The accountant does not take this personally. The accountant simply returns next week.", tag: "digital confession" },
+    {
+        text: "You have power over your mind, not outside events. Realise this and you will find strength. The algorithm realised it first.",
+        tag: "Marcus Aurelius · Meditations"
+    },
+    {
+        text: "When you gaze long into the abyss, the abyss gazes back. The abyss has 1.2 million followers and a Patreon.",
+        tag: "Nietzsche · approximately"
+    },
+    {
+        text: "Cogito ergo doom.",
+        tag: "Descartes · if he had wifi"
+    },
+    {
+        text: "We are what we repeatedly do. You have opened this app within 12 minutes of waking, without fail, for 19 days. You have become very excellent at something.",
+        tag: "Aristotle · Nicomachean Ethics"
+    },
+    {
+        text: "Your screen time report arrives every Sunday like a small honest accountant you have never once listened to. The accountant does not take this personally. The accountant simply returns.",
+        tag: "digital confession"
+    },
+    {
+        text: "Know thyself. Before you do, however, allow this 15-second ad for something you whispered about near your phone two days ago.",
+        tag: "Oracle of Delphi · 400 BC"
+    },
+    {
+        text: "Not all those who wander are lost. This does not apply to infinite scroll.",
+        tag: "Tolkien · The Fellowship of the Ring"
+    },
+    {
+        text: "A journey of a thousand miles begins with a single step. A three-hour session begins with a single tap. The mechanics are identical. The destination is not.",
+        tag: "Lao Tzu · Tao Te Ching"
+    },
+    {
+        text: "I can resist everything except temptation. The notification badge is not a temptation. It is an engineered stimulus. This is a meaningful distinction.",
+        tag: "Oscar Wilde · Lady Windermere's Fan"
+    },
+    {
+        text: "Big Brother is watching you. Big Brother has also noted your re-watch pattern on dog content at 11:47pm and adjusted your feed accordingly. This detail was not in the first edition.",
+        tag: "Orwell · 1984"
+    },
+    {
+        text: "Vindica te tibi. Claim yourself for yourself. The opposite instruction is currently available in your pocket at all times.",
+        tag: "Seneca · Letters to Lucilius"
+    },
+    {
+        text: "The mind is everything. What you think, you become. You have been thinking about a raccoon stealing a churro for three days.",
+        tag: "Buddha · Dhammapada"
+    },
+    {
+        text: "All the world's a stage. Some have more followers than others. This was not what Jaques meant but it is what happened.",
+        tag: "Shakespeare · As You Like It"
+    },
+    {
+        text: "An object in motion stays in motion unless acted upon by an outside force. Reelio is attempting to be the outside force. It is trying its best.",
+        tag: "Newton · First Law"
+    },
+    {
+        text: "The unexamined life is not worth living. You have examined 74 strangers' lives this session. Yours remains, as yet, unscheduled.",
+        tag: "Socrates · The Apology"
+    },
+    {
+        text: "Peace comes from within. You have checked outside approximately 2,800 times this month. Consistent null result.",
+        tag: "Buddha · Dhammapada"
+    },
+    {
+        text: "The road goes ever on and on. Tolkien meant this as an invitation to adventure. Instagram means it as a business model.",
+        tag: "Tolkien · The Hobbit"
+    },
+    {
+        text: "Slot machines were redesigned in the 1980s to maximise time between pulls. Short-form video was designed in the 2010s with identical intent and a considerably larger sample size.",
+        tag: "game theory"
+    },
+    {
+        text: "This is fine.",
+        tag: "the dog · 2013 · still applicable"
+    },
+    {
+        text: "You opened Instagram for a quick look. Archaeologists will later describe this era as the Late Quick Look Period.",
+        tag: "future historians · presumably"
+    },
+    {
+        text: "The average human attention span is now shorter than a goldfish's. The goldfish does not have a dopamine problem. The goldfish does not have Instagram.",
+        tag: "Microsoft Research · 2015"
+    },
+    {
+        text: "In 2009 the Like button was invented. In 2010 it was deployed to one billion people. Nobody asked the one billion people if this was a good idea.",
+        tag: "product history"
+    },
+    {
+        text: "You are not procrastinating. You are pre-experiencing the relief of finishing the thing you have not started.",
+        tag: "cognitive reframe · invalid"
+    },
+    {
+        text: "There is a version of you that closed the app after two minutes, went outside, and is now slightly better at being a person. Reelio is trying to introduce you.",
+        tag: "ALSE v3.0"
+    },
+    {
+        text: "The present moment always will have been. This one included.",
+        tag: "Stoic fragment · unattributed"
+    },
+    {
+        text: "Boredom is a skill. It was once the only option available. It produced most of Western literature.",
+        tag: "pre-2007"
+    },
+    {
+        text: "Variable reward schedules are also how slot machines work. This is not a coincidence. This was a design decision made in a meeting by people who knew exactly what they were doing.",
+        tag: "behavioral economics"
+    },
+    {
+        text: "Your attention is the most valuable thing you own. Several publicly listed companies agree with you.",
+        tag: "market capitalisation"
+    },
+    {
+        text: "Every reel you watched tonight had a team of engineers whose sole job was to make sure you watched the next one. You were not bored. You were outgunned.",
+        tag: "ALSE · session log"
+    },
+    {
+        text: "The app has no closing time. This was also a design decision.",
+        tag: "product strategy · 2010"
+    },
+    {
+        text: "Somewhere, a recommendation engine is disappointed in you. Good.",
+        tag: "ALSE · root for the underdog"
+    },
+    {
+        text: "You closed the app. It is already thinking about how to get you back.",
+        tag: "retention team · always on"
+    },
+    {
+        text: "To do two things at once is to do neither. You were doing one thing. It was also doing one thing. The one thing was you.",
+        tag: "Publilius Syrus · updated"
+    },
+    {
+        text: "We shape our tools and thereafter our tools shape us. Marshall McLuhan said this in 1964. He did not know how right he was. He was very right.",
+        tag: "McLuhan · Understanding Media"
+    },
+    {
+        text: "The best time to stop was 40 minutes ago. The second best time is now.",
+        tag: "ancient proverb · adapted"
+    },
+    {
+        text: "You have seen a video of someone else's dog, someone else's holiday, someone else's kitchen renovation, and someone else's opinion about a film you have not seen. You feel vaguely worse. The model predicted this.",
+        tag: "ALSE · session summary"
+    },
+    {
+        text: "The Greek word for idleness is skholē. It is also the root of the word school. They considered rest to be where thinking happened. They did not have push notifications.",
+        tag: "etymology"
+    },
+    {
+        text: "This app is free. You are not the customer. This is the oldest joke on the internet. It is still true.",
+        tag: "media literacy · 2008 — present"
+    },
+    {
+        text: "Your phone has no idea what time it is where you are emotionally. Reelio is trying to find out.",
+        tag: "ALSE v3.0 · calibrating"
+    },
+    {
+        text: "Leisure is the basis of culture. Josef Pieper wrote this in 1948. He meant rest, contemplation, and silence. He did not mean this. But here we are.",
+        tag: "Pieper · Leisure the Basis of Culture"
+    },
 ];
 
 // ─── ONBOARDING BLOB CONFIG ──────────────────────────────────────────────────
@@ -844,6 +984,47 @@ function normalizeData(rawData) {
         return streak;
     })();
 
+    // Count of consecutive mindful sessions from the most recent backwards.
+    // Breaks on first doom session.
+    const derivedMindfulStreak = (() => {
+        let streak = 0;
+        for (let i = sessions.length - 1; i >= 0; i -= 1) {
+            const p = maybeNum(sessions[i]?.S_t);
+            if (!isFiniteNumber(p) || p >= DOOM_THRESHOLD) break;
+            streak += 1;
+        }
+        return streak;
+    })();
+
+    // Aggregated self-report impact: compare mood shift + regret between
+    // autopilot and mindful sessions for quick dashboard insight.
+    const moodDissonance = (() => {
+        const withMood = sessions.filter((s) => maybeNum(s.moodBefore) > 0 && maybeNum(s.moodAfter) > 0);
+        const withRegret = sessions.filter((s) => maybeNum(s.regretScore) > 0);
+        if (!withMood.length && !withRegret.length) return null;
+
+        const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+        const isDoomSession = (s) => {
+            const p = maybeNum(s.S_t);
+            return isFiniteNumber(p) && p >= DOOM_THRESHOLD;
+        };
+
+        const doomMood = withMood.filter(isDoomSession);
+        const mindfulMood = withMood.filter((s) => !isDoomSession(s));
+        const doomRegret = withRegret.filter(isDoomSession);
+        const mindfulRegret = withRegret.filter((s) => !isDoomSession(s));
+
+        return {
+            doomMoodDelta: avg(doomMood.map((s) => maybeNum(s.moodAfter) - maybeNum(s.moodBefore)).filter(isFiniteNumber)),
+            mindfulMoodDelta: avg(mindfulMood.map((s) => maybeNum(s.moodAfter) - maybeNum(s.moodBefore)).filter(isFiniteNumber)),
+            doomAvgRegret: avg(doomRegret.map((s) => maybeNum(s.regretScore)).filter(isFiniteNumber)),
+            mindfulAvgRegret: avg(mindfulRegret.map((s) => maybeNum(s.regretScore)).filter(isFiniteNumber)),
+            doomSurveyed: Math.max(doomMood.length, doomRegret.length),
+            mindfulSurveyed: Math.max(mindfulMood.length, mindfulRegret.length),
+            totalSurveyed: withMood.length + withRegret.length,
+        };
+    })();
+
     const avgSessions = maybeNum(rawData?.avgSessions) ?? derivedAvgSessions;
     const sessionsToday = maybeNum(rawData?.sessionsToday) ?? derivedSessionsToday;
     const todayVsAvgDelta = maybeNum(rawData?.todayVsAvgDelta) ?? (
@@ -902,6 +1083,8 @@ function normalizeData(rawData) {
         dateBuckets,
         todaySessions,
         doomStreak: maybeNum(rawData?.doomStreak) ?? derivedDoomStreak,
+        mindfulStreak: maybeNum(rawData?.mindfulStreak) ?? derivedMindfulStreak,
+        moodDissonance,
         currentHour: maybeNum(rawData?.currentHour) ?? new Date().getHours(),
         todayVsAvgDelta,
         dataSinceDate,
