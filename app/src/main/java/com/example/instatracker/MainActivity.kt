@@ -4,6 +4,9 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -22,7 +25,9 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
+import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -317,6 +322,13 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        /**
+         * Prompts the user to confirm and clear stored behavioral event data.
+         *
+         * Exposed to JavaScript via the WebView interface. Shows a confirmation dialog; if the user confirms,
+         * deletes the file "insta_data.csv" from the app's files directory and triggers a refresh of the WebView
+         * to update the UI.
+         */
         @JavascriptInterface
         fun clearData() {
             // Need to run AlertDialog on UI thread
@@ -335,6 +347,46 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        /**
+         * Generates an intelligence report PDF from the provided JSON payload and launches a share intent for the PDF.
+         *
+         * Parses the given JSON payload, creates a timestamped PDF via createIntelligenceReportPdf, and if successful
+         * exposes the file through a FileProvider and opens the system share sheet. On failure shows a toast message.
+         *
+         * @param payloadJson JSON string containing the report payload; if null or invalid an empty payload is used.
+         */
+        @JavascriptInterface
+        fun generateIntelligenceReport(payloadJson: String?) {
+            handler.post {
+                try {
+                    val payload = JSONObject(payloadJson ?: "{}")
+                    val file = createIntelligenceReportPdf(payload)
+                    if (file == null || !file.exists()) {
+                        android.widget.Toast.makeText(mContext, "Failed to generate report", android.widget.Toast.LENGTH_SHORT).show()
+                        return@post
+                    }
+
+                    val uri: Uri = FileProvider.getUriForFile(mContext, "${packageName}.fileprovider", file)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_STREAM, uri as android.os.Parcelable)
+                        putExtra(Intent.EXTRA_SUBJECT, "Reelio Intelligence Report")
+                        putExtra(Intent.EXTRA_TEXT, "Generated from on-device ALSE model")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(intent, "Share Intelligence Report"))
+                } catch (e: Exception) {
+                    Log.e("ReactDashboard", "PDF generation error: ${e.message}", e)
+                    android.widget.Toast.makeText(mContext, "Unable to generate report", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        /**
+         * Stores the survey sampling probability in the app's shared preferences under the key "survey_probability".
+         *
+         * @param prob The probability (0.0 to 1.0) that determines how frequently surveys are presented.
+         */
         @JavascriptInterface
         fun setSurveyFrequency(prob: Float) {
             mContext.getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
@@ -356,6 +408,14 @@ class MainActivity : ComponentActivity() {
                 .apply()
         }
 
+        /**
+         * Fetches the stored sleep schedule as a comma-separated "startHour,endHour" string.
+         *
+         * Reads values from SharedPreferences "InstaTrackerPrefs" under keys `sleep_start_hour` and
+         * `sleep_end_hour`; defaults are 23 (11 PM) for start and 7 (7 AM) for end when keys are absent.
+         *
+         * @return A string formatted as "startHour,endHour" where each hour is an integer in 24-hour format.
+         */
         @JavascriptInterface
         fun getSleepSchedule(): String {
             val prefs = mContext.getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
@@ -496,5 +556,129 @@ class MainActivity : ComponentActivity() {
                 android.widget.Toast.makeText(mContext, "Error saving report: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    /**
+     * Generate a timestamped intelligence report PDF from the provided analytics payload.
+     *
+     * The payload is expected to contain session telemetry and model outputs used to populate
+     * sections such as Executive Summary, Behavior Totals, Model Dynamics, and Interpretation.
+     * Recognized fields include:
+     * - "sessions": an array of session objects (each may contain `nReels`, `totalInteractions`, `S_t`)
+     * - "model_parameters": an object (e.g., containing `transition_matrix`, `regime_stability_score`)
+     * - "model_confidence": a numeric confidence value
+     *
+     * @param payload JSON object containing sessions and model information used to build the report.
+     * @return A File pointing to the generated PDF saved in the app cache directory, or `null` if generation failed.
+     */
+    private fun createIntelligenceReportPdf(payload: JSONObject): File? {
+        return try {
+            val sessions = payload.optJSONArray("sessions")
+            val sessionCount = sessions?.length() ?: 0
+            val modelParams = payload.optJSONObject("model_parameters")
+            val modelConfidence = payload.optDouble("model_confidence", 0.0)
+
+            var totalReels = 0
+            var totalInteractions = 0
+            var avgDoom = 0.0
+            var latestDoom = 0.0
+            if (sessionCount > 0 && sessions != null) {
+                for (i in 0 until sessionCount) {
+                    val s = sessions.optJSONObject(i) ?: continue
+                    totalReels += s.optInt("nReels", 0)
+                    totalInteractions += s.optInt("totalInteractions", 0)
+                    avgDoom += s.optDouble("S_t", 0.0)
+                    if (i == sessionCount - 1) latestDoom = s.optDouble("S_t", 0.0)
+                }
+                avgDoom /= sessionCount.toDouble()
+            }
+
+            val reportFile = File(cacheDir, "reelio_intelligence_report_${System.currentTimeMillis()}.pdf")
+            val pdf = PdfDocument()
+            val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
+            val page = pdf.startPage(pageInfo)
+            val canvas = page.canvas
+
+            val titlePaint = Paint().apply {
+                color = Color.BLACK
+                textSize = 20f
+                isFakeBoldText = true
+            }
+            val sectionPaint = Paint().apply {
+                color = Color.BLACK
+                textSize = 14f
+                isFakeBoldText = true
+            }
+            val bodyPaint = Paint().apply {
+                color = Color.DKGRAY
+                textSize = 11f
+            }
+
+            var y = 50f
+            canvas.drawText("Reelio Intelligence Report", 40f, y, titlePaint)
+            y += 20f
+            canvas.drawText("Generated on-device • ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm").format(java.util.Date())}", 40f, y, bodyPaint)
+            y += 30f
+
+            canvas.drawText("Executive Summary", 40f, y, sectionPaint)
+            y += 20f
+            y = drawWrappedLine(canvas, "Sessions analyzed: $sessionCount", 40f, y, bodyPaint)
+            y = drawWrappedLine(canvas, "Latest session doom score: ${"%.2f".format(latestDoom)}", 40f, y, bodyPaint)
+            y = drawWrappedLine(canvas, "Average doom score: ${"%.2f".format(avgDoom)}", 40f, y, bodyPaint)
+            y = drawWrappedLine(canvas, "Model confidence: ${"%.2f".format(modelConfidence)}", 40f, y, bodyPaint)
+            y += 12f
+
+            canvas.drawText("Behavior Totals", 40f, y, sectionPaint)
+            y += 20f
+            y = drawWrappedLine(canvas, "Total reels observed: $totalReels", 40f, y, bodyPaint)
+            y = drawWrappedLine(canvas, "Total interactions (likes/comments/shares/saves): $totalInteractions", 40f, y, bodyPaint)
+            y += 12f
+
+            canvas.drawText("Model Dynamics", 40f, y, sectionPaint)
+            y += 20f
+            val transition = modelParams?.optJSONArray("transition_matrix")
+            val regime = modelParams?.optDouble("regime_stability_score", 0.0) ?: 0.0
+            y = drawWrappedLine(canvas, "Regime stability score: ${"%.2f".format(regime)}", 40f, y, bodyPaint)
+            y = drawWrappedLine(canvas, "Transition matrix: ${transition?.toString() ?: "N/A"}", 40f, y, bodyPaint)
+            y += 12f
+
+            canvas.drawText("Interpretation", 40f, y, sectionPaint)
+            y += 20f
+            val riskBand = when {
+                latestDoom >= 0.65 -> "High capture risk"
+                latestDoom >= 0.35 -> "Moderate capture risk"
+                else -> "Low capture risk"
+            }
+            y = drawWrappedLine(canvas, "Current risk band: $riskBand", 40f, y, bodyPaint)
+            drawWrappedLine(canvas, "This report is generated from local session telemetry and ALSE probabilities without sending data off-device.", 40f, y, bodyPaint)
+
+            pdf.finishPage(page)
+            FileOutputStream(reportFile).use { pdf.writeTo(it) }
+            pdf.close()
+            reportFile
+        } catch (e: Exception) {
+            Log.e("ReactDashboard", "createIntelligenceReportPdf failed: ${e.message}", e)
+            null
+        }
+    }
+
+    /**
+     * Draws the given text onto the canvas, wrapping it into lines of up to 80 characters.
+     *
+     * @param canvas Canvas to draw onto.
+     * @param text The text to render; it will be chunked into lines of up to 80 characters.
+     * @param x The x-coordinate where each line starts.
+     * @param yStart The starting y-coordinate for the first line.
+     * @param paint Paint used to style and measure the text.
+     * @return The y-coordinate immediately after the last drawn line.
+     */
+    private fun drawWrappedLine(canvas: android.graphics.Canvas, text: String, x: Float, yStart: Float, paint: Paint): Float {
+        val maxChars = 80
+        var y = yStart
+        text.chunked(maxChars).forEach {
+            canvas.drawText(it, x, y, paint)
+            y += 16f
+        }
+        return y
     }
 }
