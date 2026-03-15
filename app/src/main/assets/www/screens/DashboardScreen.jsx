@@ -1,5 +1,5 @@
 import {
-    useState, D, FactorIcon, Label, EmptyState, CollapsibleSection, StatusPill, InsightBox,
+    useState, useEffect, D, FactorIcon, Label, EmptyState, CollapsibleSection, StatusPill, InsightBox,
     fadeDelayStyle, safeNum, maybeNum, isFiniteNumber, safeArr, getAccuracyMeta,
     AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
     LineChart, Line, BarChart, Bar,
@@ -105,6 +105,24 @@ function DashboardToday({ data }) {
     const timeline = safeArr(data.todaySessions);
     const [selectedTimelineIdx, setSelectedTimelineIdx] = useState(null);
     const [expandedFactors, setExpandedFactors] = useState({});
+    // Tracks in-place survey overrides after a retroactive label is submitted.
+    // Key = sessionNum (string), value = label field object.
+    const [retroactiveOverrides, setRetroactiveOverrides] = useState({});
+
+    useEffect(() => {
+        // Registered by DashboardActivity.drainPendingRetroactiveLabel() on onResume.
+        // The payload is a Base64-encoded JSON string from RetroactiveSurveyActivity.
+        window.onRetroactiveLabelComplete = (b64) => {
+            try {
+                const label = JSON.parse(atob(b64));
+                const key = String(label.sessionNum);
+                setRetroactiveOverrides((prev) => ({ ...prev, [key]: label }));
+            } catch (e) {
+                console.error('onRetroactiveLabelComplete parse error:', e);
+            }
+        };
+        return () => { window.onRetroactiveLabelComplete = undefined; };
+    }, []);
 
     const circadian = safeArr(data.circadianProfile);
     const circData = circadian;
@@ -235,7 +253,10 @@ function DashboardToday({ data }) {
                             );
                         })()}
                         {selectedTimelineIdx !== null && timeline[selectedTimelineIdx] && (() => {
-                            const sel = timeline[selectedTimelineIdx];
+                            const rawSel = timeline[selectedTimelineIdx];
+                            // Apply any retroactive label that was submitted this session
+                            const override = retroactiveOverrides[String(rawSel._sessionNum)] ?? null;
+                            const sel = override ? { ...rawSel, ...override } : rawSel;
                             const hasSurvey = sel.hasSurvey || (maybeNum(sel.postSessionRating) > 0);
                             return (
                                 <div style={{ marginTop: 10 }}>
@@ -264,10 +285,115 @@ function DashboardToday({ data }) {
                                                     Intent: {sel.intendedAction}
                                                 </span>
                                             )}
+                                            {sel.retroactiveLabel && (
+                                                <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 8, background: '#F0EBF8', color: '#6B3FA0', opacity: 0.75 }}>
+                                                    ✎ retroactive
+                                                </span>
+                                            )}
                                         </div>
                                     )}
                                     {!hasSurvey && (
-                                        <div style={{ fontSize: 10, color: D.muted, opacity: 0.6, marginTop: 4 }}>No survey data</div>
+                                        <div style={{ marginTop: 6 }}>
+                                            {sel.isDoom !== undefined && (
+                                                <div style={{ fontSize: 10, color: D.muted, opacity: 0.7, marginBottom: 5 }}>
+                                                    Reelio said: <strong style={{ color: sel.isDoom ? D.danger : D.safe }}>
+                                                        {sel.isDoom ? 'Autopilot' : 'Mindful'}
+                                                    </strong>
+                                                    {sel.modelConf < 0.70 && (
+                                                    <span style={{ marginLeft: 6, fontSize: 9, background: `${D.warn}15`, color: D.warn, padding: '1px 5px', borderRadius: 4, fontWeight: 800 }}>
+                                                        HEURISTIC BLEND ({(sel.modelConf * 100).toFixed(0)}% CONF)
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                        {sel.modelConf < 0.70 && (
+                                            <div style={{ marginTop: 6, fontSize: 10, color: D.muted, lineHeight: 1.4, padding: '8px 10px', background: `${D.warn}05`, borderRadius: 10, border: `1px solid ${D.warn}15` }}>
+                                                <div style={{ color: D.warn, fontWeight: 900, marginBottom: 2 }}>⚠️ Behavioral Calibration Active</div>
+                                                Current model confidence is low ({(sel.modelConf * 100).toFixed(0)}%). Reelio is blending HMM state inference with heuristic scoring ({Math.round(sel.heuristicScore * 100)}%) to ensure capture events are not missed during learning.
+                                            </div>
+                                        )}
+
+                                            {sel.hasSurvey && (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                                                    <div style={{ padding: '4px 10px', background: 'rgba(58,158,111,0.1)', border: '1px solid rgba(58,158,111,0.2)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3A9E6F" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                            <polyline points="20 6 9 17 4 12" />
+                                                        </svg>
+                                                        <span style={{ fontSize: 10, fontWeight: 900, color: '#3A9E6F', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                                            {sel.retroactiveLabel ? "Retroactively Labeled" : "Surveyed"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {sel._sessionNum != null && sel._sessionDate && !sel.hasSurvey && (
+                                                <button
+                                                    onClick={() => {
+                                                        const predSummary = sel.isDoom !== undefined
+                                                            ? `Reelio said: ${sel.isDoom ? 'Autopilot' : 'Mindful'}`
+                                                            : '';
+                                                        const prefill = JSON.stringify({
+                                                            postSessionRating: sel.postSessionRating || 0,
+                                                            regretScore:       sel.regretScore       || 0,
+                                                            moodBefore:        sel.moodBefore         || 0,
+                                                            moodAfter:         sel.moodAfter          || 0,
+                                                            intendedAction:    sel.intendedAction      || '',
+                                                            comparativeRating: sel.comparativeRating  || 0,
+                                                            _rawSessionNum:    sel._rawSessionNum,
+                                                            _rawStartTime:     sel._rawStartTime
+                                                        });
+                                                        const sNum = sel._sessionNum;
+                                                        const sDate = sel._sessionDate;
+                                                        
+                                                        if (!sNum || !sDate) {
+                                                            console.error("[Bridge] Missing session identity", { sNum, sDate });
+                                                            alert(`Cannot label session: identifiers missing (ID: ${sNum}, Date: ${sDate}). Try refreshing the dashboard.`);
+                                                            return;
+                                                        }
+
+                                                        const logPayload = JSON.stringify({
+                                                            sessionNum: String(sNum),
+                                                            date: String(sDate),
+                                                            predSummary,
+                                                            prefill
+                                                        });
+                                                        console.log("[Bridge] Launching openRetroactiveSurvey: " + logPayload);
+                                                        
+                                                        try {
+                                                            if (window.Android && window.Android.openRetroactiveSurvey) {
+                                                                window.Android.openRetroactiveSurvey(
+                                                                    String(sNum),
+                                                                    String(sDate),
+                                                                    String(predSummary),
+                                                                    String(prefill)
+                                                                );
+                                                                // Provide immediate visual feedback that the call was made
+                                                                console.log("[Bridge] Call to native openRetroactiveSurvey succeeded.");
+                                                            } else {
+                                                                console.warn("[Bridge] window.Android.openRetroactiveSurvey not found");
+                                                                alert("Native bridge (window.Android) is not available. This feature only works inside the app.");
+                                                            }
+                                                        } catch (err) {
+                                                            console.error("[Bridge] Native call failed", err);
+                                                            alert("System error launching survey: " + err.message);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                                                        fontSize: 11, fontWeight: 800, fontFamily: "'Space Grotesk', sans-serif",
+                                                        color: D.purple, background: 'rgba(107,63,160,0.10)',
+                                                        border: '1.5px solid rgba(107,63,160,0.18)',
+                                                        borderRadius: 10, padding: '6px 12px',
+                                                        cursor: 'pointer', letterSpacing: '0.02em'
+                                                    }}
+                                                >
+                                                    ✎ Label this session
+                                                </button>
+                                            )}
+                                            {(sel._sessionNum == null || !sel._sessionDate) && (
+                                                <div style={{ fontSize: 10, color: D.muted, opacity: 0.6 }}>No survey data</div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             );

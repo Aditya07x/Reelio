@@ -1,16 +1,15 @@
 (() => {
-  // app/src/main/assets/www/shared.jsx
-  var { useState, useEffect, useRef, useMemo } = React;
-  var RechartsLib = window.Recharts || window.recharts || {};
-  var LucideLib = window.lucideReact || window.LucideReact || {};
-  var ChartNull = () => null;
-  var ChartPassThrough = ({ children }) => React.createElement(React.Fragment, null, children);
-  var ChartContainerFallback = ({ width = "100%", height = 120, children }) => {
+  const { useState, useEffect, useRef, useMemo } = React;
+  const RechartsLib = window.Recharts || window.recharts || {};
+  const LucideLib = window.lucideReact || window.LucideReact || {};
+  const ChartNull = () => null;
+  const ChartPassThrough = ({ children }) => React.createElement(React.Fragment, null, children);
+  const ChartContainerFallback = ({ width = "100%", height = 120, children }) => {
     const w = typeof width === "number" ? `${width}px` : width;
     const h = typeof height === "number" ? `${height}px` : height;
     return React.createElement("div", { style: { width: w, height: h } }, children);
   };
-  var IconFallback = ({ size = 16, color = "currentColor", style = {} }) => React.createElement(
+  const IconFallback = ({ size = 16, color = "currentColor", style = {} }) => React.createElement(
     "svg",
     {
       width: size,
@@ -25,7 +24,7 @@
     },
     React.createElement("circle", { cx: "12", cy: "12", r: "8" })
   );
-  var {
+  const {
     AreaChart = ChartPassThrough,
     Area = ChartNull,
     XAxis = ChartNull,
@@ -38,7 +37,7 @@
     BarChart = ChartPassThrough,
     Bar = ChartNull
   } = RechartsLib;
-  var {
+  const {
     Eye = IconFallback,
     Zap = IconFallback,
     Shield = IconFallback,
@@ -65,7 +64,7 @@
     Target = IconFallback,
     Sparkles = IconFallback
   } = LucideLib;
-  var D = {
+  const D = {
     // ── Ground colours ──
     bg: "#EDE8DF",
     cream: "#EDE8DF",
@@ -111,7 +110,7 @@
     peach: "#C4973A",
     teal: "#3A9E6F"
   };
-  var Styles = () => /* @__PURE__ */ React.createElement("style", null, `
+  const Styles = () => /* @__PURE__ */ React.createElement("style", null, `
         * {
             box-sizing: border-box;
             margin: 0;
@@ -388,7 +387,7 @@
       padding: 14px 18px 16px;
     }
   `);
-  var Label = ({ children, style = {} }) => /* @__PURE__ */ React.createElement("span", { style: {
+  const Label = ({ children, style = {} }) => /* @__PURE__ */ React.createElement("span", { style: {
     fontFamily: "'Space Grotesk', sans-serif",
     fontSize: 10,
     letterSpacing: "0.14em",
@@ -509,24 +508,30 @@
       }
     }, label);
   }
-  var isFiniteNumber = (v) => typeof v === "number" && Number.isFinite(v);
-  var safeNum = (v, fallback = 0) => isFiniteNumber(v) ? v : fallback;
-  var maybeNum = (v) => isFiniteNumber(v) ? v : null;
-  var safeArr = (v) => Array.isArray(v) ? v : [];
-  var averageOf = (vals) => {
+  const InsightBox = ({ body }) => /* @__PURE__ */ React.createElement("div", { style: {
+    background: "rgba(0, 229, 255, 0.06)",
+    borderLeft: "3px solid rgba(0, 229, 255, 0.4)",
+    borderRadius: 8,
+    padding: "14px 16px"
+  } }, /* @__PURE__ */ React.createElement("div", { style: { color: "#00e5ff", fontWeight: 700, marginBottom: 6 } }, "What this means:"), /* @__PURE__ */ React.createElement("div", { style: { color: "#b0b8b8", fontSize: 14, lineHeight: 1.6 } }, body));
+  const isFiniteNumber = (v) => typeof v === "number" && Number.isFinite(v);
+  const safeNum = (v, fallback = 0) => isFiniteNumber(v) ? v : fallback;
+  const maybeNum = (v) => isFiniteNumber(v) ? v : null;
+  const safeArr = (v) => Array.isArray(v) ? v : [];
+  const averageOf = (vals) => {
     const nums = safeArr(vals).filter(isFiniteNumber);
     if (!nums.length) return null;
     return nums.reduce((acc, n) => acc + n, 0) / nums.length;
   };
-  var sumOf = (vals) => safeArr(vals).filter(isFiniteNumber).reduce((acc, n) => acc + n, 0);
-  var formatHour = (hour) => `${String((hour + 24) % 24).padStart(2, "0")}:00`;
-  var formatHourWindow = (hour, span = 2) => {
+  const sumOf = (vals) => safeArr(vals).filter(isFiniteNumber).reduce((acc, n) => acc + n, 0);
+  const formatHour = (hour) => `${String((hour + 24) % 24).padStart(2, "0")}:00`;
+  const formatHourWindow = (hour, span = 2) => {
     if (!isFiniteNumber(hour)) return null;
     const h = (Math.round(hour) % 24 + 24) % 24;
     const end = (h + span) % 24;
     return `${formatHour(h)}-${formatHour(end)}`;
   };
-  var normalizeDateKey = (session) => {
+  const normalizeDateKey = (session) => {
     const startRaw = session?.startTime;
     if (typeof startRaw === "string" && startRaw && startRaw !== "Unknown") {
       const dt = new Date(startRaw);
@@ -545,7 +550,7 @@
     }
     return null;
   };
-  var pickSessionTimestampMs = (session) => {
+  const pickSessionTimestampMs = (session) => {
     const startRaw = session?.startTime;
     if (typeof startRaw === "string" && startRaw && startRaw !== "Unknown") {
       const ms = Date.parse(startRaw);
@@ -553,7 +558,7 @@
     }
     return null;
   };
-  var deriveSessionDurationSec = (session) => {
+  const deriveSessionDurationSec = (session) => {
     const explicitSec = maybeNum(session?.durationSec) ?? maybeNum(session?.sessionDurationSec) ?? maybeNum(session?.totalDurationSec);
     if (isFiniteNumber(explicitSec) && explicitSec > 0) return explicitSec;
     const reels = maybeNum(session?.nReels);
@@ -563,7 +568,7 @@
     }
     return null;
   };
-  var formatMin = (min) => {
+  const formatMin = (min) => {
     const m = safeNum(min, 0);
     if (m < 1) return `${Math.round(m * 60)}s`;
     const hh = Math.floor(m / 60);
@@ -571,14 +576,14 @@
     if (hh > 0) return `${hh}h ${mm}m`;
     return `${mm}m`;
   };
-  var formatDurationSec = (sec) => {
+  const formatDurationSec = (sec) => {
     const s = Math.round(safeNum(sec, 0));
     const m = Math.floor(s / 60);
     const r = s % 60;
     if (m > 0) return `${m}m ${r}s`;
     return `${r}s`;
   };
-  var parseActiveTimeSeconds = (str, fallback = 0) => {
+  const parseActiveTimeSeconds = (str, fallback = 0) => {
     if (typeof str !== "string" || !str.trim()) return fallback;
     let total = 0;
     const m = str.match(/(\d+)m/);
@@ -589,7 +594,7 @@
     if (s) total += parseInt(s[1], 10);
     return total || fallback;
   };
-  var getRiskMeta = (score) => {
+  const getRiskMeta = (score) => {
     const s = safeNum(score, 0);
     if (s >= 70) return { label: "CRITICAL", color: D.danger, hint: "Exit Instagram 2 reels earlier than you want to" };
     if (s >= 45) return { label: "ELEVATED", color: D.warn, hint: "Watch your session length today" };
@@ -651,7 +656,7 @@
     }, [targetValue, duration]);
     return value;
   }
-  var getAccuracyMeta = (confidence) => {
+  const getAccuracyMeta = (confidence) => {
     if (!isFiniteNumber(confidence)) {
       return { show: false, needed: null, known: false };
     }
@@ -662,8 +667,8 @@
     const needed = Math.max(0, Math.ceil((0.6 - conf) * 20));
     return { show: false, needed, known: true };
   };
-  var fadeDelayStyle = (idx) => ({ animationDelay: `${idx * 50}ms` });
-  var FactorIcon = ({ type, size = 22, color = "white" }) => {
+  const fadeDelayStyle = (idx) => ({ animationDelay: `${idx * 50}ms` });
+  const FactorIcon = ({ type, size = 22, color = "white" }) => {
     const s = size;
     const props = { width: s, height: s, viewBox: "0 0 24 24", fill: "none", style: { display: "block", flexShrink: 0 } };
     switch (type) {
@@ -687,9 +692,7 @@
         return /* @__PURE__ */ React.createElement("svg", { ...props }, /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "8", stroke: color, strokeWidth: "1.8", fill: "none" }), /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "2", fill: color }));
     }
   };
-
-  // app/src/main/assets/www/screens/MonitorScreen.jsx
-  var STATE = {
+  const STATE = {
     doom: {
       heroBg: "#F5EDE9",
       heroText: "#1A1612",
@@ -723,8 +726,8 @@
       accent: "#3A9E6F"
     }
   };
-  var getState = (s) => s >= 70 ? STATE.doom : s >= 45 ? STATE.hooked : s >= 25 ? STATE.aware : STATE.mindful;
-  var MoodFace = ({ score, size = 100 }) => {
+  const getState = (s) => s >= 70 ? STATE.doom : s >= 45 ? STATE.hooked : s >= 25 ? STATE.aware : STATE.mindful;
+  const MoodFace = ({ score, size = 100 }) => {
     const r = size / 2;
     const type = score >= 70 ? "doom" : score >= 45 ? "hooked" : score >= 25 ? "aware" : "mindful";
     const state = getState(score);
@@ -1350,21 +1353,592 @@
   function MonitorScreen({ data }) {
     return /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 16, paddingBottom: 36 } }, /* @__PURE__ */ React.createElement(HeroBlock, { data }), /* @__PURE__ */ React.createElement(StatsBento, { data }), /* @__PURE__ */ React.createElement(AutopilotCard, { data }), /* @__PURE__ */ React.createElement(RingCard, { data }), /* @__PURE__ */ React.createElement("div", { style: { padding: "0 16px" } }, /* @__PURE__ */ React.createElement(CollapsibleSection, { title: "Today's Sessions", defaultOpen: true }, /* @__PURE__ */ React.createElement(SessionPatterns, { data }))), /* @__PURE__ */ React.createElement("div", { style: { padding: "0 16px" } }, /* @__PURE__ */ React.createElement(CollapsibleSection, { title: "Lifetime Stats", defaultOpen: false }, /* @__PURE__ */ React.createElement(LifetimeStats, { data }))));
   }
-
-  // app/src/main/assets/www/screens/CalendarScreen.jsx
-  var CAPTURE_STATES = [
+  const mapDriverIcon = (name) => {
+    const k = String(name || "").toLowerCase();
+    if (k.includes("length")) return BarChart2;
+    if (k.includes("rewatch")) return Radio;
+    if (k.includes("rapid") || k.includes("re-entry")) return Zap;
+    if (k.includes("exit")) return Lock;
+    if (k.includes("automatic")) return Cpu;
+    if (k.includes("dwell")) return TrendingDown;
+    if (k.includes("environment")) return Moon;
+    return Activity;
+  };
+  const driverEnglish = (driver, monitorData) => {
+    const name = String(driver.name || "");
+    if (typeof driver.detail === "string" && driver.detail.trim()) return driver.detail;
+    const raw = String(driver.rawValue || "").trim();
+    if (/Session Length/i.test(name)) return "You stayed longer than your usual pattern";
+    if (/Rewatch Compulsion/i.test(name)) return raw ? `Rewatch signal value: ${raw}` : "Rewatch behavior contributed to this score";
+    if (/Rapid Re-entry/i.test(name)) return "Short gaps between sessions increased risk";
+    if (/Exit Conflict/i.test(name)) return "Exit-attempt friction contributed to this score";
+    if (/Scroll Automaticity/i.test(name)) return "Scroll rhythm became more automatic";
+    if (/Dwell Collapse/i.test(name)) return "Attention per reel dropped as the session progressed";
+    if (/Environment/i.test(name)) return "Time-of-day and context patterns increased risk";
+    return "This driver contributed to your score today";
+  };
+  function MoodDissonanceCard({ data }) {
+    const mood = data?.moodDissonance;
+    if (!mood) return null;
+    const doomMood = maybeNum(mood.doomMoodDelta);
+    const mindfulMood = maybeNum(mood.mindfulMoodDelta);
+    const doomRegret = maybeNum(mood.doomAvgRegret);
+    const mindfulRegret = maybeNum(mood.mindfulAvgRegret);
+    const totalSurveyed = maybeNum(mood.totalSurveyed);
+    const fmtDelta = (v) => isFiniteNumber(v) ? `${v > 0 ? "+" : ""}${v.toFixed(1)}` : "--";
+    const fmtScore = (v) => isFiniteNumber(v) ? `${v.toFixed(1)}/5` : "--";
+    const moodColor = (v) => !isFiniteNumber(v) ? D.muted : v >= 0 ? "#2A7A54" : "#C4563A";
+    const summary = (() => {
+      if (isFiniteNumber(doomMood) && isFiniteNumber(mindfulMood)) {
+        const gap = mindfulMood - doomMood;
+        if (gap >= 0.6) return "Mindful sessions are leaving you noticeably better than autopilot ones.";
+        if (gap <= -0.6) return "Recent data is unusual: autopilot sessions look better than mindful ones.";
+        return "Mood difference between session types is currently small.";
+      }
+      if (isFiniteNumber(doomRegret) && isFiniteNumber(mindfulRegret)) {
+        const gap = doomRegret - mindfulRegret;
+        if (gap >= 0.6) return "Autopilot sessions carry higher regret than mindful sessions.";
+        if (gap <= -0.6) return "Regret is currently higher in mindful sessions than autopilot sessions.";
+        return "Regret difference between session types is currently small.";
+      }
+      return "More post-session check-ins will sharpen this comparison.";
+    })();
+    return /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(0.05), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Mood Dissonance"), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 800, color: D.muted } }, isFiniteNumber(totalSurveyed) ? `${Math.round(totalSurveyed)} check-ins` : "survey sample")), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { background: "#F5EDE9", borderRadius: 12, padding: "10px 10px 8px" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, fontWeight: 800, color: "#A03A25", textTransform: "uppercase", letterSpacing: "0.08em" } }, "Autopilot"), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, fontSize: 18, fontWeight: 800, color: moodColor(doomMood), fontFamily: "Space Grotesk" } }, fmtDelta(doomMood)), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 2, fontSize: 11, color: D.muted } }, "avg mood change"), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, fontSize: 12, fontWeight: 700, color: "#A03A25" } }, "Regret ", fmtScore(doomRegret))), /* @__PURE__ */ React.createElement("div", { style: { background: "#EAF3EE", borderRadius: 12, padding: "10px 10px 8px" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, fontWeight: 800, color: "#2A7A54", textTransform: "uppercase", letterSpacing: "0.08em" } }, "Mindful"), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, fontSize: 18, fontWeight: 800, color: moodColor(mindfulMood), fontFamily: "Space Grotesk" } }, fmtDelta(mindfulMood)), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 2, fontSize: 11, color: D.muted } }, "avg mood change"), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, fontSize: 12, fontWeight: 700, color: "#2A7A54" } }, "Regret ", fmtScore(mindfulRegret)))), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10, fontSize: 12, color: D.ink2, lineHeight: 1.45 } }, summary));
+  }
+  function DashboardToday({ data }) {
+    const drivers = safeArr(data.doomDrivers);
+    const sortedDrivers = [...drivers].sort((a, b) => safeNum(b.contribution, 0) - safeNum(a.contribution, 0));
+    const topThree = sortedDrivers.slice(0, 3);
+    const timeline = safeArr(data.todaySessions);
+    const [selectedTimelineIdx, setSelectedTimelineIdx] = useState(null);
+    const [expandedFactors, setExpandedFactors] = useState({});
+    const [retroactiveOverrides, setRetroactiveOverrides] = useState({});
+    useEffect(() => {
+      window.onRetroactiveLabelComplete = (b64) => {
+        try {
+          const label = JSON.parse(atob(b64));
+          const key = String(label.sessionNum);
+          setRetroactiveOverrides((prev) => ({ ...prev, [key]: label }));
+        } catch (e) {
+          console.error("onRetroactiveLabelComplete parse error:", e);
+        }
+      };
+      return () => {
+        window.onRetroactiveLabelComplete = void 0;
+      };
+    }, []);
+    const circadian = safeArr(data.circadianProfile);
+    const circData = circadian;
+    const factorConfig = {
+      "Session Length": { color: D.yellow, gradient: "linear-gradient(135deg,#C4973A,#9A7020)", iconType: "session" },
+      "Rewatch Compulsion": { color: D.pink, gradient: "linear-gradient(135deg,#C4563A,#A03030)", iconType: "rewatch" },
+      "Rapid Re-entry": { color: D.coral, gradient: "linear-gradient(135deg,#C4563A,#A03A25)", iconType: "reentry" },
+      "Scroll Automaticity": { color: D.blue, gradient: "linear-gradient(135deg,#6B3FA0,#4A2580)", iconType: "scroll" },
+      "Dwell Collapse": { color: D.sage, gradient: "linear-gradient(135deg,#3A9E6F,#2A7A54)", iconType: "dwell" },
+      "Exit Conflict": { color: D.lavender, gradient: "linear-gradient(135deg,#9B6FCC,#6B3FA0)", iconType: "exit" },
+      "Environment": { color: D.peach, gradient: "linear-gradient(135deg,#C4973A,#9A7020)", iconType: "environment" },
+      "Cumulative": { color: D.teal, gradient: "linear-gradient(135deg,#3A9E6F,#2A7A54)", iconType: "cumulative" }
+    };
+    const getFactorStyle = (name) => {
+      const normalized = name.trim();
+      return factorConfig[normalized] || { color: D.purple, gradient: `linear-gradient(135deg, ${D.purple}, ${D.purpleDark})`, iconType: "default" };
+    };
+    const toggleFactor = (idx) => {
+      setExpandedFactors((prev) => ({ ...prev, [idx]: !prev[idx] }));
+    };
+    const [showAll, setShowAll] = useState(false);
+    const displayedDrivers = showAll ? sortedDrivers : topThree;
+    const hiddenCount = sortedDrivers.length - topThree.length;
+    return /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(0), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 10 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Today's Session Timeline")), !timeline.length ? /* @__PURE__ */ React.createElement(EmptyState, { message: "No sessions recorded yet today" }) : /* @__PURE__ */ React.createElement(React.Fragment, null, (() => {
+      const cols = Math.min(Math.max(4, Math.ceil(timeline.length / 2)), 5);
+      const rows = Math.ceil(timeline.length / cols);
+      const cellW = 100 / cols;
+      const cellH = 76;
+      const gap = 8;
+      const step = cellH + gap;
+      const dotOff = 10;
+      const svgH = rows * cellH + (rows - 1) * gap;
+      const pts = timeline.map((_, idx) => {
+        const row = Math.floor(idx / cols);
+        const colInRow = idx % cols;
+        const col = row % 2 === 1 ? cols - 1 - colInRow : colInRow;
+        return { row, col, x: (col + 0.5) * cellW, y: row * step + dotOff };
+      });
+      let pathD = "";
+      if (pts.length > 0) {
+        pathD = `M ${pts[0].x} ${pts[0].y}`;
+        for (let i = 1; i < pts.length; i++) {
+          const prev = pts[i - 1];
+          const curr = pts[i];
+          if (prev.row === curr.row) {
+            pathD += ` L ${curr.x} ${curr.y}`;
+          } else {
+            const edgeRight = prev.x > 50;
+            const loopX = edgeRight ? 108 : -8;
+            const midY = (prev.y + curr.y) / 2;
+            pathD += ` C ${loopX} ${midY}, ${loopX} ${midY}, ${curr.x} ${curr.y}`;
+          }
+        }
+      }
+      return /* @__PURE__ */ React.createElement("div", { style: { position: "relative", paddingTop: 8, minHeight: svgH } }, /* @__PURE__ */ React.createElement("svg", { style: { position: "absolute", top: 8, left: 0, width: "100%", height: svgH, pointerEvents: "none", zIndex: 0, overflow: "visible" }, viewBox: `0 0 100 ${svgH}`, preserveAspectRatio: "none" }, /* @__PURE__ */ React.createElement("path", { d: pathD, fill: "none", stroke: D.muted, strokeWidth: "2", opacity: "0.5", strokeLinecap: "round", strokeLinejoin: "round", vectorEffect: "non-scaling-stroke" })), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gridAutoRows: cellH, rowGap: gap } }, (() => {
+        const grid = Array.from({ length: rows * cols }, () => null);
+        timeline.forEach((s, idx) => {
+          const row = Math.floor(idx / cols);
+          const colInRow = idx % cols;
+          const isReversed = row % 2 === 1;
+          const col = isReversed ? cols - 1 - colInRow : colInRow;
+          grid[row * cols + col] = { s, idx };
+        });
+        return grid.map((cell, gi) => {
+          if (!cell) return /* @__PURE__ */ React.createElement("div", { key: `empty-${gi}` });
+          const { s, idx } = cell;
+          const c = s.isDoom ? D.danger : D.safe;
+          const durationMin = maybeNum(s.durationMin);
+          const isSelected = selectedTimelineIdx === idx;
+          return /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              key: `${s.startTime}-${idx}`,
+              onClick: () => setSelectedTimelineIdx(isSelected ? null : idx),
+              style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 5, cursor: "pointer", position: "relative", paddingBottom: 4, zIndex: 1 }
+            },
+            /* @__PURE__ */ React.createElement("div", { style: {
+              width: isSelected ? 24 : 20,
+              height: isSelected ? 24 : 20,
+              borderRadius: "50%",
+              background: c,
+              boxShadow: `0 0 ${isSelected ? 18 : 12}px ${c}, 0 0 ${isSelected ? 6 : 3}px ${c}`,
+              border: isSelected ? `3px solid white` : `2px solid ${c}40`,
+              transition: "all 0.2s cubic-bezier(0.34,1.56,0.64,1)",
+              zIndex: 1,
+              position: "relative"
+            } }),
+            /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: 700, color: D.ink } }, (s.startTime || "").slice(0, 5) || `S${idx + 1}`),
+            /* @__PURE__ */ React.createElement("div", { style: { background: `${c}25`, borderRadius: 6, padding: "2px 6px", fontFamily: "'Nunito', sans-serif", fontSize: 10, fontWeight: 800, color: c } }, isFiniteNumber(durationMin) ? `${Math.round(durationMin)}m` : "--")
+          );
+        });
+      })()));
+    })(), selectedTimelineIdx !== null && timeline[selectedTimelineIdx] && (() => {
+      const rawSel = timeline[selectedTimelineIdx];
+      const override = retroactiveOverrides[String(rawSel._sessionNum)] ?? null;
+      const sel = override ? { ...rawSel, ...override } : rawSel;
+      const hasSurvey = sel.hasSurvey || maybeNum(sel.postSessionRating) > 0;
+      return /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: D.muted } }, (sel.startTime || "--:--").slice(0, 5), " \xB7 ", isFiniteNumber(maybeNum(sel.durationMin)) ? `${Math.round(sel.durationMin)} min` : "duration unavailable", " \xB7 ", isFiniteNumber(maybeNum(sel.reelCount)) ? `${Math.round(sel.reelCount)} reels` : "reel count unavailable"), hasSurvey && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 } }, maybeNum(sel.postSessionRating) > 0 && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: "#EEE9F5", color: "#6B3FA0" } }, "Rating ", sel.postSessionRating, "/5"), maybeNum(sel.regretScore) > 0 && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: sel.regretScore >= 4 ? "#F5EDE9" : "#EAF3EE", color: sel.regretScore >= 4 ? "#C4563A" : "#2A7A54" } }, "Regret ", sel.regretScore, "/5"), maybeNum(sel.moodAfter) > 0 && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: "#EEE9F5", color: "#6B3FA0" } }, "Mood ", sel.moodAfter, "/5"), sel.intendedAction && sel.intendedAction !== "0" && sel.intendedAction !== "0.0" && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: "#F5F0E2", color: "#9A7020" } }, "Intent: ", sel.intendedAction), sel.retroactiveLabel && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: "#F0EBF8", color: "#6B3FA0", opacity: 0.75 } }, "\u270E retroactive")), !hasSurvey && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6 } }, sel.isDoom !== void 0 && /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, color: D.muted, opacity: 0.7, marginBottom: 5 } }, "Reelio said: ", /* @__PURE__ */ React.createElement("strong", { style: { color: sel.isDoom ? D.danger : D.safe } }, sel.isDoom ? "Autopilot" : "Mindful"), sel.modelConf < 0.7 && /* @__PURE__ */ React.createElement("span", { style: { marginLeft: 6, fontSize: 9, background: `${D.warn}15`, color: D.warn, padding: "1px 5px", borderRadius: 4, fontWeight: 800 } }, "HEURISTIC BLEND (", (sel.modelConf * 100).toFixed(0), "% CONF)")), sel.modelConf < 0.7 && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, fontSize: 10, color: D.muted, lineHeight: 1.4, padding: "8px 10px", background: `${D.warn}05`, borderRadius: 10, border: `1px solid ${D.warn}15` } }, /* @__PURE__ */ React.createElement("div", { style: { color: D.warn, fontWeight: 900, marginBottom: 2 } }, "\u26A0\uFE0F Behavioral Calibration Active"), "Current model confidence is low (", (sel.modelConf * 100).toFixed(0), "%). Reelio is blending HMM state inference with heuristic scoring (", Math.round(sel.heuristicScore * 100), "%) to ensure capture events are not missed during learning."), sel.hasSurvey && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginTop: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { padding: "4px 10px", background: "rgba(58,158,111,0.1)", border: "1px solid rgba(58,158,111,0.2)", borderRadius: 8, display: "flex", alignItems: "center", gap: 6 } }, /* @__PURE__ */ React.createElement("svg", { width: "12", height: "12", viewBox: "0 0 24 24", fill: "none", stroke: "#3A9E6F", strokeWidth: "3", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("polyline", { points: "20 6 9 17 4 12" })), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 900, color: "#3A9E6F", textTransform: "uppercase", letterSpacing: "0.02em" } }, sel.retroactiveLabel ? "Retroactively Labeled" : "Surveyed"))), sel._sessionNum != null && sel._sessionDate && !sel.hasSurvey && /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            const predSummary = sel.isDoom !== void 0 ? `Reelio said: ${sel.isDoom ? "Autopilot" : "Mindful"}` : "";
+            const prefill = JSON.stringify({
+              postSessionRating: sel.postSessionRating || 0,
+              regretScore: sel.regretScore || 0,
+              moodBefore: sel.moodBefore || 0,
+              moodAfter: sel.moodAfter || 0,
+              intendedAction: sel.intendedAction || "",
+              comparativeRating: sel.comparativeRating || 0
+            });
+            const sNum = sel._sessionNum;
+            const sDate = sel._sessionDate;
+            if (!sNum || !sDate) {
+              console.error("[Bridge] Missing session identity", { sNum, sDate });
+              alert(`Cannot label session: identifiers missing (ID: ${sNum}, Date: ${sDate}). Try refreshing the dashboard.`);
+              return;
+            }
+            const logPayload = JSON.stringify({
+              sessionNum: String(sNum),
+              date: String(sDate),
+              predSummary,
+              prefill
+            });
+            console.log("[Bridge] Launching openRetroactiveSurvey: " + logPayload);
+            try {
+              if (window.Android && window.Android.openRetroactiveSurvey) {
+                window.Android.openRetroactiveSurvey(
+                  String(sNum),
+                  String(sDate),
+                  String(predSummary),
+                  String(prefill)
+                );
+                console.log("[Bridge] Call to native openRetroactiveSurvey succeeded.");
+              } else {
+                console.warn("[Bridge] window.Android.openRetroactiveSurvey not found");
+                alert("Native bridge (window.Android) is not available. This feature only works inside the app.");
+              }
+            } catch (err) {
+              console.error("[Bridge] Native call failed", err);
+              alert("System error launching survey: " + err.message);
+            }
+          },
+          style: {
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            fontSize: 11,
+            fontWeight: 800,
+            fontFamily: "'Space Grotesk', sans-serif",
+            color: D.purple,
+            background: "rgba(107,63,160,0.10)",
+            border: "1.5px solid rgba(107,63,160,0.18)",
+            borderRadius: 10,
+            padding: "6px 12px",
+            cursor: "pointer",
+            letterSpacing: "0.02em"
+          }
+        },
+        "\u270E Label this session"
+      ), (sel._sessionNum == null || !sel._sessionDate) && /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, color: D.muted, opacity: 0.6 } }, "No survey data")));
+    })())), /* @__PURE__ */ React.createElement(MoodDissonanceCard, { data }));
+  }
+  function DashboardWeek({ data }) {
+    const heatmap = safeArr(data.heatmapData);
+    const heat = heatmap.filter((d) => isFiniteNumber(maybeNum(d.avgCapture)));
+    const [selectedDay, setSelectedDay] = useState(null);
+    const thisWeekRate = maybeNum(data.thisWindowDoomRate);
+    const lastWeekRate = maybeNum(data.lastWindowDoomRate);
+    const delta = isFiniteNumber(thisWeekRate) && isFiniteNumber(lastWeekRate) ? thisWeekRate - lastWeekRate : null;
+    const baselineScore = maybeNum(data.tenSessionAvgScore);
+    const underAvgDays = isFiniteNumber(baselineScore) ? heat.filter((d) => safeNum(d.avgCapture, 0) < baselineScore / 100).length : null;
+    const modelConf = maybeNum(data.modelConfidence);
+    const confMeta = getAccuracyMeta(modelConf);
+    let confidenceText = "Model confidence is not available in this payload.";
+    const sessionsCount = safeNum(data.totalSessions, 0);
+    if (confMeta.known) {
+      if (confMeta.show) {
+        confidenceText = `Model confidence is ${Math.round(modelConf * 100)}% based on ${sessionsCount} sessions.`;
+      } else {
+        confidenceText = `Model is still calibrating${isFiniteNumber(confMeta.needed) ? ` (${confMeta.needed} more sessions to reach full confidence)` : ""}.`;
+      }
+    }
+    const weeklyTrendData = heat.slice(-7).map((d, i) => ({
+      day: d.dayLabel || ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"][i],
+      score: Math.round(safeNum(d.avgCapture, 0) * 100),
+      index: i
+    }));
+    return /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } }, weeklyTrendData.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: {
+      ...fadeDelayStyle(0),
+      padding: "18px 16px",
+      background: "linear-gradient(135deg, rgba(107,63,160,0.05), rgba(74,37,128,0.05))",
+      borderColor: "rgba(107,63,160,0.12)"
+    } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.purple, fontSize: 11, fontWeight: 800 } }, "Weekly Snapshot"), /* @__PURE__ */ React.createElement("div", { style: { color: D.ink, fontSize: 14, fontWeight: 800, marginTop: 4, fontFamily: "Nunito" } }, "Your focus trend")), /* @__PURE__ */ React.createElement("div", { style: { height: 150 } }, /* @__PURE__ */ React.createElement(ResponsiveContainer, { width: "100%", height: "100%" }, /* @__PURE__ */ React.createElement(LineChart, { data: weeklyTrendData, margin: { top: 12, right: 12, left: 8, bottom: 8 } }, /* @__PURE__ */ React.createElement(XAxis, { dataKey: "day", tick: { fill: D.muted, fontSize: 10 } }), /* @__PURE__ */ React.createElement(
+      YAxis,
+      {
+        tick: { fill: D.muted, fontSize: 10 },
+        domain: [0, 100],
+        width: 44,
+        label: { value: "Autopilot (%)", angle: -90, position: "insideLeft", offset: 4, fontSize: 10, fill: D.muted }
+      }
+    ), /* @__PURE__ */ React.createElement(
+      Tooltip,
+      {
+        contentStyle: { background: D.cardLight, border: `1px solid ${D.borderSoft}`, borderRadius: 10, fontSize: 12, color: D.ink, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" },
+        formatter: (v) => [`${v}%`, "Autopilot"],
+        labelStyle: { color: D.muted, fontWeight: 700 }
+      }
+    ), /* @__PURE__ */ React.createElement(Line, { type: "monotone", dataKey: "score", stroke: D.purple, strokeWidth: 2.5, dot: { fill: D.purple, r: 4, stroke: D.cardLight, strokeWidth: 2 }, activeDot: { r: 6, fill: D.purple, stroke: D.cardLight, strokeWidth: 2 } })))), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8, padding: "10px 12px", background: "rgba(107,63,160,0.06)", borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: D.ink2, fontWeight: 600 } }, "Avg this week"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 16, fontWeight: 900, color: D.purple, fontFamily: "Nunito" } }, Math.round(weeklyTrendData.reduce((sum, d) => sum + d.score, 0) / weeklyTrendData.length), "%"))), /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(0), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Weekly Heatmap"), heat.length ? /* @__PURE__ */ React.createElement(
+      StatusPill,
+      {
+        label: isFiniteNumber(underAvgDays) ? `${underAvgDays} days under your average` : "Weekly baseline unavailable",
+        type: isFiniteNumber(underAvgDays) && underAvgDays > 0 ? "safe" : "info"
+      }
+    ) : null), !heat.length ? /* @__PURE__ */ React.createElement(EmptyState, { message: "Not enough weekly data yet" }) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { height: 180 } }, /* @__PURE__ */ React.createElement(ResponsiveContainer, { width: "100%", height: "100%" }, (() => {
+      const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+      const heatData = heat.map((d, i) => {
+        const rawVal = safeNum(d.avgCapture, 0) * 100;
+        return {
+          day: dayNames[i % 7],
+          value: Math.round(rawVal),
+          sessions: maybeNum(d.sessionCount),
+          raw: rawVal
+        };
+      });
+      const avgVal = heatData.length > 0 ? Math.round(heatData.reduce((sum, d) => sum + d.value, 0) / heatData.length) : 0;
+      const getBarColor = (val) => {
+        if (val < 33) return "#2A7A54";
+        if (val < 66) return "#D4A574";
+        return "#C4563A";
+      };
+      return /* @__PURE__ */ React.createElement(BarChart, { data: heatData, margin: { top: 12, right: 8, left: -8, bottom: 32 } }, /* @__PURE__ */ React.createElement(XAxis, { dataKey: "day", tick: { fill: D.muted, fontSize: 10 }, angle: -45, textAnchor: "end", height: 60 }), /* @__PURE__ */ React.createElement(
+        YAxis,
+        {
+          tick: { fill: D.muted, fontSize: 10 },
+          label: { value: "Autopilot Rate (%)", angle: -90, position: "insideLeft", offset: -12, fontSize: 10, fill: D.muted },
+          domain: [0, 100]
+        }
+      ), /* @__PURE__ */ React.createElement(
+        Tooltip,
+        {
+          contentStyle: { background: D.cardLight, border: `1px solid ${D.borderSoft}`, borderRadius: 10, fontSize: 12, color: D.ink, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" },
+          formatter: (v, name, props) => {
+            const sessions = props.payload.sessions;
+            return [`${v}% autopilot - ${isFiniteNumber(sessions) ? sessions + " session" + (sessions !== 1 ? "s" : "") : "N/A"}`, "Risk"];
+          },
+          labelStyle: { color: D.muted, fontWeight: 700 },
+          labelFormatter: (label) => label
+        }
+      ), /* @__PURE__ */ React.createElement(
+        ReferenceLine,
+        {
+          y: avgVal,
+          stroke: D.info,
+          strokeDasharray: "5 5",
+          label: { value: `Weekly Avg: ${avgVal}%`, position: "right", fill: D.muted, fontSize: 9, offset: 4 }
+        }
+      ), /* @__PURE__ */ React.createElement(
+        Bar,
+        {
+          dataKey: "value",
+          onClick: (entry) => setSelectedDay(entry && entry.payload ? entry.payload : null),
+          shape: ({ x, y, width, height, value }) => /* @__PURE__ */ React.createElement(
+            "rect",
+            {
+              x,
+              y,
+              width,
+              height,
+              fill: getBarColor(value)
+            }
+          )
+        }
+      ));
+    })())), selectedDay && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 12, padding: "8px 10px", background: "rgba(107,63,160,0.08)", borderLeft: `3px solid ${D.info}`, color: D.muted, fontSize: 12, borderRadius: 4 } }, /* @__PURE__ */ React.createElement("strong", null, selectedDay.day, ":"), " ", Math.round(selectedDay.raw), "% autopilot \xB7 ", isFiniteNumber(maybeNum(selectedDay.sessions)) ? selectedDay.sessions + " session" + (selectedDay.sessions !== 1 ? "s" : "") : "N/A"))), /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(1), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 8 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Weekly Insight")), !heat.length ? /* @__PURE__ */ React.createElement(EmptyState, { message: "Need more sessions to compare this week vs last week" }) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, color: D.text, marginBottom: 10 } }, confidenceText), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, color: D.muted } }, "This week: ", isFiniteNumber(thisWeekRate) ? `${Math.round(thisWeekRate * 100)}%` : "--", " autopilot  |  Last week: ", isFiniteNumber(lastWeekRate) ? `${Math.round(lastWeekRate * 100)}%` : "--", "  |  ", isFiniteNumber(delta) ? delta < 0 ? "\u2193 better" : delta > 0 ? "\u2191 worse" : "stable" : "comparison unavailable"))));
+  }
+  function DashboardAllTime({ data }) {
+    const topology = data.sessionTopology || {};
+    const totalReels = safeNum(topology.totalReels, 0);
+    const safePct = safeNum(topology.safePercent, 0);
+    const borderPct = safeNum(topology.borderPercent, 0);
+    const doomPct = safeNum(topology.doomPercent, 0);
+    const conf = maybeNum(data.modelConfidence) ?? maybeNum(data.stateDynamics?.modelConfidence);
+    const confMeta = getAccuracyMeta(conf);
+    const allTimeCaptureRate = maybeNum(data.allTimeCaptureRate);
+    const sessionDoomPersistence = maybeNum(data.sessionDoomPersistence);
+    const escapeRate = maybeNum(data.escapeRate);
+    const pullIndex = maybeNum(data.pullIndex);
+    const recoveryWindow = maybeNum(data.stateDynamics?.recoveryWindowSessions);
+    const recoveryDelta = maybeNum(data.stateDynamics?.recoveryWindowDelta);
+    return /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(0), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 8 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Behavioral Baseline")), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } }, [
+      { title: "Autopilot Rate (All Sessions)", value: isFiniteNumber(allTimeCaptureRate) ? `${Math.round(allTimeCaptureRate * 100)}%` : "--", desc: "Share of all sessions that entered autopilot" },
+      { title: "Back-to-Back Autopilot Rate", value: isFiniteNumber(sessionDoomPersistence) ? `${Math.round(sessionDoomPersistence * 100)}%` : "--", desc: "How often autopilot sessions cluster" },
+      { title: "Self-Recovery Rate", value: isFiniteNumber(escapeRate) ? `${Math.round(escapeRate * 100)}%` : "--", desc: "How often you return to mindful browsing" },
+      { title: "Trap Pressure Ratio", value: isFiniteNumber(pullIndex) ? `${pullIndex.toFixed(1)}x` : "--", desc: "Trap pressure relative to recovery pressure" }
+    ].map((m) => /* @__PURE__ */ React.createElement("div", { key: m.title, style: { border: `1px solid ${D.borderSoft}`, borderRadius: 10, padding: 10 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: D.muted } }, m.title), /* @__PURE__ */ React.createElement("div", { className: "spacemono", style: { fontSize: 22, color: D.ink, marginTop: 4, fontWeight: 700 } }, m.value), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 4, fontSize: 11, color: D.muted } }, m.desc))))), /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(1), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 8 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Your Historical Vulnerability Pattern")), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: D.muted, marginBottom: 10 } }, "Across all sessions you've recorded"), safeArr(data.circadianProfile).length < 3 ? /* @__PURE__ */ React.createElement(EmptyState, { message: "Need at least 3 sessions to reveal your risk pattern" }) : (() => {
+      const [circSmooth, setCircSmooth] = useState(0);
+      const circProfile = safeArr(data.circadianProfile);
+      const fmtHour = (h) => {
+        const hr = (h % 24 + 24) % 24;
+        if (hr === 0) return "12 AM";
+        if (hr === 12) return "12 PM";
+        return hr < 12 ? `${hr} AM` : `${hr - 12} PM`;
+      };
+      const circRaw = circProfile.map((p) => ({
+        h: p.hour,
+        p: safeNum(p.captureProb, 0),
+        label: fmtHour(p.hour)
+      }));
+      const smoothCirc = (data2, win) => {
+        if (win <= 1) return data2;
+        return data2.map((pt, idx) => {
+          const half = Math.floor(win / 2);
+          let sum = 0, count = 0;
+          for (let j = idx - half; j <= idx + half; j++) {
+            const k = (j % data2.length + data2.length) % data2.length;
+            sum += data2[k].p;
+            count++;
+          }
+          return { ...pt, p: sum / count };
+        });
+      };
+      const circWin = circSmooth === 0 ? 1 : circSmooth === 1 ? 2 : 3;
+      const circData = smoothCirc(circRaw, circWin);
+      const peakPt = circProfile.reduce((best, c) => !best || c.captureProb > best.captureProb ? c : best, null);
+      const safePt = circProfile.reduce((best, c) => !best || c.captureProb < best.captureProb ? c : best, null);
+      const formatHr = (hour) => {
+        const h = (hour % 24 + 24) % 24;
+        if (h === 0) return "12 AM";
+        if (h === 12) return "12 PM";
+        return h < 12 ? `${h} AM` : `${h - 12} PM`;
+      };
+      return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { height: 200 } }, /* @__PURE__ */ React.createElement(ResponsiveContainer, { width: "100%", height: "100%" }, /* @__PURE__ */ React.createElement(LineChart, { data: circData, margin: { top: 8, right: 12, left: 8, bottom: 8 } }, /* @__PURE__ */ React.createElement(XAxis, { dataKey: "label", tick: { fill: D.muted, fontSize: 10 } }), /* @__PURE__ */ React.createElement(
+        YAxis,
+        {
+          label: { value: "Autopilot Risk (%)", angle: -90, position: "insideLeft", offset: 4, style: { fontSize: 10, fill: D.muted } },
+          tick: { fill: D.muted, fontSize: 10 },
+          width: 44
+        }
+      ), /* @__PURE__ */ React.createElement(
+        Tooltip,
+        {
+          contentStyle: { background: D.cardLight, border: `1px solid ${D.borderSoft}`, borderRadius: 10, fontSize: 12, color: D.ink, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" },
+          formatter: (v) => [`${Math.round(v * 100)}% autopilot risk`, "Risk"],
+          labelStyle: { color: D.muted, fontWeight: 700 }
+        }
+      ), /* @__PURE__ */ React.createElement(Line, { type: "monotone", dataKey: "p", stroke: D.info, strokeWidth: 2.5, dot: { fill: D.info, r: 3 }, activeDot: { r: 5, stroke: D.cardLight, strokeWidth: 2 } })))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 6, padding: "6px 0" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: D.muted, flexShrink: 0 } }, "Smoothing"), /* @__PURE__ */ React.createElement(
+        "input",
+        {
+          type: "range",
+          min: "0",
+          max: "2",
+          step: "1",
+          value: circSmooth,
+          onChange: (e) => setCircSmooth(parseInt(e.target.value)),
+          style: { flex: 1 }
+        }
+      ), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: D.muted, flexShrink: 0, minWidth: 40, textAlign: "right" } }, ["Raw", "Smooth", "Extra"][circSmooth])), peakPt && safePt && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { position: "relative", border: `1px solid rgba(58,158,111,0.25)`, borderRadius: 14, padding: "14px 12px 12px", overflow: "hidden", background: "rgba(58,158,111,0.03)" } }, /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 8, right: 8, width: 36, height: 36 } }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 36 36", width: "36", height: "36" }, /* @__PURE__ */ React.createElement("path", { d: "M18 4 C18 4 6 14 10 24 C12 28 16 30 18 32 C20 30 24 28 26 24 C30 14 18 4 18 4Z", fill: "#2A7A54", opacity: "0.3" }), /* @__PURE__ */ React.createElement("path", { d: "M18 4 C18 4 6 14 10 24 C12 28 16 30 18 32 C20 30 24 28 26 24 C30 14 18 4 18 4Z", fill: "none", stroke: "#2A7A54", strokeWidth: "1.5", opacity: "0.7" }), /* @__PURE__ */ React.createElement("path", { d: "M18 12 L18 26", stroke: "#2A7A54", strokeWidth: "1", opacity: "0.5" }), /* @__PURE__ */ React.createElement("path", { d: "M14 18 Q18 16 22 18", stroke: "#2A7A54", strokeWidth: "0.8", opacity: "0.4", fill: "none" }), /* @__PURE__ */ React.createElement("path", { d: "M15 22 Q18 20 21 22", stroke: "#2A7A54", strokeWidth: "0.8", opacity: "0.4", fill: "none" }))), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: D.safe, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 } }, "Safest Window"), /* @__PURE__ */ React.createElement("div", { className: "spacemono", style: { fontSize: 20, fontWeight: 800, color: D.ink } }, formatHr(safePt.hour)), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: D.muted, marginTop: 4 } }, Math.round(safePt.captureProb * 100), "% risk")), /* @__PURE__ */ React.createElement("div", { style: { position: "relative", border: `1px solid rgba(196,86,58,0.25)`, borderRadius: 14, padding: "14px 12px 12px", overflow: "hidden", background: "rgba(196,86,58,0.03)" } }, /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 8, right: 8, width: 36, height: 36 } }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 36 36", width: "36", height: "36" }, /* @__PURE__ */ React.createElement("path", { d: "M18 4 C18 4 6 14 10 24 C12 28 16 30 18 32 C20 30 24 28 26 24 C30 14 18 4 18 4Z", fill: "#C4563A", opacity: "0.3" }), /* @__PURE__ */ React.createElement("path", { d: "M18 4 C18 4 6 14 10 24 C12 28 16 30 18 32 C20 30 24 28 26 24 C30 14 18 4 18 4Z", fill: "none", stroke: "#C4563A", strokeWidth: "1.5", opacity: "0.7" }), /* @__PURE__ */ React.createElement("path", { d: "M18 12 L18 26", stroke: "#C4563A", strokeWidth: "1", opacity: "0.5" }), /* @__PURE__ */ React.createElement("path", { d: "M14 18 Q18 16 22 18", stroke: "#C4563A", strokeWidth: "0.8", opacity: "0.4", fill: "none" }), /* @__PURE__ */ React.createElement("path", { d: "M15 22 Q18 20 21 22", stroke: "#C4563A", strokeWidth: "0.8", opacity: "0.4", fill: "none" }))), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: D.danger, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 } }, "Riskiest Window"), /* @__PURE__ */ React.createElement("div", { className: "spacemono", style: { fontSize: 20, fontWeight: 800, color: D.ink } }, formatHr(peakPt.hour)), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: D.muted, marginTop: 4 } }, Math.round(peakPt.captureProb * 100), "% risk"))));
+    })()), /* @__PURE__ */ React.createElement(CollapsibleSection, { title: "State Dynamics", defaultOpen: false }, (() => {
+      const c2d = maybeNum(data.stateDynamics?.casualToDoomProb);
+      const d2c = maybeNum(data.stateDynamics?.doomToCasualProb);
+      const c2dPct = isFiniteNumber(c2d) ? `${Math.round(c2d * 100)}%` : "--";
+      const d2cPct = isFiniteNumber(d2c) ? `${Math.round(d2c * 100)}%` : "--";
+      const c2cPct = isFiniteNumber(c2d) ? `${Math.round((1 - c2d) * 100)}%` : "--";
+      const d2dPct = isFiniteNumber(d2c) ? `${Math.round((1 - d2c) * 100)}%` : "--";
+      return /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 8 } }, /* @__PURE__ */ React.createElement("style", null, `
+                        @keyframes dotMoveForward {
+                            0%   { offset-distance: 0%; opacity: 0; }
+                            10%  { opacity: 1; }
+                            90%  { opacity: 1; }
+                            100% { offset-distance: 100%; opacity: 0; }
+                        }
+                        @keyframes dotMoveBack {
+                            0%   { offset-distance: 0%; opacity: 0; }
+                            10%  { opacity: 1; }
+                            90%  { opacity: 1; }
+                            100% { offset-distance: 100%; opacity: 0; }
+                        }
+                        @keyframes dotMoveLoop {
+                            0%   { offset-distance: 0%; opacity: 0; }
+                            10%  { opacity: 1; }
+                            90%  { opacity: 1; }
+                            100% { offset-distance: 100%; opacity: 0; }
+                        }
+                        @keyframes pulseNode {
+                            0%, 100% { transform: scale(1); }
+                            50% { transform: scale(1.04); }
+                        }
+                    `), /* @__PURE__ */ React.createElement("svg", { width: "100%", viewBox: "0 0 320 160" }, /* @__PURE__ */ React.createElement("path", { d: "M 56 36 C 34 14 106 14 84 36", fill: "none", stroke: D.safe, strokeWidth: "1.25", strokeDasharray: "4 2" }), /* @__PURE__ */ React.createElement("polygon", { points: "84,36 80,30 87,31", fill: D.safe }), /* @__PURE__ */ React.createElement("text", { x: "70", y: "8", textAnchor: "middle", fontFamily: "Space Mono", fontSize: "10", fontWeight: "700", fill: D.safe }, c2cPct), /* @__PURE__ */ React.createElement("circle", { r: "2.25", fill: D.safe, style: { offsetPath: "path('M 56 36 C 34 14 106 14 84 36')", animation: "dotMoveLoop 3.2s ease-in-out 0.3s infinite" } }), /* @__PURE__ */ React.createElement("path", { d: "M 236 36 C 214 14 286 14 264 36", fill: "none", stroke: D.danger, strokeWidth: "1.25", strokeDasharray: "4 2" }), /* @__PURE__ */ React.createElement("polygon", { points: "264,36 260,30 267,31", fill: D.danger }), /* @__PURE__ */ React.createElement("text", { x: "250", y: "8", textAnchor: "middle", fontFamily: "Space Mono", fontSize: "10", fontWeight: "700", fill: D.danger }, d2dPct), /* @__PURE__ */ React.createElement("circle", { r: "2.25", fill: D.danger, style: { offsetPath: "path('M 236 36 C 214 14 286 14 264 36')", animation: "dotMoveLoop 3.6s ease-in-out 1s infinite" } }), /* @__PURE__ */ React.createElement("g", { style: { animation: "pulseNode 3s ease-in-out infinite" } }, /* @__PURE__ */ React.createElement("circle", { cx: "70", cy: "88", r: "38", fill: "rgba(58,158,111,0.10)", stroke: D.safe, strokeWidth: "2" }), /* @__PURE__ */ React.createElement("text", { x: "70", y: "83", textAnchor: "middle", fontFamily: "Space Grotesk", fontSize: "11", fontWeight: "800", fill: D.safe }, "Mindful"), /* @__PURE__ */ React.createElement("text", { x: "70", y: "97", textAnchor: "middle", fontFamily: "Space Grotesk", fontSize: "11", fontWeight: "800", fill: D.safe }, "Browsing")), /* @__PURE__ */ React.createElement("g", { style: { animation: "pulseNode 3s ease-in-out 1.5s infinite" } }, /* @__PURE__ */ React.createElement("circle", { cx: "250", cy: "88", r: "38", fill: "rgba(196,86,58,0.10)", stroke: D.danger, strokeWidth: "2" }), /* @__PURE__ */ React.createElement("text", { x: "250", y: "91", textAnchor: "middle", fontFamily: "Space Grotesk", fontSize: "11", fontWeight: "800", fill: D.danger }, "Autopilot")), /* @__PURE__ */ React.createElement("path", { id: "pathForward", d: "M 110 70 Q 160 41 210 70", fill: "none", stroke: D.danger, strokeWidth: "2.5" }), /* @__PURE__ */ React.createElement("polygon", { points: "210,70 201,64 204,74", fill: D.danger }), /* @__PURE__ */ React.createElement("text", { x: "160", y: "50", textAnchor: "middle", fontFamily: "Space Mono", fontSize: "11", fontWeight: "800", fill: D.danger }, c2dPct), /* @__PURE__ */ React.createElement("circle", { r: "4", fill: D.danger, style: { offsetPath: "path('M 110 70 Q 160 41 210 70')", animation: "dotMoveForward 2.8s ease-in-out infinite" } }), /* @__PURE__ */ React.createElement("circle", { r: "4", fill: D.danger, opacity: "0.5", style: { offsetPath: "path('M 110 70 Q 160 41 210 70')", animation: "dotMoveForward 2.8s ease-in-out 1.4s infinite" } }), /* @__PURE__ */ React.createElement("path", { id: "pathBack", d: "M 210 106 Q 160 135 110 106", fill: "none", stroke: D.safe, strokeWidth: "2", strokeDasharray: "5 3" }), /* @__PURE__ */ React.createElement("polygon", { points: "110,106 119,100 117,111", fill: D.safe }), /* @__PURE__ */ React.createElement("text", { x: "160", y: "148", textAnchor: "middle", fontFamily: "Space Mono", fontSize: "11", fontWeight: "800", fill: D.safe }, d2cPct), /* @__PURE__ */ React.createElement("circle", { r: "3.5", fill: D.safe, style: { offsetPath: "path('M 210 106 Q 160 135 110 106')", animation: "dotMoveBack 3.4s ease-in-out 0.6s infinite" } })));
+    })(), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 12, color: D.muted, fontSize: 13, lineHeight: 1.5 } }, isFiniteNumber(recoveryWindow) ? `Once you enter autopilot mode, you typically recover within ${recoveryWindow.toFixed(1)} sessions.${isFiniteNumber(recoveryDelta) ? ` That is ${recoveryDelta <= 0 ? "better" : "worse"} than last month.` : ""}` : "Not enough transition data yet to estimate recovery window."), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10 } }, confMeta.show ? /* @__PURE__ */ React.createElement("div", { style: { color: D.info, fontSize: 12 } }, "Prediction Accuracy: ", Math.round(conf * 100), "%") : confMeta.known ? /* @__PURE__ */ React.createElement("div", { style: { color: D.muted, fontSize: 12 } }, "Still learning your patterns \xB7 ", confMeta.needed, " more sessions to full accuracy") : /* @__PURE__ */ React.createElement("div", { style: { color: D.muted, fontSize: 12 } }, "Prediction accuracy not available in this dataset."))), /* @__PURE__ */ React.createElement(CollapsibleSection, { title: `Session Topology (${totalReels} reels)`, defaultOpen: false }, safeArr(topology.reelData).length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { message: "Not enough data for session topology" }) : /* @__PURE__ */ React.createElement(React.Fragment, null, (() => {
+      const [topoSmooth, setTopoSmooth] = useState(0);
+      const rawReelData = safeArr(topology.reelData).map((r) => ({
+        i: r.index,
+        p: Math.round(safeNum(r.captureProb, 0) * 100)
+      }));
+      const smoothData = (data2, windowSize2) => {
+        if (windowSize2 <= 1) return data2;
+        return data2.map((point, idx) => {
+          const half = Math.floor(windowSize2 / 2);
+          const start = Math.max(0, idx - half);
+          const end = Math.min(data2.length - 1, idx + half);
+          let sum = 0, count = 0;
+          for (let j = start; j <= end; j++) {
+            sum += data2[j].p;
+            count++;
+          }
+          return { ...point, p: Math.round(sum / count) };
+        });
+      };
+      const windowSize = topoSmooth === 0 ? 1 : topoSmooth === 1 ? 3 : topoSmooth === 2 ? 7 : 15;
+      const reelData = smoothData(rawReelData, windowSize);
+      const maxReel = reelData.length > 0 ? reelData[reelData.length - 1].i : 0;
+      const smoothSafe = reelData.length > 0 ? Math.round(reelData.filter((d) => d.p < 33).length / reelData.length * 100) : 0;
+      const smoothDoom = reelData.length > 0 ? Math.round(reelData.filter((d) => d.p >= 66).length / reelData.length * 100) : 0;
+      const smoothBorder = Math.max(0, 100 - smoothSafe - smoothDoom);
+      const getTickInterval = (max) => {
+        if (max <= 30) return 5;
+        if (max <= 80) return 10;
+        if (max <= 200) return 20;
+        if (max <= 500) return 50;
+        return 100;
+      };
+      const tickInterval = getTickInterval(maxReel);
+      const explicitTicks = [];
+      for (let t = tickInterval; t <= maxReel; t += tickInterval) explicitTicks.push(t);
+      if (explicitTicks.length === 0 && maxReel > 0) explicitTicks.push(maxReel);
+      return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 10, color: D.text, fontSize: 13 } }, "Across all ", totalReels, " reels: ", smoothSafe, "% mindful, ", smoothBorder, "% borderline, ", smoothDoom, "% autopilot"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", height: 10, borderRadius: 999, overflow: "hidden", background: "#E4DED4", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { width: `${smoothSafe}%`, background: D.safe, transition: "width 0.3s ease" } }), /* @__PURE__ */ React.createElement("div", { style: { width: `${smoothBorder}%`, background: D.warn, transition: "width 0.3s ease" } }), /* @__PURE__ */ React.createElement("div", { style: { width: `${smoothDoom}%`, background: D.danger, transition: "width 0.3s ease" } })), /* @__PURE__ */ React.createElement("div", { style: { height: 210 } }, /* @__PURE__ */ React.createElement(ResponsiveContainer, { width: "100%", height: "100%" }, /* @__PURE__ */ React.createElement(LineChart, { data: reelData, margin: { top: 12, right: 12, left: 8, bottom: 8 } }, /* @__PURE__ */ React.createElement(
+        XAxis,
+        {
+          dataKey: "i",
+          tick: { fill: D.muted, fontSize: 10 },
+          ticks: explicitTicks,
+          type: "number",
+          domain: [0, maxReel]
+        }
+      ), /* @__PURE__ */ React.createElement(
+        YAxis,
+        {
+          tick: { fill: D.muted, fontSize: 10 },
+          label: { value: "Capture Risk (%)", angle: -90, position: "insideLeft", offset: 4, fontSize: 10, fill: D.muted },
+          domain: [0, 100],
+          width: 44
+        }
+      ), /* @__PURE__ */ React.createElement(
+        Tooltip,
+        {
+          contentStyle: { background: D.cardLight, border: `1px solid ${D.borderSoft}`, borderRadius: 10, fontSize: 12, color: D.ink, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" },
+          formatter: (v) => {
+            let riskLevel = "Mindful";
+            if (v >= 33 && v < 66) riskLevel = "Borderline";
+            if (v >= 66) riskLevel = "Autopilot";
+            return [`${v}% - ${riskLevel}`, "Risk"];
+          },
+          labelStyle: { color: D.muted, fontWeight: 700 },
+          labelFormatter: (label) => `Reel #${label}`
+        }
+      ), /* @__PURE__ */ React.createElement(
+        ReferenceLine,
+        {
+          y: 33,
+          stroke: D.borderSoft,
+          strokeDasharray: "3 3",
+          opacity: 0.4
+        }
+      ), /* @__PURE__ */ React.createElement(
+        ReferenceLine,
+        {
+          y: 66,
+          stroke: D.borderSoft,
+          strokeDasharray: "3 3",
+          opacity: 0.4
+        }
+      ), /* @__PURE__ */ React.createElement(
+        Line,
+        {
+          type: "monotone",
+          dataKey: "p",
+          stroke: D.danger,
+          strokeWidth: 2.5,
+          dot: false,
+          activeDot: { r: 5, fill: D.danger, stroke: D.cardLight, strokeWidth: 2 },
+          isAnimationActive: false
+        }
+      )))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 6, padding: "6px 0" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: D.muted, flexShrink: 0 } }, "Smoothing"), /* @__PURE__ */ React.createElement(
+        "input",
+        {
+          type: "range",
+          min: "0",
+          max: "3",
+          step: "1",
+          value: topoSmooth,
+          onChange: (e) => setTopoSmooth(parseInt(e.target.value)),
+          style: { flex: 1 }
+        }
+      ), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: D.muted, flexShrink: 0, minWidth: 40, textAlign: "right" } }, ["Raw", "Low", "Med", "High"][topoSmooth])));
+    })())));
+  }
+  function DashboardScreen({ data }) {
+    const [subTab, setSubTab] = useState("today");
+    return /* @__PURE__ */ React.createElement("div", { style: { padding: "16px 16px 32px", position: "relative", zIndex: 1 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "sub-tabs" }, /* @__PURE__ */ React.createElement("button", { className: `sub-tab ${subTab === "today" ? "active" : ""}`, onClick: () => setSubTab("today") }, "Today"), /* @__PURE__ */ React.createElement("button", { className: `sub-tab ${subTab === "week" ? "active" : ""}`, onClick: () => setSubTab("week") }, "This Week"), /* @__PURE__ */ React.createElement("button", { className: `sub-tab ${subTab === "all" ? "active" : ""}`, onClick: () => setSubTab("all") }, "All Time"))), subTab === "today" && /* @__PURE__ */ React.createElement(DashboardToday, { data }), subTab === "week" && /* @__PURE__ */ React.createElement(DashboardWeek, { data }), subTab === "all" && /* @__PURE__ */ React.createElement(DashboardAllTime, { data }));
+  }
+  const CAPTURE_STATES = [
     { id: "doom", label: "Doom", cellBg: "#F5EDE9", accent: "#C4563A", textColor: "#A03A25" },
     { id: "hooked", label: "Hooked", cellBg: "#F5F0E2", accent: "#C4973A", textColor: "#7A6020" },
     { id: "aware", label: "Aware", cellBg: "#E8E0F5", accent: "#6B3FA0", textColor: "#4A2580" },
     { id: "mindful", label: "Mindful", cellBg: "#EAF3EE", accent: "#3A9E6F", textColor: "#2A7A54" }
   ];
-  var stateFromCapture = (avgCapture) => {
+  const stateFromCapture = (avgCapture) => {
     if (avgCapture >= 0.7) return CAPTURE_STATES[0];
     if (avgCapture >= 0.45) return CAPTURE_STATES[1];
     if (avgCapture >= 0.25) return CAPTURE_STATES[2];
     return CAPTURE_STATES[3];
   };
-  var CaptureIcon = ({ stateId, size = 22 }) => {
+  const CaptureIcon = ({ stateId, size = 22 }) => {
     const ink = "#1A1612";
     const state = CAPTURE_STATES.find((s) => s.id === stateId) || CAPTURE_STATES[3];
     const bg = state.accent;
@@ -1374,7 +1948,7 @@
     if (stateId === "aware") return /* @__PURE__ */ React.createElement("svg", { width: size, height: size, viewBox: `0 0 ${size} ${size}`, fill: "none", style: { overflow: "visible" } }, /* @__PURE__ */ React.createElement("g", { transform: `scale(${scale})` }, /* @__PURE__ */ React.createElement("path", { d: "M 50 15 L 85 32 L 85 68 L 50 85 L 15 68 L 15 32 Z", fill: bg, stroke: bg, strokeWidth: "10", strokeLinejoin: "round" }), /* @__PURE__ */ React.createElement("circle", { cx: "38", cy: "50", r: "14", fill: "#FFF" }), /* @__PURE__ */ React.createElement("circle", { cx: "62", cy: "50", r: "14", fill: "#FFF" }), /* @__PURE__ */ React.createElement("circle", { cx: "33", cy: "50", r: "5", fill: ink }), /* @__PURE__ */ React.createElement("circle", { cx: "57", cy: "50", r: "5", fill: ink })));
     return /* @__PURE__ */ React.createElement("svg", { width: size, height: size, viewBox: `0 0 ${size} ${size}`, fill: "none", style: { overflow: "visible" } }, /* @__PURE__ */ React.createElement("g", { transform: `scale(${scale})` }, /* @__PURE__ */ React.createElement("circle", { cx: "35", cy: "35", r: "22", fill: bg }), /* @__PURE__ */ React.createElement("circle", { cx: "65", cy: "35", r: "22", fill: bg }), /* @__PURE__ */ React.createElement("circle", { cx: "35", cy: "65", r: "22", fill: bg }), /* @__PURE__ */ React.createElement("circle", { cx: "65", cy: "65", r: "22", fill: bg }), /* @__PURE__ */ React.createElement("rect", { x: "35", y: "35", width: "30", height: "30", fill: bg }), /* @__PURE__ */ React.createElement("path", { d: "M 32 48 Q 38 56 44 48 M 56 48 Q 62 56 68 48", stroke: ink, strokeWidth: "4", strokeLinecap: "round", fill: "none" }), /* @__PURE__ */ React.createElement("path", { d: "M 42 62 Q 50 70 58 62", stroke: ink, strokeWidth: "4", strokeLinecap: "round", fill: "none" })));
   };
-  var monthNames = [
+  const monthNames = [
     "January",
     "February",
     "March",
@@ -1816,480 +2390,6 @@
       }
     ));
   }
-
-  // app/src/main/assets/www/screens/DashboardScreen.jsx
-  function MoodDissonanceCard({ data }) {
-    const mood = data?.moodDissonance;
-    if (!mood) return null;
-    const doomMood = maybeNum(mood.doomMoodDelta);
-    const mindfulMood = maybeNum(mood.mindfulMoodDelta);
-    const doomRegret = maybeNum(mood.doomAvgRegret);
-    const mindfulRegret = maybeNum(mood.mindfulAvgRegret);
-    const totalSurveyed = maybeNum(mood.totalSurveyed);
-    const fmtDelta = (v) => isFiniteNumber(v) ? `${v > 0 ? "+" : ""}${v.toFixed(1)}` : "--";
-    const fmtScore = (v) => isFiniteNumber(v) ? `${v.toFixed(1)}/5` : "--";
-    const moodColor = (v) => !isFiniteNumber(v) ? D.muted : v >= 0 ? "#2A7A54" : "#C4563A";
-    const summary = (() => {
-      if (isFiniteNumber(doomMood) && isFiniteNumber(mindfulMood)) {
-        const gap = mindfulMood - doomMood;
-        if (gap >= 0.6) return "Mindful sessions are leaving you noticeably better than autopilot ones.";
-        if (gap <= -0.6) return "Recent data is unusual: autopilot sessions look better than mindful ones.";
-        return "Mood difference between session types is currently small.";
-      }
-      if (isFiniteNumber(doomRegret) && isFiniteNumber(mindfulRegret)) {
-        const gap = doomRegret - mindfulRegret;
-        if (gap >= 0.6) return "Autopilot sessions carry higher regret than mindful sessions.";
-        if (gap <= -0.6) return "Regret is currently higher in mindful sessions than autopilot sessions.";
-        return "Regret difference between session types is currently small.";
-      }
-      return "More post-session check-ins will sharpen this comparison.";
-    })();
-    return /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(0.05), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Mood Dissonance"), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 800, color: D.muted } }, isFiniteNumber(totalSurveyed) ? `${Math.round(totalSurveyed)} check-ins` : "survey sample")), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { background: "#F5EDE9", borderRadius: 12, padding: "10px 10px 8px" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, fontWeight: 800, color: "#A03A25", textTransform: "uppercase", letterSpacing: "0.08em" } }, "Autopilot"), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, fontSize: 18, fontWeight: 800, color: moodColor(doomMood), fontFamily: "Space Grotesk" } }, fmtDelta(doomMood)), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 2, fontSize: 11, color: D.muted } }, "avg mood change"), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, fontSize: 12, fontWeight: 700, color: "#A03A25" } }, "Regret ", fmtScore(doomRegret))), /* @__PURE__ */ React.createElement("div", { style: { background: "#EAF3EE", borderRadius: 12, padding: "10px 10px 8px" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, fontWeight: 800, color: "#2A7A54", textTransform: "uppercase", letterSpacing: "0.08em" } }, "Mindful"), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, fontSize: 18, fontWeight: 800, color: moodColor(mindfulMood), fontFamily: "Space Grotesk" } }, fmtDelta(mindfulMood)), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 2, fontSize: 11, color: D.muted } }, "avg mood change"), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, fontSize: 12, fontWeight: 700, color: "#2A7A54" } }, "Regret ", fmtScore(mindfulRegret)))), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10, fontSize: 12, color: D.ink2, lineHeight: 1.45 } }, summary));
-  }
-  function DashboardToday({ data }) {
-    const drivers = safeArr(data.doomDrivers);
-    const sortedDrivers = [...drivers].sort((a, b) => safeNum(b.contribution, 0) - safeNum(a.contribution, 0));
-    const topThree = sortedDrivers.slice(0, 3);
-    const timeline = safeArr(data.todaySessions);
-    const [selectedTimelineIdx, setSelectedTimelineIdx] = useState(null);
-    const [expandedFactors, setExpandedFactors] = useState({});
-    const circadian = safeArr(data.circadianProfile);
-    const circData = circadian;
-    const factorConfig = {
-      "Session Length": { color: D.yellow, gradient: "linear-gradient(135deg,#C4973A,#9A7020)", iconType: "session" },
-      "Rewatch Compulsion": { color: D.pink, gradient: "linear-gradient(135deg,#C4563A,#A03030)", iconType: "rewatch" },
-      "Rapid Re-entry": { color: D.coral, gradient: "linear-gradient(135deg,#C4563A,#A03A25)", iconType: "reentry" },
-      "Scroll Automaticity": { color: D.blue, gradient: "linear-gradient(135deg,#6B3FA0,#4A2580)", iconType: "scroll" },
-      "Dwell Collapse": { color: D.sage, gradient: "linear-gradient(135deg,#3A9E6F,#2A7A54)", iconType: "dwell" },
-      "Exit Conflict": { color: D.lavender, gradient: "linear-gradient(135deg,#9B6FCC,#6B3FA0)", iconType: "exit" },
-      "Environment": { color: D.peach, gradient: "linear-gradient(135deg,#C4973A,#9A7020)", iconType: "environment" },
-      "Cumulative": { color: D.teal, gradient: "linear-gradient(135deg,#3A9E6F,#2A7A54)", iconType: "cumulative" }
-    };
-    const getFactorStyle = (name) => {
-      const normalized = name.trim();
-      return factorConfig[normalized] || { color: D.purple, gradient: `linear-gradient(135deg, ${D.purple}, ${D.purpleDark})`, iconType: "default" };
-    };
-    const toggleFactor = (idx) => {
-      setExpandedFactors((prev) => ({ ...prev, [idx]: !prev[idx] }));
-    };
-    const [showAll, setShowAll] = useState(false);
-    const displayedDrivers = showAll ? sortedDrivers : topThree;
-    const hiddenCount = sortedDrivers.length - topThree.length;
-    return /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(0), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 10 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Today's Session Timeline")), !timeline.length ? /* @__PURE__ */ React.createElement(EmptyState, { message: "No sessions recorded yet today" }) : /* @__PURE__ */ React.createElement(React.Fragment, null, (() => {
-      const cols = Math.min(Math.max(4, Math.ceil(timeline.length / 2)), 5);
-      const rows = Math.ceil(timeline.length / cols);
-      const cellW = 100 / cols;
-      const cellH = 76;
-      const gap = 8;
-      const step = cellH + gap;
-      const dotOff = 10;
-      const svgH = rows * cellH + (rows - 1) * gap;
-      const pts = timeline.map((_, idx) => {
-        const row = Math.floor(idx / cols);
-        const colInRow = idx % cols;
-        const col = row % 2 === 1 ? cols - 1 - colInRow : colInRow;
-        return { row, col, x: (col + 0.5) * cellW, y: row * step + dotOff };
-      });
-      let pathD = "";
-      if (pts.length > 0) {
-        pathD = `M ${pts[0].x} ${pts[0].y}`;
-        for (let i = 1; i < pts.length; i++) {
-          const prev = pts[i - 1];
-          const curr = pts[i];
-          if (prev.row === curr.row) {
-            pathD += ` L ${curr.x} ${curr.y}`;
-          } else {
-            const edgeRight = prev.x > 50;
-            const loopX = edgeRight ? 108 : -8;
-            const midY = (prev.y + curr.y) / 2;
-            pathD += ` C ${loopX} ${midY}, ${loopX} ${midY}, ${curr.x} ${curr.y}`;
-          }
-        }
-      }
-      return /* @__PURE__ */ React.createElement("div", { style: { position: "relative", paddingTop: 8, minHeight: svgH } }, /* @__PURE__ */ React.createElement("svg", { style: { position: "absolute", top: 8, left: 0, width: "100%", height: svgH, pointerEvents: "none", zIndex: 0, overflow: "visible" }, viewBox: `0 0 100 ${svgH}`, preserveAspectRatio: "none" }, /* @__PURE__ */ React.createElement("path", { d: pathD, fill: "none", stroke: D.muted, strokeWidth: "2", opacity: "0.5", strokeLinecap: "round", strokeLinejoin: "round", vectorEffect: "non-scaling-stroke" })), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gridAutoRows: cellH, rowGap: gap } }, (() => {
-        const grid = Array.from({ length: rows * cols }, () => null);
-        timeline.forEach((s, idx) => {
-          const row = Math.floor(idx / cols);
-          const colInRow = idx % cols;
-          const isReversed = row % 2 === 1;
-          const col = isReversed ? cols - 1 - colInRow : colInRow;
-          grid[row * cols + col] = { s, idx };
-        });
-        return grid.map((cell, gi) => {
-          if (!cell) return /* @__PURE__ */ React.createElement("div", { key: `empty-${gi}` });
-          const { s, idx } = cell;
-          const c = s.isDoom ? D.danger : D.safe;
-          const durationMin = maybeNum(s.durationMin);
-          const isSelected = selectedTimelineIdx === idx;
-          return /* @__PURE__ */ React.createElement(
-            "div",
-            {
-              key: `${s.startTime}-${idx}`,
-              onClick: () => setSelectedTimelineIdx(isSelected ? null : idx),
-              style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 5, cursor: "pointer", position: "relative", paddingBottom: 4, zIndex: 1 }
-            },
-            /* @__PURE__ */ React.createElement("div", { style: {
-              width: isSelected ? 24 : 20,
-              height: isSelected ? 24 : 20,
-              borderRadius: "50%",
-              background: c,
-              boxShadow: `0 0 ${isSelected ? 18 : 12}px ${c}, 0 0 ${isSelected ? 6 : 3}px ${c}`,
-              border: isSelected ? `3px solid white` : `2px solid ${c}40`,
-              transition: "all 0.2s cubic-bezier(0.34,1.56,0.64,1)",
-              zIndex: 1,
-              position: "relative"
-            } }),
-            /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: 700, color: D.ink } }, (s.startTime || "").slice(0, 5) || `S${idx + 1}`),
-            /* @__PURE__ */ React.createElement("div", { style: { background: `${c}25`, borderRadius: 6, padding: "2px 6px", fontFamily: "'Nunito', sans-serif", fontSize: 10, fontWeight: 800, color: c } }, isFiniteNumber(durationMin) ? `${Math.round(durationMin)}m` : "--")
-          );
-        });
-      })()));
-    })(), selectedTimelineIdx !== null && timeline[selectedTimelineIdx] && (() => {
-      const sel = timeline[selectedTimelineIdx];
-      const hasSurvey = sel.hasSurvey || maybeNum(sel.postSessionRating) > 0;
-      return /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: D.muted } }, (sel.startTime || "--:--").slice(0, 5), " \xB7 ", isFiniteNumber(maybeNum(sel.durationMin)) ? `${Math.round(sel.durationMin)} min` : "duration unavailable", " \xB7 ", isFiniteNumber(maybeNum(sel.reelCount)) ? `${Math.round(sel.reelCount)} reels` : "reel count unavailable"), hasSurvey && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 } }, maybeNum(sel.postSessionRating) > 0 && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: "#EEE9F5", color: "#6B3FA0" } }, "Rating ", sel.postSessionRating, "/5"), maybeNum(sel.regretScore) > 0 && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: sel.regretScore >= 4 ? "#F5EDE9" : "#EAF3EE", color: sel.regretScore >= 4 ? "#C4563A" : "#2A7A54" } }, "Regret ", sel.regretScore, "/5"), maybeNum(sel.moodAfter) > 0 && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: "#EEE9F5", color: "#6B3FA0" } }, "Mood ", sel.moodAfter, "/5"), sel.intendedAction && sel.intendedAction !== "0" && sel.intendedAction !== "0.0" && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: "#F5F0E2", color: "#9A7020" } }, "Intent: ", sel.intendedAction)), !hasSurvey && /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, color: D.muted, opacity: 0.6, marginTop: 4 } }, "No survey data"));
-    })())), /* @__PURE__ */ React.createElement(MoodDissonanceCard, { data }));
-  }
-  function DashboardWeek({ data }) {
-    const heatmap = safeArr(data.heatmapData);
-    const heat = heatmap.filter((d) => isFiniteNumber(maybeNum(d.avgCapture)));
-    const [selectedDay, setSelectedDay] = useState(null);
-    const thisWeekRate = maybeNum(data.thisWindowDoomRate);
-    const lastWeekRate = maybeNum(data.lastWindowDoomRate);
-    const delta = isFiniteNumber(thisWeekRate) && isFiniteNumber(lastWeekRate) ? thisWeekRate - lastWeekRate : null;
-    const baselineScore = maybeNum(data.tenSessionAvgScore);
-    const underAvgDays = isFiniteNumber(baselineScore) ? heat.filter((d) => safeNum(d.avgCapture, 0) < baselineScore / 100).length : null;
-    const modelConf = maybeNum(data.modelConfidence);
-    const confMeta = getAccuracyMeta(modelConf);
-    let confidenceText = "Model confidence is not available in this payload.";
-    const sessionsCount = safeNum(data.totalSessions, 0);
-    if (confMeta.known) {
-      if (confMeta.show) {
-        confidenceText = `Model confidence is ${Math.round(modelConf * 100)}% based on ${sessionsCount} sessions.`;
-      } else {
-        confidenceText = `Model is still calibrating${isFiniteNumber(confMeta.needed) ? ` (${confMeta.needed} more sessions to reach full confidence)` : ""}.`;
-      }
-    }
-    const weeklyTrendData = heat.slice(-7).map((d, i) => ({
-      day: d.dayLabel || ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"][i],
-      score: Math.round(safeNum(d.avgCapture, 0) * 100),
-      index: i
-    }));
-    return /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } }, weeklyTrendData.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: {
-      ...fadeDelayStyle(0),
-      padding: "18px 16px",
-      background: "linear-gradient(135deg, rgba(107,63,160,0.05), rgba(74,37,128,0.05))",
-      borderColor: "rgba(107,63,160,0.12)"
-    } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.purple, fontSize: 11, fontWeight: 800 } }, "Weekly Snapshot"), /* @__PURE__ */ React.createElement("div", { style: { color: D.ink, fontSize: 14, fontWeight: 800, marginTop: 4, fontFamily: "Nunito" } }, "Your focus trend")), /* @__PURE__ */ React.createElement("div", { style: { height: 150 } }, /* @__PURE__ */ React.createElement(ResponsiveContainer, { width: "100%", height: "100%" }, /* @__PURE__ */ React.createElement(LineChart, { data: weeklyTrendData, margin: { top: 12, right: 12, left: 8, bottom: 8 } }, /* @__PURE__ */ React.createElement(XAxis, { dataKey: "day", tick: { fill: D.muted, fontSize: 10 } }), /* @__PURE__ */ React.createElement(
-      YAxis,
-      {
-        tick: { fill: D.muted, fontSize: 10 },
-        domain: [0, 100],
-        width: 44,
-        label: { value: "Autopilot (%)", angle: -90, position: "insideLeft", offset: 4, fontSize: 10, fill: D.muted }
-      }
-    ), /* @__PURE__ */ React.createElement(
-      Tooltip,
-      {
-        contentStyle: { background: D.cardLight, border: `1px solid ${D.borderSoft}`, borderRadius: 10, fontSize: 12, color: D.ink, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" },
-        formatter: (v) => [`${v}%`, "Autopilot"],
-        labelStyle: { color: D.muted, fontWeight: 700 }
-      }
-    ), /* @__PURE__ */ React.createElement(Line, { type: "monotone", dataKey: "score", stroke: D.purple, strokeWidth: 2.5, dot: { fill: D.purple, r: 4, stroke: D.cardLight, strokeWidth: 2 }, activeDot: { r: 6, fill: D.purple, stroke: D.cardLight, strokeWidth: 2 } })))), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8, padding: "10px 12px", background: "rgba(107,63,160,0.06)", borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: D.ink2, fontWeight: 600 } }, "Avg this week"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 16, fontWeight: 900, color: D.purple, fontFamily: "Nunito" } }, Math.round(weeklyTrendData.reduce((sum, d) => sum + d.score, 0) / weeklyTrendData.length), "%"))), /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(0), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Weekly Heatmap"), heat.length ? /* @__PURE__ */ React.createElement(
-      StatusPill,
-      {
-        label: isFiniteNumber(underAvgDays) ? `${underAvgDays} days under your average` : "Weekly baseline unavailable",
-        type: isFiniteNumber(underAvgDays) && underAvgDays > 0 ? "safe" : "info"
-      }
-    ) : null), !heat.length ? /* @__PURE__ */ React.createElement(EmptyState, { message: "Not enough weekly data yet" }) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { height: 180 } }, /* @__PURE__ */ React.createElement(ResponsiveContainer, { width: "100%", height: "100%" }, (() => {
-      const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-      const heatData = heat.map((d, i) => {
-        const rawVal = safeNum(d.avgCapture, 0) * 100;
-        return {
-          day: dayNames[i % 7],
-          value: Math.round(rawVal),
-          sessions: maybeNum(d.sessionCount),
-          raw: rawVal
-        };
-      });
-      const avgVal = heatData.length > 0 ? Math.round(heatData.reduce((sum, d) => sum + d.value, 0) / heatData.length) : 0;
-      const getBarColor = (val) => {
-        if (val < 33) return "#2A7A54";
-        if (val < 66) return "#D4A574";
-        return "#C4563A";
-      };
-      return /* @__PURE__ */ React.createElement(BarChart, { data: heatData, margin: { top: 12, right: 8, left: -8, bottom: 32 } }, /* @__PURE__ */ React.createElement(XAxis, { dataKey: "day", tick: { fill: D.muted, fontSize: 10 }, angle: -45, textAnchor: "end", height: 60 }), /* @__PURE__ */ React.createElement(
-        YAxis,
-        {
-          tick: { fill: D.muted, fontSize: 10 },
-          label: { value: "Autopilot Rate (%)", angle: -90, position: "insideLeft", offset: -12, fontSize: 10, fill: D.muted },
-          domain: [0, 100]
-        }
-      ), /* @__PURE__ */ React.createElement(
-        Tooltip,
-        {
-          contentStyle: { background: D.cardLight, border: `1px solid ${D.borderSoft}`, borderRadius: 10, fontSize: 12, color: D.ink, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" },
-          formatter: (v, name, props) => {
-            const sessions = props.payload.sessions;
-            return [`${v}% autopilot - ${isFiniteNumber(sessions) ? sessions + " session" + (sessions !== 1 ? "s" : "") : "N/A"}`, "Risk"];
-          },
-          labelStyle: { color: D.muted, fontWeight: 700 },
-          labelFormatter: (label) => label
-        }
-      ), /* @__PURE__ */ React.createElement(
-        ReferenceLine,
-        {
-          y: avgVal,
-          stroke: D.info,
-          strokeDasharray: "5 5",
-          label: { value: `Weekly Avg: ${avgVal}%`, position: "right", fill: D.muted, fontSize: 9, offset: 4 }
-        }
-      ), /* @__PURE__ */ React.createElement(
-        Bar,
-        {
-          dataKey: "value",
-          onClick: (entry) => setSelectedDay(entry && entry.payload ? entry.payload : null),
-          shape: ({ x, y, width, height, value }) => /* @__PURE__ */ React.createElement(
-            "rect",
-            {
-              x,
-              y,
-              width,
-              height,
-              fill: getBarColor(value)
-            }
-          )
-        }
-      ));
-    })())), selectedDay && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 12, padding: "8px 10px", background: "rgba(107,63,160,0.08)", borderLeft: `3px solid ${D.info}`, color: D.muted, fontSize: 12, borderRadius: 4 } }, /* @__PURE__ */ React.createElement("strong", null, selectedDay.day, ":"), " ", Math.round(selectedDay.raw), "% autopilot \xB7 ", isFiniteNumber(maybeNum(selectedDay.sessions)) ? selectedDay.sessions + " session" + (selectedDay.sessions !== 1 ? "s" : "") : "N/A"))), /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(1), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 8 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Weekly Insight")), !heat.length ? /* @__PURE__ */ React.createElement(EmptyState, { message: "Need more sessions to compare this week vs last week" }) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, color: D.text, marginBottom: 10 } }, confidenceText), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, color: D.muted } }, "This week: ", isFiniteNumber(thisWeekRate) ? `${Math.round(thisWeekRate * 100)}%` : "--", " autopilot  |  Last week: ", isFiniteNumber(lastWeekRate) ? `${Math.round(lastWeekRate * 100)}%` : "--", "  |  ", isFiniteNumber(delta) ? delta < 0 ? "\u2193 better" : delta > 0 ? "\u2191 worse" : "stable" : "comparison unavailable"))));
-  }
-  function DashboardAllTime({ data }) {
-    const topology = data.sessionTopology || {};
-    const totalReels = safeNum(topology.totalReels, 0);
-    const safePct = safeNum(topology.safePercent, 0);
-    const borderPct = safeNum(topology.borderPercent, 0);
-    const doomPct = safeNum(topology.doomPercent, 0);
-    const conf = maybeNum(data.modelConfidence) ?? maybeNum(data.stateDynamics?.modelConfidence);
-    const confMeta = getAccuracyMeta(conf);
-    const allTimeCaptureRate = maybeNum(data.allTimeCaptureRate);
-    const sessionDoomPersistence = maybeNum(data.sessionDoomPersistence);
-    const escapeRate = maybeNum(data.escapeRate);
-    const pullIndex = maybeNum(data.pullIndex);
-    const recoveryWindow = maybeNum(data.stateDynamics?.recoveryWindowSessions);
-    const recoveryDelta = maybeNum(data.stateDynamics?.recoveryWindowDelta);
-    return /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(0), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 8 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Behavioral Baseline")), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } }, [
-      { title: "Autopilot Rate (All Sessions)", value: isFiniteNumber(allTimeCaptureRate) ? `${Math.round(allTimeCaptureRate * 100)}%` : "--", desc: "Share of all sessions that entered autopilot" },
-      { title: "Back-to-Back Autopilot Rate", value: isFiniteNumber(sessionDoomPersistence) ? `${Math.round(sessionDoomPersistence * 100)}%` : "--", desc: "How often autopilot sessions cluster" },
-      { title: "Self-Recovery Rate", value: isFiniteNumber(escapeRate) ? `${Math.round(escapeRate * 100)}%` : "--", desc: "How often you return to mindful browsing" },
-      { title: "Trap Pressure Ratio", value: isFiniteNumber(pullIndex) ? `${pullIndex.toFixed(1)}x` : "--", desc: "Trap pressure relative to recovery pressure" }
-    ].map((m) => /* @__PURE__ */ React.createElement("div", { key: m.title, style: { border: `1px solid ${D.borderSoft}`, borderRadius: 10, padding: 10 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: D.muted } }, m.title), /* @__PURE__ */ React.createElement("div", { className: "spacemono", style: { fontSize: 22, color: D.ink, marginTop: 4, fontWeight: 700 } }, m.value), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 4, fontSize: 11, color: D.muted } }, m.desc))))), /* @__PURE__ */ React.createElement("div", { className: "card fade-card", style: { ...fadeDelayStyle(1), padding: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 8 } }, /* @__PURE__ */ React.createElement(Label, { style: { color: D.ink } }, "Your Historical Vulnerability Pattern")), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: D.muted, marginBottom: 10 } }, "Across all sessions you've recorded"), safeArr(data.circadianProfile).length < 3 ? /* @__PURE__ */ React.createElement(EmptyState, { message: "Need at least 3 sessions to reveal your risk pattern" }) : (() => {
-      const [circSmooth, setCircSmooth] = useState(0);
-      const circProfile = safeArr(data.circadianProfile);
-      const fmtHour = (h) => {
-        const hr = (h % 24 + 24) % 24;
-        if (hr === 0) return "12 AM";
-        if (hr === 12) return "12 PM";
-        return hr < 12 ? `${hr} AM` : `${hr - 12} PM`;
-      };
-      const circRaw = circProfile.map((p) => ({
-        h: p.hour,
-        p: safeNum(p.captureProb, 0),
-        label: fmtHour(p.hour)
-      }));
-      const smoothCirc = (data2, win) => {
-        if (win <= 1) return data2;
-        return data2.map((pt, idx) => {
-          const half = Math.floor(win / 2);
-          let sum = 0, count = 0;
-          for (let j = idx - half; j <= idx + half; j++) {
-            const k = (j % data2.length + data2.length) % data2.length;
-            sum += data2[k].p;
-            count++;
-          }
-          return { ...pt, p: sum / count };
-        });
-      };
-      const circWin = circSmooth === 0 ? 1 : circSmooth === 1 ? 2 : 3;
-      const circData = smoothCirc(circRaw, circWin);
-      const peakPt = circProfile.reduce((best, c) => !best || c.captureProb > best.captureProb ? c : best, null);
-      const safePt = circProfile.reduce((best, c) => !best || c.captureProb < best.captureProb ? c : best, null);
-      const formatHr = (hour) => {
-        const h = (hour % 24 + 24) % 24;
-        if (h === 0) return "12 AM";
-        if (h === 12) return "12 PM";
-        return h < 12 ? `${h} AM` : `${h - 12} PM`;
-      };
-      return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { height: 200 } }, /* @__PURE__ */ React.createElement(ResponsiveContainer, { width: "100%", height: "100%" }, /* @__PURE__ */ React.createElement(LineChart, { data: circData, margin: { top: 8, right: 12, left: 8, bottom: 8 } }, /* @__PURE__ */ React.createElement(XAxis, { dataKey: "label", tick: { fill: D.muted, fontSize: 10 } }), /* @__PURE__ */ React.createElement(
-        YAxis,
-        {
-          label: { value: "Autopilot Risk (%)", angle: -90, position: "insideLeft", offset: 4, style: { fontSize: 10, fill: D.muted } },
-          tick: { fill: D.muted, fontSize: 10 },
-          width: 44
-        }
-      ), /* @__PURE__ */ React.createElement(
-        Tooltip,
-        {
-          contentStyle: { background: D.cardLight, border: `1px solid ${D.borderSoft}`, borderRadius: 10, fontSize: 12, color: D.ink, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" },
-          formatter: (v) => [`${Math.round(v * 100)}% autopilot risk`, "Risk"],
-          labelStyle: { color: D.muted, fontWeight: 700 }
-        }
-      ), /* @__PURE__ */ React.createElement(Line, { type: "monotone", dataKey: "p", stroke: D.info, strokeWidth: 2.5, dot: { fill: D.info, r: 3 }, activeDot: { r: 5, stroke: D.cardLight, strokeWidth: 2 } })))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 6, padding: "6px 0" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: D.muted, flexShrink: 0 } }, "Smoothing"), /* @__PURE__ */ React.createElement(
-        "input",
-        {
-          type: "range",
-          min: "0",
-          max: "2",
-          step: "1",
-          value: circSmooth,
-          onChange: (e) => setCircSmooth(parseInt(e.target.value)),
-          style: { flex: 1 }
-        }
-      ), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: D.muted, flexShrink: 0, minWidth: 40, textAlign: "right" } }, ["Raw", "Smooth", "Extra"][circSmooth])), peakPt && safePt && /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { position: "relative", border: `1px solid rgba(58,158,111,0.25)`, borderRadius: 14, padding: "14px 12px 12px", overflow: "hidden", background: "rgba(58,158,111,0.03)" } }, /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 8, right: 8, width: 36, height: 36 } }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 36 36", width: "36", height: "36" }, /* @__PURE__ */ React.createElement("path", { d: "M18 4 C18 4 6 14 10 24 C12 28 16 30 18 32 C20 30 24 28 26 24 C30 14 18 4 18 4Z", fill: "#2A7A54", opacity: "0.3" }), /* @__PURE__ */ React.createElement("path", { d: "M18 4 C18 4 6 14 10 24 C12 28 16 30 18 32 C20 30 24 28 26 24 C30 14 18 4 18 4Z", fill: "none", stroke: "#2A7A54", strokeWidth: "1.5", opacity: "0.7" }), /* @__PURE__ */ React.createElement("path", { d: "M18 12 L18 26", stroke: "#2A7A54", strokeWidth: "1", opacity: "0.5" }), /* @__PURE__ */ React.createElement("path", { d: "M14 18 Q18 16 22 18", stroke: "#2A7A54", strokeWidth: "0.8", opacity: "0.4", fill: "none" }), /* @__PURE__ */ React.createElement("path", { d: "M15 22 Q18 20 21 22", stroke: "#2A7A54", strokeWidth: "0.8", opacity: "0.4", fill: "none" }))), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: D.safe, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 } }, "Safest Window"), /* @__PURE__ */ React.createElement("div", { className: "spacemono", style: { fontSize: 20, fontWeight: 800, color: D.ink } }, formatHr(safePt.hour)), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: D.muted, marginTop: 4 } }, Math.round(safePt.captureProb * 100), "% risk")), /* @__PURE__ */ React.createElement("div", { style: { position: "relative", border: `1px solid rgba(196,86,58,0.25)`, borderRadius: 14, padding: "14px 12px 12px", overflow: "hidden", background: "rgba(196,86,58,0.03)" } }, /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 8, right: 8, width: 36, height: 36 } }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 36 36", width: "36", height: "36" }, /* @__PURE__ */ React.createElement("path", { d: "M18 4 C18 4 6 14 10 24 C12 28 16 30 18 32 C20 30 24 28 26 24 C30 14 18 4 18 4Z", fill: "#C4563A", opacity: "0.3" }), /* @__PURE__ */ React.createElement("path", { d: "M18 4 C18 4 6 14 10 24 C12 28 16 30 18 32 C20 30 24 28 26 24 C30 14 18 4 18 4Z", fill: "none", stroke: "#C4563A", strokeWidth: "1.5", opacity: "0.7" }), /* @__PURE__ */ React.createElement("path", { d: "M18 12 L18 26", stroke: "#C4563A", strokeWidth: "1", opacity: "0.5" }), /* @__PURE__ */ React.createElement("path", { d: "M14 18 Q18 16 22 18", stroke: "#C4563A", strokeWidth: "0.8", opacity: "0.4", fill: "none" }), /* @__PURE__ */ React.createElement("path", { d: "M15 22 Q18 20 21 22", stroke: "#C4563A", strokeWidth: "0.8", opacity: "0.4", fill: "none" }))), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: D.danger, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 } }, "Riskiest Window"), /* @__PURE__ */ React.createElement("div", { className: "spacemono", style: { fontSize: 20, fontWeight: 800, color: D.ink } }, formatHr(peakPt.hour)), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: D.muted, marginTop: 4 } }, Math.round(peakPt.captureProb * 100), "% risk"))));
-    })()), /* @__PURE__ */ React.createElement(CollapsibleSection, { title: "State Dynamics", defaultOpen: false }, (() => {
-      const c2d = maybeNum(data.stateDynamics?.casualToDoomProb);
-      const d2c = maybeNum(data.stateDynamics?.doomToCasualProb);
-      const c2dPct = isFiniteNumber(c2d) ? `${Math.round(c2d * 100)}%` : "--";
-      const d2cPct = isFiniteNumber(d2c) ? `${Math.round(d2c * 100)}%` : "--";
-      const c2cPct = isFiniteNumber(c2d) ? `${Math.round((1 - c2d) * 100)}%` : "--";
-      const d2dPct = isFiniteNumber(d2c) ? `${Math.round((1 - d2c) * 100)}%` : "--";
-      return /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 8 } }, /* @__PURE__ */ React.createElement("style", null, `
-                        @keyframes dotMoveForward {
-                            0%   { offset-distance: 0%; opacity: 0; }
-                            10%  { opacity: 1; }
-                            90%  { opacity: 1; }
-                            100% { offset-distance: 100%; opacity: 0; }
-                        }
-                        @keyframes dotMoveBack {
-                            0%   { offset-distance: 0%; opacity: 0; }
-                            10%  { opacity: 1; }
-                            90%  { opacity: 1; }
-                            100% { offset-distance: 100%; opacity: 0; }
-                        }
-                        @keyframes dotMoveLoop {
-                            0%   { offset-distance: 0%; opacity: 0; }
-                            10%  { opacity: 1; }
-                            90%  { opacity: 1; }
-                            100% { offset-distance: 100%; opacity: 0; }
-                        }
-                        @keyframes pulseNode {
-                            0%, 100% { transform: scale(1); }
-                            50% { transform: scale(1.04); }
-                        }
-                    `), /* @__PURE__ */ React.createElement("svg", { width: "100%", viewBox: "0 0 320 160" }, /* @__PURE__ */ React.createElement("path", { d: "M 56 36 C 34 14 106 14 84 36", fill: "none", stroke: D.safe, strokeWidth: "1.25", strokeDasharray: "4 2" }), /* @__PURE__ */ React.createElement("polygon", { points: "84,36 80,30 87,31", fill: D.safe }), /* @__PURE__ */ React.createElement("text", { x: "70", y: "8", textAnchor: "middle", fontFamily: "Space Mono", fontSize: "10", fontWeight: "700", fill: D.safe }, c2cPct), /* @__PURE__ */ React.createElement("circle", { r: "2.25", fill: D.safe, style: { offsetPath: "path('M 56 36 C 34 14 106 14 84 36')", animation: "dotMoveLoop 3.2s ease-in-out 0.3s infinite" } }), /* @__PURE__ */ React.createElement("path", { d: "M 236 36 C 214 14 286 14 264 36", fill: "none", stroke: D.danger, strokeWidth: "1.25", strokeDasharray: "4 2" }), /* @__PURE__ */ React.createElement("polygon", { points: "264,36 260,30 267,31", fill: D.danger }), /* @__PURE__ */ React.createElement("text", { x: "250", y: "8", textAnchor: "middle", fontFamily: "Space Mono", fontSize: "10", fontWeight: "700", fill: D.danger }, d2dPct), /* @__PURE__ */ React.createElement("circle", { r: "2.25", fill: D.danger, style: { offsetPath: "path('M 236 36 C 214 14 286 14 264 36')", animation: "dotMoveLoop 3.6s ease-in-out 1s infinite" } }), /* @__PURE__ */ React.createElement("g", { style: { animation: "pulseNode 3s ease-in-out infinite" } }, /* @__PURE__ */ React.createElement("circle", { cx: "70", cy: "88", r: "38", fill: "rgba(58,158,111,0.10)", stroke: D.safe, strokeWidth: "2" }), /* @__PURE__ */ React.createElement("text", { x: "70", y: "83", textAnchor: "middle", fontFamily: "Space Grotesk", fontSize: "11", fontWeight: "800", fill: D.safe }, "Mindful"), /* @__PURE__ */ React.createElement("text", { x: "70", y: "97", textAnchor: "middle", fontFamily: "Space Grotesk", fontSize: "11", fontWeight: "800", fill: D.safe }, "Browsing")), /* @__PURE__ */ React.createElement("g", { style: { animation: "pulseNode 3s ease-in-out 1.5s infinite" } }, /* @__PURE__ */ React.createElement("circle", { cx: "250", cy: "88", r: "38", fill: "rgba(196,86,58,0.10)", stroke: D.danger, strokeWidth: "2" }), /* @__PURE__ */ React.createElement("text", { x: "250", y: "91", textAnchor: "middle", fontFamily: "Space Grotesk", fontSize: "11", fontWeight: "800", fill: D.danger }, "Autopilot")), /* @__PURE__ */ React.createElement("path", { id: "pathForward", d: "M 110 70 Q 160 41 210 70", fill: "none", stroke: D.danger, strokeWidth: "2.5" }), /* @__PURE__ */ React.createElement("polygon", { points: "210,70 201,64 204,74", fill: D.danger }), /* @__PURE__ */ React.createElement("text", { x: "160", y: "50", textAnchor: "middle", fontFamily: "Space Mono", fontSize: "11", fontWeight: "800", fill: D.danger }, c2dPct), /* @__PURE__ */ React.createElement("circle", { r: "4", fill: D.danger, style: { offsetPath: "path('M 110 70 Q 160 41 210 70')", animation: "dotMoveForward 2.8s ease-in-out infinite" } }), /* @__PURE__ */ React.createElement("circle", { r: "4", fill: D.danger, opacity: "0.5", style: { offsetPath: "path('M 110 70 Q 160 41 210 70')", animation: "dotMoveForward 2.8s ease-in-out 1.4s infinite" } }), /* @__PURE__ */ React.createElement("path", { id: "pathBack", d: "M 210 106 Q 160 135 110 106", fill: "none", stroke: D.safe, strokeWidth: "2", strokeDasharray: "5 3" }), /* @__PURE__ */ React.createElement("polygon", { points: "110,106 119,100 117,111", fill: D.safe }), /* @__PURE__ */ React.createElement("text", { x: "160", y: "148", textAnchor: "middle", fontFamily: "Space Mono", fontSize: "11", fontWeight: "800", fill: D.safe }, d2cPct), /* @__PURE__ */ React.createElement("circle", { r: "3.5", fill: D.safe, style: { offsetPath: "path('M 210 106 Q 160 135 110 106')", animation: "dotMoveBack 3.4s ease-in-out 0.6s infinite" } })));
-    })(), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 12, color: D.muted, fontSize: 13, lineHeight: 1.5 } }, isFiniteNumber(recoveryWindow) ? `Once you enter autopilot mode, you typically recover within ${recoveryWindow.toFixed(1)} sessions.${isFiniteNumber(recoveryDelta) ? ` That is ${recoveryDelta <= 0 ? "better" : "worse"} than last month.` : ""}` : "Not enough transition data yet to estimate recovery window."), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10 } }, confMeta.show ? /* @__PURE__ */ React.createElement("div", { style: { color: D.info, fontSize: 12 } }, "Prediction Accuracy: ", Math.round(conf * 100), "%") : confMeta.known ? /* @__PURE__ */ React.createElement("div", { style: { color: D.muted, fontSize: 12 } }, "Still learning your patterns \xB7 ", confMeta.needed, " more sessions to full accuracy") : /* @__PURE__ */ React.createElement("div", { style: { color: D.muted, fontSize: 12 } }, "Prediction accuracy not available in this dataset."))), /* @__PURE__ */ React.createElement(CollapsibleSection, { title: `Session Topology (${totalReels} reels)`, defaultOpen: false }, safeArr(topology.reelData).length === 0 ? /* @__PURE__ */ React.createElement(EmptyState, { message: "Not enough data for session topology" }) : /* @__PURE__ */ React.createElement(React.Fragment, null, (() => {
-      const [topoSmooth, setTopoSmooth] = useState(0);
-      const rawReelData = safeArr(topology.reelData).map((r) => ({
-        i: r.index,
-        p: Math.round(safeNum(r.captureProb, 0) * 100)
-      }));
-      const smoothData = (data2, windowSize2) => {
-        if (windowSize2 <= 1) return data2;
-        return data2.map((point, idx) => {
-          const half = Math.floor(windowSize2 / 2);
-          const start = Math.max(0, idx - half);
-          const end = Math.min(data2.length - 1, idx + half);
-          let sum = 0, count = 0;
-          for (let j = start; j <= end; j++) {
-            sum += data2[j].p;
-            count++;
-          }
-          return { ...point, p: Math.round(sum / count) };
-        });
-      };
-      const windowSize = topoSmooth === 0 ? 1 : topoSmooth === 1 ? 3 : topoSmooth === 2 ? 7 : 15;
-      const reelData = smoothData(rawReelData, windowSize);
-      const maxReel = reelData.length > 0 ? reelData[reelData.length - 1].i : 0;
-      const smoothSafe = reelData.length > 0 ? Math.round(reelData.filter((d) => d.p < 33).length / reelData.length * 100) : 0;
-      const smoothDoom = reelData.length > 0 ? Math.round(reelData.filter((d) => d.p >= 66).length / reelData.length * 100) : 0;
-      const smoothBorder = Math.max(0, 100 - smoothSafe - smoothDoom);
-      const getTickInterval = (max) => {
-        if (max <= 30) return 5;
-        if (max <= 80) return 10;
-        if (max <= 200) return 20;
-        if (max <= 500) return 50;
-        return 100;
-      };
-      const tickInterval = getTickInterval(maxReel);
-      const explicitTicks = [];
-      for (let t = tickInterval; t <= maxReel; t += tickInterval) explicitTicks.push(t);
-      if (explicitTicks.length === 0 && maxReel > 0) explicitTicks.push(maxReel);
-      return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 10, color: D.text, fontSize: 13 } }, "Across all ", totalReels, " reels: ", smoothSafe, "% mindful, ", smoothBorder, "% borderline, ", smoothDoom, "% autopilot"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", height: 10, borderRadius: 999, overflow: "hidden", background: "#E4DED4", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { width: `${smoothSafe}%`, background: D.safe, transition: "width 0.3s ease" } }), /* @__PURE__ */ React.createElement("div", { style: { width: `${smoothBorder}%`, background: D.warn, transition: "width 0.3s ease" } }), /* @__PURE__ */ React.createElement("div", { style: { width: `${smoothDoom}%`, background: D.danger, transition: "width 0.3s ease" } })), /* @__PURE__ */ React.createElement("div", { style: { height: 210 } }, /* @__PURE__ */ React.createElement(ResponsiveContainer, { width: "100%", height: "100%" }, /* @__PURE__ */ React.createElement(LineChart, { data: reelData, margin: { top: 12, right: 12, left: 8, bottom: 8 } }, /* @__PURE__ */ React.createElement(
-        XAxis,
-        {
-          dataKey: "i",
-          tick: { fill: D.muted, fontSize: 10 },
-          ticks: explicitTicks,
-          type: "number",
-          domain: [0, maxReel]
-        }
-      ), /* @__PURE__ */ React.createElement(
-        YAxis,
-        {
-          tick: { fill: D.muted, fontSize: 10 },
-          label: { value: "Capture Risk (%)", angle: -90, position: "insideLeft", offset: 4, fontSize: 10, fill: D.muted },
-          domain: [0, 100],
-          width: 44
-        }
-      ), /* @__PURE__ */ React.createElement(
-        Tooltip,
-        {
-          contentStyle: { background: D.cardLight, border: `1px solid ${D.borderSoft}`, borderRadius: 10, fontSize: 12, color: D.ink, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" },
-          formatter: (v) => {
-            let riskLevel = "Mindful";
-            if (v >= 33 && v < 66) riskLevel = "Borderline";
-            if (v >= 66) riskLevel = "Autopilot";
-            return [`${v}% - ${riskLevel}`, "Risk"];
-          },
-          labelStyle: { color: D.muted, fontWeight: 700 },
-          labelFormatter: (label) => `Reel #${label}`
-        }
-      ), /* @__PURE__ */ React.createElement(
-        ReferenceLine,
-        {
-          y: 33,
-          stroke: D.borderSoft,
-          strokeDasharray: "3 3",
-          opacity: 0.4
-        }
-      ), /* @__PURE__ */ React.createElement(
-        ReferenceLine,
-        {
-          y: 66,
-          stroke: D.borderSoft,
-          strokeDasharray: "3 3",
-          opacity: 0.4
-        }
-      ), /* @__PURE__ */ React.createElement(
-        Line,
-        {
-          type: "monotone",
-          dataKey: "p",
-          stroke: D.danger,
-          strokeWidth: 2.5,
-          dot: false,
-          activeDot: { r: 5, fill: D.danger, stroke: D.cardLight, strokeWidth: 2 },
-          isAnimationActive: false
-        }
-      )))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 6, padding: "6px 0" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: D.muted, flexShrink: 0 } }, "Smoothing"), /* @__PURE__ */ React.createElement(
-        "input",
-        {
-          type: "range",
-          min: "0",
-          max: "3",
-          step: "1",
-          value: topoSmooth,
-          onChange: (e) => setTopoSmooth(parseInt(e.target.value)),
-          style: { flex: 1 }
-        }
-      ), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: D.muted, flexShrink: 0, minWidth: 40, textAlign: "right" } }, ["Raw", "Low", "Med", "High"][topoSmooth])));
-    })())));
-  }
-  function DashboardScreen({ data }) {
-    const [subTab, setSubTab] = useState("today");
-    return /* @__PURE__ */ React.createElement("div", { style: { padding: "16px 16px 32px", position: "relative", zIndex: 1 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "sub-tabs" }, /* @__PURE__ */ React.createElement("button", { className: `sub-tab ${subTab === "today" ? "active" : ""}`, onClick: () => setSubTab("today") }, "Today"), /* @__PURE__ */ React.createElement("button", { className: `sub-tab ${subTab === "week" ? "active" : ""}`, onClick: () => setSubTab("week") }, "This Week"), /* @__PURE__ */ React.createElement("button", { className: `sub-tab ${subTab === "all" ? "active" : ""}`, onClick: () => setSubTab("all") }, "All Time"))), subTab === "today" && /* @__PURE__ */ React.createElement(DashboardToday, { data }), subTab === "week" && /* @__PURE__ */ React.createElement(DashboardWeek, { data }), subTab === "all" && /* @__PURE__ */ React.createElement(DashboardAllTime, { data }));
-  }
-
-  // app/src/main/assets/www/screens/SettingsScreen.jsx
   function SettingsScreen({ data }) {
     const [surveyProb, setSurveyProb] = useState(0.3);
     const [sleepStart, setSleepStart] = useState(23);
@@ -2405,12 +2505,10 @@
       gap: 8
     } }, /* @__PURE__ */ React.createElement(Trash2, { size: 15 }), " Reset My Baseline")), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10, color: D.muted, fontSize: 12, lineHeight: 1.5 } }, "This permanently clears your history and the app will start learning you from scratch.")));
   }
-
-  // app/src/main/assets/www/app.jsx
-  var TabIconMonitor = ({ size = 20, color = "currentColor" }) => /* @__PURE__ */ React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("path", { d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" }), /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "3" }));
-  var TabIconCalendar = ({ size = 20, color = "currentColor" }) => /* @__PURE__ */ React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("rect", { x: "3", y: "4", width: "18", height: "18", rx: "2" }), /* @__PURE__ */ React.createElement("line", { x1: "16", y1: "2", x2: "16", y2: "6" }), /* @__PURE__ */ React.createElement("line", { x1: "8", y1: "2", x2: "8", y2: "6" }), /* @__PURE__ */ React.createElement("line", { x1: "3", y1: "10", x2: "21", y2: "10" }), /* @__PURE__ */ React.createElement("rect", { x: "8", y: "14", width: "3", height: "3", rx: "0.5", fill: color, stroke: "none" }));
-  var TabIconDashboard = ({ size = 20, color = "currentColor" }) => /* @__PURE__ */ React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("line", { x1: "18", y1: "20", x2: "18", y2: "10" }), /* @__PURE__ */ React.createElement("line", { x1: "12", y1: "20", x2: "12", y2: "4" }), /* @__PURE__ */ React.createElement("line", { x1: "6", y1: "20", x2: "6", y2: "14" }));
-  var TabIconSettings = ({ size = 20, color = "currentColor" }) => /* @__PURE__ */ React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "3" }), /* @__PURE__ */ React.createElement("path", { d: "M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001.08 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1.08z" }));
+  const TabIconMonitor = ({ size = 20, color = "currentColor" }) => /* @__PURE__ */ React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("path", { d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" }), /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "3" }));
+  const TabIconCalendar = ({ size = 20, color = "currentColor" }) => /* @__PURE__ */ React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("rect", { x: "3", y: "4", width: "18", height: "18", rx: "2" }), /* @__PURE__ */ React.createElement("line", { x1: "16", y1: "2", x2: "16", y2: "6" }), /* @__PURE__ */ React.createElement("line", { x1: "8", y1: "2", x2: "8", y2: "6" }), /* @__PURE__ */ React.createElement("line", { x1: "3", y1: "10", x2: "21", y2: "10" }), /* @__PURE__ */ React.createElement("rect", { x: "8", y: "14", width: "3", height: "3", rx: "0.5", fill: color, stroke: "none" }));
+  const TabIconDashboard = ({ size = 20, color = "currentColor" }) => /* @__PURE__ */ React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("line", { x1: "18", y1: "20", x2: "18", y2: "10" }), /* @__PURE__ */ React.createElement("line", { x1: "12", y1: "20", x2: "12", y2: "4" }), /* @__PURE__ */ React.createElement("line", { x1: "6", y1: "20", x2: "6", y2: "14" }));
+  const TabIconSettings = ({ size = 20, color = "currentColor" }) => /* @__PURE__ */ React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "3" }), /* @__PURE__ */ React.createElement("path", { d: "M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001.08 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1.08z" }));
   function LoadingState() {
     return /* @__PURE__ */ React.createElement("div", { style: {
       minHeight: "100vh",
@@ -2424,7 +2522,7 @@
       gap: 12
     } }, /* @__PURE__ */ React.createElement("div", { style: { width: 36, height: 36, borderRadius: "50%", border: `3px solid rgba(26,22,18,0.08)`, borderTopColor: "#6B3FA0", animation: "spin 1s linear infinite" } }), /* @__PURE__ */ React.createElement("div", { className: "mono", style: { fontSize: 10, color: "#9A8E84", letterSpacing: "0.18em" } }, "INITIALIZING TRACKER..."), /* @__PURE__ */ React.createElement("style", null, `@keyframes spin { to { transform: rotate(360deg); } }`));
   }
-  var ONBOARD_QUOTES = [
+  const ONBOARD_QUOTES = [
     {
       text: "You have power over your mind, not outside events. Realise this and you will find strength. The algorithm realised it first.",
       tag: "Marcus Aurelius \xB7 Meditations"
@@ -2586,7 +2684,7 @@
       tag: "Pieper \xB7 Leisure the Basis of Culture"
     }
   ];
-  var ONBOARD_BLOB_CONFIG = [
+  const ONBOARD_BLOB_CONFIG = [
     { cx: 0.12, cy: 0.26, r: 160, color: "#8B5CF6", alpha: 0.28, speed: 16500, phase: 0 },
     { cx: 0.82, cy: 0.13, r: 140, color: "#6366F1", alpha: 0.27, speed: 14500, phase: 1.2 },
     { cx: 0.66, cy: 0.48, r: 132, color: "#34D399", alpha: 0.24, speed: 17500, phase: 2.5 },
@@ -2911,6 +3009,9 @@
         probability,
         isDoom: isFiniteNumber(probability) ? probability >= DOOM_THRESHOLD : Boolean(source.isDoom),
         _ts: ts,
+        // Session identity — needed for retroactive labeling bridge call
+        _sessionNum: source.sessionNum ?? null,
+        _sessionDate: source.date ?? null,
         // Survey self-report labels
         postSessionRating: maybeNum(source.postSessionRating) ?? 0,
         regretScore: maybeNum(source.regretScore) ?? 0,
@@ -2921,7 +3022,11 @@
         comparativeRating: maybeNum(source.comparativeRating) ?? 0,
         delayedRegretScore: maybeNum(source.delayedRegretScore) ?? 0,
         supervisedDoom: maybeNum(source.supervisedDoom) ?? 0,
-        hasSurvey: Boolean(source.hasSurvey)
+        hasSurvey: Boolean(source.hasSurvey),
+        retroactiveLabel: Boolean(source.retroactiveLabel),
+        // Heuristic and confidence metadata for Fix 1
+        heuristicScore: maybeNum(source.heuristic_score) ?? 0,
+        modelConf: maybeNum(source.model_conf) ?? 1
       };
     };
     const providedTodaySource = safeArr(rawData?.todaySessions).filter((s) => s && typeof s === "object").map((s, idx) => ({ raw: s, idx, ts: pickSessionTimestampMs(s), durationSec: deriveSessionDurationSec(s) }));
@@ -3276,17 +3381,18 @@
       totalSessions: sessions.length,
       avgSessions,
       avgActiveTimeTodaySeconds: maybeNum(rawData?.avgActiveTimeTodaySeconds) ?? derivedAvgActiveTimeTodaySeconds,
-      last3SessionAutopilotRates: last3SessionAutopilotRates.length ? last3SessionAutopilotRates : derivedLast3SessionAutopilotRates
+      last3SessionAutopilotRates: last3SessionAutopilotRates.length ? last3SessionAutopilotRates : derivedLast3SessionAutopilotRates,
+      confidenceBreakdown: rawData?.model_confidence_breakdown || null
     };
   }
-  var DOOM_THRESHOLD = 0.55;
-  var HEADER_STATE = {
+  const DOOM_THRESHOLD = 0.55;
+  const HEADER_STATE = {
     doom: { accent: "#C4563A", bg: "rgba(196,86,58,0.08)", glow: "rgba(196,86,58,0.4)", label: "DOOM", pulseCycle: "1.2s" },
     hooked: { accent: "#C4973A", bg: "rgba(196,151,58,0.08)", glow: "rgba(196,151,58,0.35)", label: "HOOKED", pulseCycle: "1.8s" },
     aware: { accent: "#6B3FA0", bg: "rgba(107,63,160,0.06)", glow: "rgba(107,63,160,0.3)", label: "AWARE", pulseCycle: "2.5s" },
     mindful: { accent: "#3A9E6F", bg: "rgba(58,158,111,0.08)", glow: "rgba(58,158,111,0.3)", label: "MINDFUL", pulseCycle: "3s" }
   };
-  var getHeaderState = (s) => s >= 70 ? HEADER_STATE.doom : s >= 45 ? HEADER_STATE.hooked : s >= 25 ? HEADER_STATE.aware : HEADER_STATE.mindful;
+  const getHeaderState = (s) => s >= 70 ? HEADER_STATE.doom : s >= 45 ? HEADER_STATE.hooked : s >= 25 ? HEADER_STATE.aware : HEADER_STATE.mindful;
   function ReelioHeader({ data, isAccessibilityActive, openAccessibilitySettings }) {
     const rawScore = safeNum(data?.captureRiskScore, 0);
     const timeSince = maybeNum(data?.idleSinceLastSessionMin) ?? maybeNum(data?.timeSinceLastSessionMin);
@@ -3474,6 +3580,37 @@
         window.reactDataCallback = null;
       };
     }, []);
+    useEffect(() => {
+      if (!window.Android || typeof window.Android.drainPendingRetroactiveLabel !== "function") return;
+      const poll = () => {
+        try {
+          const b64 = window.Android.drainPendingRetroactiveLabel();
+          if (b64 && b64.length > 0) {
+            const json = atob(b64);
+            const label = JSON.parse(json);
+            console.log("[Bridge] Received retroactive label update:", label);
+            setRawData((prev) => {
+              if (!prev) return prev;
+              const patch = (list) => safeArr(list).map((s) => {
+                if (String(s.sessionNum) === String(label.sessionNum) && s.date === label.date) {
+                  return { ...s, ...label };
+                }
+                return s;
+              });
+              return {
+                ...prev,
+                sessions: patch(prev.sessions),
+                todaySessions: patch(prev.todaySessions)
+              };
+            });
+          }
+        } catch (err) {
+          console.error("[Bridge] Failed to drain retroactive label:", err);
+        }
+      };
+      const id = setInterval(poll, 2e3);
+      return () => clearInterval(id);
+    }, []);
     const data = useMemo(() => rawData ? normalizeData(rawData) : null, [rawData]);
     if (loading) return /* @__PURE__ */ React.createElement(LoadingState, null);
     if (error) {
@@ -3500,6 +3637,6 @@
       ].map(({ id, icon: Icon, label }) => /* @__PURE__ */ React.createElement("button", { key: id, className: `tab-item ${screen === id ? "active" : ""}`, onClick: () => setScreen(id) }, /* @__PURE__ */ React.createElement(Icon, { size: 20, color: screen === id ? "white" : D.muted }), /* @__PURE__ */ React.createElement("span", null, label))))
     ));
   }
-  var root = ReactDOM.createRoot(document.getElementById("root"));
+  const root = ReactDOM.createRoot(document.getElementById("root"));
   root.render(/* @__PURE__ */ React.createElement(ReeliApp, null));
 })();

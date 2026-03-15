@@ -78,7 +78,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     private var scrollDirection = 1
     private var backScrollCount = 0
     
-    private var liked = false
+    private var likeEventCount = 0  // counts raw like/unlike signals; even=not liked, odd=liked (modulo-2)
     private var commented = false
     private var shared = false
     private var saved = false
@@ -112,6 +112,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     // Layer 1.5
     private var isOverlaySheetOpen = false
     private var overlayOpenTimeMs = 0L
+    private var lastLikeRecordingLatencyMs = -1L
     
     // Layer 2
     private lateinit var sensorManager: SensorManager
@@ -687,7 +688,10 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                 // ── Index-Based Segmentation with 200ms Settle Window ──
                 val toIdx = event.toIndex
                 val fromIdxEvent = event.fromIndex
-                val newIndex = if (toIdx != -1) toIdx else fromIdxEvent
+                // Prefer fromIndex because it represents the top-most visible item.
+                // When Instagram adds "liked by" text at the bottom, toIndex increments
+                // but fromIndex stays the same, preventing a false reel flush.
+                val newIndex = if (fromIdxEvent != -1) fromIdxEvent else toIdx
 
                 if (newIndex != -1 && !isOverlaySheetOpen) {
                     if (currentReelIndex == null) {
@@ -742,6 +746,14 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                             }
                         }
                         // If not a progression (snap-back bounce), ignore entirely
+                    } else {
+                        // If newIndex reverts back to currentReelIndex, it was a bounce
+                        // or a phantom scroll event. Cancel any pending settle to prevent
+                        // a false reel flush.
+                        if (settleTargetIndex != -1) {
+                            settleTargetIndex = -1
+                            lastReelSettleJob?.cancel()
+                        }
                     }
                 }
             }
@@ -824,14 +836,22 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         val beforeState = currentInteractionStateForLog()
         when (type) {
             InteractionType.LIKE -> {
-                if (!liked) {
-                    liked = true
-                    if (likeLatencyMs == -1L) likeLatencyMs = latency
+                if (lastLikeRecordingLatencyMs != -1L && latency - lastLikeRecordingLatencyMs < 1000L) {
+                    return
+                }
+                lastLikeRecordingLatencyMs = latency
+                likeEventCount++
+                // Modulo-2: odd count = net liked, even count = net unliked/toggled off.
+                // This naturally handles like→unlike→like chains from announcement + click duplicates.
+                val netLiked = (likeEventCount % 2) == 1
+                if (netLiked && likeLatencyMs == -1L) likeLatencyMs = latency
+                if (netLiked && likeEventCount == 1) {
+                    // Only increment streak and record half-session on the first true like
                     likeStreakLength++
                     if (likeStreakLength > maxLikeStreakLength) maxLikeStreakLength = likeStreakLength
                     halfSessionInteractions.add(reelCount)
                 }
-                savedWithoutLike = false
+                savedWithoutLike = if (netLiked) false else savedWithoutLike
             }
 
             InteractionType.COMMENT -> {
@@ -857,7 +877,8 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
                     if (saveLatencyMs == -1L) saveLatencyMs = latency
                     halfSessionInteractions.add(reelCount)
                 }
-                if (!liked) savedWithoutLike = true
+                val netLiked = (likeEventCount % 2) == 1
+                if (!netLiked) savedWithoutLike = true
             }
         }
 
@@ -870,7 +891,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     }
 
     private fun startNextReel(now: Long) {
-        val previousReelLiked = liked
+        val previousReelNetLiked = (likeEventCount % 2) == 1
         reelCount++
         cumulativeReels++
         
@@ -880,7 +901,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         scrollDistances.clear()
         accelMagnitudes.clear()
         
-        liked = false
+        likeEventCount = 0
         commented = false
         shared = false
         saved = false
@@ -889,6 +910,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         commentLatencyMs = -1L
         shareLatencyMs = -1L
         saveLatencyMs = -1L
+        lastLikeRecordingLatencyMs = -1L
         scrollDirection = 1
         
         hasCaption = false
@@ -905,7 +927,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         profileVisits = 0
         hashtagTaps = 0
         
-        if (!previousReelLiked) likeStreakLength = 0
+        if (!previousReelNetLiked) likeStreakLength = 0
         savedWithoutLike = false
         commentAbandoned = false
         
@@ -952,7 +974,8 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
     }
 
     private fun currentInteractionStateForLog(): String {
-        return "liked=${if (liked) 1 else 0} commented=${if (commented) 1 else 0} shared=${if (shared) 1 else 0} saved=${if (saved) 1 else 0} likeLatencyMs=$likeLatencyMs commentLatencyMs=$commentLatencyMs shareLatencyMs=$shareLatencyMs saveLatencyMs=$saveLatencyMs savedWithoutLike=${if (savedWithoutLike) 1 else 0} commentAbandoned=${if (commentAbandoned) 1 else 0}"
+        val netLiked = (likeEventCount % 2) == 1
+        return "liked=${if (netLiked) 1 else 0}(events=$likeEventCount) commented=${if (commented) 1 else 0} shared=${if (shared) 1 else 0} saved=${if (saved) 1 else 0} likeLatencyMs=$likeLatencyMs commentLatencyMs=$commentLatencyMs shareLatencyMs=$shareLatencyMs saveLatencyMs=$saveLatencyMs savedWithoutLike=${if (savedWithoutLike) 1 else 0} commentAbandoned=${if (commentAbandoned) 1 else 0}"
     }
 
     private fun compactLogValue(value: String, maxLen: Int = 120): String {
@@ -1190,6 +1213,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
         sessionSortedDwells.clear()
 
         // ── Interaction state ───────────────────────────────────
+        likeEventCount = 0
         likeStreakLength = 0
         maxLikeStreakLength = 0
         savedWithoutLike = false
@@ -1822,7 +1846,7 @@ class InstaAccessibilityService : AccessibilityService(), SensorEventListener {
             String.format("%.2f", eStats.avgSpeed), String.format("%.2f", eStats.maxSpeed),
             String.format("%.2f", eStats.rollingMean), String.format("%.2f", eStats.rollingStd),
             cumulativeReels, continuousScrollCount,
-            if (liked) 1 else 0, if (commented) 1 else 0, if (shared) 1 else 0, if (saved) 1 else 0,
+            likeEventCount % 2, if (commented) 1 else 0, if (shared) 1 else 0, if (saved) 1 else 0,  // modulo-2: odd=liked, even=unliked/net-zero
             likeLatencyMs, commentLatencyMs, shareLatencyMs, saveLatencyMs, String.format("%.4f", iStats.interactionDwellRatio),
             scrollDirection, backScrollCount, scrollPauseCount, scrollPauseDurationMs, String.format("%.2f", iStats.swipeCompletionRatio),
             if (hasCaption) 1 else 0, if (captionExpanded) 1 else 0, if (hasAudio) 1 else 0, if (isAd) 1 else 0, adSkipLatencyMs,

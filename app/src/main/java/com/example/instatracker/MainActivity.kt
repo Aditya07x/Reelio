@@ -436,6 +436,44 @@ class MainActivity : ComponentActivity() {
             return "$start,$end"
         }
 
+        @JavascriptInterface
+        fun openRetroactiveSurvey(sessionNumStr: String, date: String, predSummary: String, prefillJson: String) {
+            android.util.Log.d("ReactDashboard", "[Bridge] openRetroactiveSurvey called (Main) with: sessionNum=$sessionNumStr, date=$date")
+            val sessionNum = sessionNumStr.toIntOrNull()
+            if (sessionNum == null) {
+                android.util.Log.e("ReactDashboard", "[Bridge] Aborting (Main): sessionNum '$sessionNumStr' is not a valid integer")
+                return
+            }
+            try {
+                val intent = android.content.Intent(mContext, RetroactiveSurveyActivity::class.java).apply {
+                    putExtra("session_num",         sessionNum)
+                    putExtra("session_date",        date)
+                    putExtra("prediction_summary",  predSummary)
+                    putExtra("prefill_json",         prefillJson)
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                mContext.startActivity(intent)
+                android.util.Log.d("ReactDashboard", "[Bridge] Activity launch triggered (Main) for session $sessionNum")
+            } catch (e: Exception) {
+                android.util.Log.e("ReactDashboard", "[Bridge] Failed to launch activity (Main): ${e.message}", e)
+            }
+        }
+
+        @JavascriptInterface
+        fun drainPendingRetroactiveLabel(): String {
+            val prefs = mContext.getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
+            val b64 = prefs.getString("pending_retroactive_label_b64", "") ?: ""
+            if (b64.isNotEmpty()) {
+                // Remove once read to prevent duplicate triggers
+                prefs.edit()
+                    .remove("pending_retroactive_label_b64")
+                    .remove("pending_retroactive_label_ts")
+                    .apply()
+                android.util.Log.d("ReactDashboard", "[Bridge] Drained pending retroactive label (Main) (Base64 length: ${b64.length})")
+            }
+            return b64
+        }
+
         private fun isCacheValid(hmmFile: File, csvFile: File): Boolean {
             // 1. Cache must be newer than CSV
             if (csvFile.exists() && hmmFile.lastModified() < csvFile.lastModified()) {

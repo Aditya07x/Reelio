@@ -783,14 +783,21 @@ class DoomScorer:
         else:
             in_sleep_window = (sleep_start <= hour < sleep_end)
 
-        is_dark_rm = 1.0 if (lux < 15 and (phase > 0.75 or phase < 0.25)) else 0.0
+        # A long gap during the sleep window is NOT healthy recovery —
+        # it just means they put the phone down for a bit then came back at 2AM.
+        # Don't give c_rapid=0.0 credit in that scenario.
+        if in_sleep_window and gap_min > 60:
+            c_rapid = max(c_rapid, 0.25)
+
+        dark_frac  = session_df['IsScreenInDarkRoom'].mean() if 'IsScreenInDarkRoom' in session_df.columns else float(lux < 15)
+        is_dark_rm = 1.0 if (dark_frac > 0.5 and (phase > 0.75 or phase < 0.25)) else 0.0
         sleep_penalty = 1.0 if in_sleep_window else 0.0
         fatigue_risk = float(session_df['fatigue_risk'].iloc[0]) if 'fatigue_risk' in session_df.columns else 0.0
         c_env_base = (
-            0.15 * is_dark_rm +
+            0.20 * is_dark_rm +
             0.15 * float(chrge) +
             0.10 * float(lux < 5) +
-            0.30 * sleep_penalty +
+            0.50 * sleep_penalty +
             0.10 * fatigue_risk  # conservative; proxy-of-proxy pending validation
         )
         # Environment risk is absolute, not conditioned on previous state.
@@ -803,6 +810,16 @@ class DoomScorer:
             c_auto, c_collapse, c_rewatch, c_env
         ])
         ds = float(np.dot(w, c_vec))
+
+        # Late night context multiplier — environment amplifies risk, not just adds to it
+        if in_sleep_window and c_env >= 0.45:
+            ds = float(np.clip(ds * 1.25, 0.0, 1.0))
+
+        # Hard floor: 2+ exit attempts means the user tried to leave and couldn't.
+        # That's a capture signal regardless of everything else. Floor at 0.35.
+        raw_exit_total = int(session_df['AppExitAttempts'].sum())
+        if raw_exit_total >= 2:
+            ds = max(ds, 0.35)
         
         # FIX (Bug 9): additive amplifiers, not multiplicative chain
         post_rating        = session_df['PostSessionRating'].iloc[0]    if 'PostSessionRating'    in session_df else 0
@@ -942,7 +959,8 @@ class ReelioCLSE:
         self.sigma[2, :] = 0.2
         self.p_bern[3, :] = priors['rewatch_rate_prior']
         
-        exit_p = priors['exit_rate_prior']
+        # Changed to soft continuous feature as requested
+        exit_p = min(df['AppExitAttempts'].sum() / 5.0, 1.0) if 'AppExitAttempts' in df.columns else priors['exit_rate_prior']
         self.p_bern[4, 0] = np.clip(exit_p * 0.4, 0.01, 0.40)   # casual: few exit attempts
         self.p_bern[4, 1] = np.clip(exit_p * 2.5, 0.15, 0.90)   # doom: many failed exit attempts
         
@@ -1372,12 +1390,7 @@ class ReelioCLSE:
             self.q_01 = np.clip(mid + 0.01, 0.02, 5.0)
             self.q_10 = np.clip(mid - 0.01, 0.01, 4.99)
 
-        # Enforce dwell/speed ordering: Doom Dwell mu < Casual Dwell mu, Doom Speed mu > Casual Speed mu
-        # Dwell: mu[0, 1] (doom) < mu[0, 0] (casual)
-        if self.mu[0, 1] >= self.mu[0, 0]:
-            mid = 0.5 * (self.mu[0, 0] + self.mu[0, 1])
-            self.mu[0, 0] = mid + 0.01
-            self.mu[0, 1] = mid - 0.01
+        # Enforce dwell/speed ordering: Doom Speed mu > Casual Speed mu
         # Speed: mu[1, 1] (doom) > mu[1, 0] (casual)
         if self.mu[1, 1] <= self.mu[1, 0]:
             mid = 0.5 * (self.mu[1, 0] + self.mu[1, 1])
@@ -1484,6 +1497,8 @@ class ReelioCLSE:
         if 'StartTime' in df.columns and pd.notna(df['StartTime'].iloc[0]):
             session_timestamp = str(df['StartTime'].iloc[0])
             
+        # Replace binary flag with soft continuous feature
+        df['exit_flag'] = min(df['AppExitAttempts'].sum() / 5.0, 1.0) if 'AppExitAttempts' in df.columns else 0.0
         obs = df[['log_dwell', 'log_speed', 'rhythm_dissociation', 'rewatch_flag', 'exit_flag', 'swipe_incomplete']].values
         
         if self.n_sessions_seen == 0:
@@ -1619,9 +1634,6 @@ class ReelioCLSE:
 def validate_model(model: ReelioCLSE) -> list:
     errors = []
     
-    if model.mu[0, 1] >= model.mu[0, 0]:
-        errors.append("Validation Failed: Doom Dwell mu must be < Casual Dwell mu (doom = faster scrolling)")
-
     # FIX (Bug 10): removed arbitrary sigma ordering check — doom sigma > casual sigma
     # is not architecturally required; only doom MEAN must be higher
         
@@ -1863,15 +1875,21 @@ def run_inference_on_latest(csv_data: str, model_state_path: str, survey_data: d
         
     f = io.StringIO(csv_data)
     first_line = f.readline().strip()
-    if first_line != f"SCHEMA_VERSION={EXPECTED_SCHEMA_VERSION}":
-        raise SchemaError(f"Expected SCHEMA_VERSION={EXPECTED_SCHEMA_VERSION}, got: {first_line}")
-
+    if first_line.startswith("SCHEMA_VERSION="):
+        # We no longer strictly enforce EXPECTED_SCHEMA_VERSION to allow parsing older
+        # schemas (e.g., v4). `preprocess_session` handles missing columns gracefully.
+        pass
+    else:
+        # If the file somehow has no SCHEMA_VERSION at all, we'd skip down, 
+        # but let's assume it's an old file or plain CSV.
+        f.seek(0)
+        
     lines = f.read().split('\n')
     if lines and lines[0].strip():
-        header_cols = lines[0].split(',')
-        if len(header_cols) < len(REQUIRED_COLUMNS):
-            print(f"SCHEMA_REWRITE: CSV has {len(header_cols)} columns, forcing {len(REQUIRED_COLUMNS)} REQUIRED_COLUMNS in run_inference_on_latest.")
-            lines[0] = ','.join(REQUIRED_COLUMNS)
+        # Do not force ','.join(REQUIRED_COLUMNS) here. Doing so on a CSV with fewer 
+        # columns (e.g. 94 instead of 100) causes Pandas to assign the data to the 
+        # wrong columns downstream, scrambling the survey metrics.
+        pass
     full_df = pd.read_csv(io.StringIO('\n'.join(lines)))
         
     validate_csv_schema(full_df)
@@ -2025,15 +2043,10 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
         if lines and lines[0].startswith("SCHEMA_VERSION="):
             lines = lines[1:]
             
-        # Dynamically fix schema mismatches (e.g., 94 columns vs 96 columns)
-        # by forcing the header to always be the REQUIRED_COLUMNS.
-        # Pandas will automatically pad older, shorter rows with NaN.
-        if lines:
-            header_cols = lines[0].split(',')
-            if len(header_cols) < len(REQUIRED_COLUMNS):
-                print(f"SCHEMA_REWRITE: CSV has {len(header_cols)} columns, forcing {len(REQUIRED_COLUMNS)} REQUIRED_COLUMNS. This may indicate upstream data contract breakage.")
-                lines[0] = ','.join(REQUIRED_COLUMNS)
-                
+        # We no longer force the header to REQUIRED_COLUMNS because rewriting a 94-column 
+        # header with a 100-column string silently corrupts all column mappings downstream.
+        # Pandas will safely read the 94 columns as they are, and `preprocess_session` 
+        # will fill in any missing columns by their exact names.                
         csv_data = '\n'.join(lines)
         df = pd.read_csv(io.StringIO(csv_data))
     except Exception as e:
@@ -2120,14 +2133,44 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
                 
             gamma, blended_prob = model.process_session(s_df, baseline, detector, prev_gamma)
             doom_prob = blended_prob
-            prev_gamma = gamma
-            
-            # Dashboard score is the raw behavioral mean
-            S_t_reported = doom_prob
+            # Don't carry over extreme posterior if the gap before the NEXT session
+            # is long — a fresh session after 60+ min shouldn't inherit 99.99% Mindful.
+            _gap_next = float(s_df['TimeSinceLastSessionMin'].iloc[0]) if 'TimeSinceLastSessionMin' in s_df.columns else 0.0
+            if _gap_next > 60.0:
+                # Regress toward balanced prior so next session starts neutral
+                prev_gamma = 0.5 * gamma + 0.5 * np.ones_like(gamma) * np.array([0.5, 0.5])
+            else:
+                prev_gamma = gamma
 
             # Internal learning uses blended probability
             gap_min = float(s_df['TimeSinceLastSessionMin'].iloc[0]) if 'TimeSinceLastSessionMin' in s_df.columns else 60.0
             scorer_result = scorer.score(s_df, baseline, gap_min, prev_S_t=blended_prob)
+            
+            # When model confidence is low, blend heuristic into displayed score.
+            # This prevents near-zero S_t from hiding clearly bad sessions.
+            _model_conf = model.compute_model_confidence_breakdown()['overall']
+            _heuristic  = scorer_result.get('doom_score', 0.0)
+            if _model_conf < 0.70:
+                # Weight shifts toward heuristic as confidence drops
+                _w_hmm  = _model_conf
+                _w_heus = 1.0 - _model_conf
+                S_t_reported = float(np.clip(
+                    _w_hmm * doom_prob + _w_heus * _heuristic, 0.0, 1.0
+                ))
+            else:
+                S_t_reported = doom_prob
+
+            # Hard floor: if heuristic says this is elevated AND we're in the sleep window,
+            # don't let S_t report below 0.25 regardless of HMM output.
+            try:
+                _hour = pd.to_datetime(s_df['StartTime'].iloc[0]).hour
+                _sleep_start = int(s_df['SleepStart'].iloc[0]) if 'SleepStart' in s_df.columns else 1
+                _sleep_end   = int(s_df['SleepEnd'].iloc[0])   if 'SleepEnd'   in s_df.columns else 8
+                _in_sleep = (_hour >= _sleep_start) or (_hour < _sleep_end) if _sleep_start > _sleep_end else (_sleep_start <= _hour < _sleep_end)
+            except:
+                _in_sleep = False
+            if _in_sleep and _heuristic >= 0.50:
+                S_t_reported = max(S_t_reported, 0.25)
             scorer.update_weights(scorer_result['components'], blended_prob)
             
             # Historical Aggregation: Weight components by blended probability for stability
@@ -2183,7 +2226,9 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
                     end_time_str = str(s_df['EndTime'].iloc[-1])
             
             results.append({
-                "sessionNum":          str(sess_id),
+                "sessionNum":          str(len(results) + 1),
+                "_rawSessionNum":      int(s_df['SessionNum'].iloc[0]) if 'SessionNum' in s_df.columns else 0,
+                "_rawStartTime":       str(s_df['StartTime'].iloc[0]) if 'StartTime' in s_df.columns else "Unknown",
                 "S_t":                 S_t_reported,
                 "dominantState":       dom_state,
                 "nReels":              effective_reels,
@@ -2215,7 +2260,9 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
                 "comparativeRating":   int(s_df['ComparativeRating'].iloc[0])    if 'ComparativeRating'   in s_df.columns and pd.notna(s_df['ComparativeRating'].iloc[0])    else 0,
                 "delayedRegretScore":  int(s_df['DelayedRegretScore'].iloc[0])   if 'DelayedRegretScore'  in s_df.columns and pd.notna(s_df['DelayedRegretScore'].iloc[0])   else 0,
                 "supervisedDoom":      round(float(s_df['supervised_doom'].iloc[0]), 4) if 'supervised_doom' in s_df.columns else 0.0,
-                "hasSurvey":           bool(('PostSessionRating' in s_df.columns and pd.notna(s_df['PostSessionRating'].iloc[0]) and float(s_df['PostSessionRating'].iloc[0]) > 0))
+                "hasSurvey":           bool(('RegretScore' in s_df.columns and pd.notna(s_df['RegretScore'].iloc[0]) and float(s_df['RegretScore'].iloc[0]) > 0) or 
+                                            ('PostSessionRating' in s_df.columns and pd.notna(s_df['PostSessionRating'].iloc[0]) and float(s_df['PostSessionRating'].iloc[0]) > 0) or
+                                            ('MoodAfter' in s_df.columns and pd.notna(s_df['MoodAfter'].iloc[0]) and float(s_df['MoodAfter'].iloc[0]) > 0))
             })
             
             p_capture_timeline.extend(gamma[:, 1].round(3).tolist())

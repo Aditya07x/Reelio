@@ -93,11 +93,36 @@ class DashboardActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Re-inject data whenever returning from any external screen (Settings, etc.)
-        // WebView is already loaded; this just refreshes the data layer without a full reload.
         if (::webView.isInitialized) {
+            // Re-inject HMM data (covers Settings changes + post-survey model updates)
             injectDataWithDebounce(webView)
+            // If RetroactiveSurveyActivity wrote a label while we were away, fire the JS callback
+            drainPendingRetroactiveLabel(webView)
         }
+    }
+
+    /**
+     * Reads any pending retroactive label written by RetroactiveSurveyActivity and fires
+     * window.onRetroactiveLabelComplete(b64) in the WebView.
+     * The label payload is already Base64-encoded JSON — JS decodes with atob() + JSON.parse().
+     */
+    private fun drainPendingRetroactiveLabel(webView: WebView) {
+        val prefs = getSharedPreferences("InstaTrackerPrefs", Context.MODE_PRIVATE)
+        val b64   = prefs.getString("pending_retroactive_label_b64", null) ?: return
+        val ts    = prefs.getLong("pending_retroactive_label_ts", 0L)
+        // Ignore stale entries older than 5 minutes
+        if (System.currentTimeMillis() - ts > 5 * 60 * 1000L) {
+            prefs.edit().remove("pending_retroactive_label_b64").remove("pending_retroactive_label_ts").apply()
+            return
+        }
+        prefs.edit().remove("pending_retroactive_label_b64").remove("pending_retroactive_label_ts").apply()
+        handler.post {
+            webView.evaluateJavascript(
+                "if(typeof window.onRetroactiveLabelComplete==='function') window.onRetroactiveLabelComplete('$b64');",
+                null
+            )
+        }
+        android.util.Log.d("ReactDashboard", "Drained retroactive label callback to WebView")
     }
 
     private fun injectDataWithDebounce(webView: WebView) {
@@ -412,6 +437,37 @@ class DashboardActivity : ComponentActivity() {
                 .putInt("sleep_start_hour", start)
                 .putInt("sleep_end_hour", end)
                 .apply()
+        }
+
+        /**
+         * Launches RetroactiveSurveyActivity for a specific past session.
+         * Called from JS as: window.Android.openRetroactiveSurvey(sessionNum, date, predSummary, prefillJson)
+         * - sessionNum:    integer session number from hmm_results.json
+         * - date:          date string "YYYY-MM-DD" from hmm_results.json
+         * - predSummary:   human-readable model prediction string (shown as subtitle in Step 1)
+         * - prefillJson:   JSON string with existing non-zero label fields for context
+         */
+        @JavascriptInterface
+        fun openRetroactiveSurvey(sessionNumStr: String, date: String, predSummary: String, prefillJson: String) {
+            android.util.Log.d("ReactDashboard", "[Bridge] openRetroactiveSurvey called with: sessionNum=$sessionNumStr, date=$date")
+            val sessionNum = sessionNumStr.toIntOrNull()
+            if (sessionNum == null) {
+                android.util.Log.e("ReactDashboard", "[Bridge] Aborting: sessionNum '$sessionNumStr' is not a valid integer")
+                return
+            }
+            try {
+                val intent = android.content.Intent(mContext, RetroactiveSurveyActivity::class.java).apply {
+                    putExtra("session_num",         sessionNum)
+                    putExtra("session_date",        date)
+                    putExtra("prediction_summary",  predSummary)
+                    putExtra("prefill_json",         prefillJson)
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                mContext.startActivity(intent)
+                android.util.Log.d("ReactDashboard", "[Bridge] Activity launch triggered for session $sessionNum")
+            } catch (e: Exception) {
+                android.util.Log.e("ReactDashboard", "[Bridge] Failed to launch activity: ${e.message}", e)
+            }
         }
     }
 }

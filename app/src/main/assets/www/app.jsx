@@ -591,6 +591,11 @@ function normalizeData(rawData) {
             probability,
             isDoom: isFiniteNumber(probability) ? probability >= DOOM_THRESHOLD : Boolean(source.isDoom),
             _ts: ts,
+            // Session identity — needed for retroactive labeling bridge call
+            _sessionNum:  source.sessionNum  ?? null,
+            _sessionDate: source.date        ?? null,
+            _rawSessionNum: source._rawSessionNum ?? null,
+            _rawStartTime:  source._rawStartTime  ?? null,
             // Survey self-report labels
             postSessionRating:  maybeNum(source.postSessionRating) ?? 0,
             regretScore:        maybeNum(source.regretScore) ?? 0,
@@ -601,7 +606,11 @@ function normalizeData(rawData) {
             comparativeRating:  maybeNum(source.comparativeRating) ?? 0,
             delayedRegretScore: maybeNum(source.delayedRegretScore) ?? 0,
             supervisedDoom:     maybeNum(source.supervisedDoom) ?? 0,
-            hasSurvey:          Boolean(source.hasSurvey)
+            hasSurvey:          Boolean(source.hasSurvey),
+            retroactiveLabel:   Boolean(source.retroactiveLabel),
+            // Heuristic and confidence metadata for Fix 1
+            heuristicScore:     maybeNum(source.heuristic_score) ?? 0,
+            modelConf:          maybeNum(source.model_conf) ?? 1.0,
         };
     };
 
@@ -1091,7 +1100,8 @@ function normalizeData(rawData) {
         totalSessions: sessions.length,
         avgSessions,
         avgActiveTimeTodaySeconds: maybeNum(rawData?.avgActiveTimeTodaySeconds) ?? derivedAvgActiveTimeTodaySeconds,
-        last3SessionAutopilotRates: last3SessionAutopilotRates.length ? last3SessionAutopilotRates : derivedLast3SessionAutopilotRates
+        last3SessionAutopilotRates: last3SessionAutopilotRates.length ? last3SessionAutopilotRates : derivedLast3SessionAutopilotRates,
+        confidenceBreakdown: rawData?.model_confidence_breakdown || null
     };
 }
 
@@ -1354,6 +1364,43 @@ export default function ReeliApp() {
         return () => {
             window.reactDataCallback = null;
         };
+    }, []);
+
+    // ─── Retroactive Label Polling ──────────────────────────────────────────
+    useEffect(() => {
+        if (!window.Android || typeof window.Android.drainPendingRetroactiveLabel !== 'function') return;
+
+        const poll = () => {
+            try {
+                const b64 = window.Android.drainPendingRetroactiveLabel();
+                if (b64 && b64.length > 0) {
+                    const json = atob(b64);
+                    const label = JSON.parse(json);
+                    console.log("[Bridge] Received retroactive label update:", label);
+                    
+                    setRawData(prev => {
+                        if (!prev) return prev;
+                        const patch = (list) => safeArr(list).map(s => {
+                            if (String(s.sessionNum) === String(label.sessionNum) && s.date === label.date) {
+                                return { ...s, ...label };
+                            }
+                            return s;
+                        });
+
+                        return {
+                            ...prev,
+                            sessions: patch(prev.sessions),
+                            todaySessions: patch(prev.todaySessions)
+                        };
+                    });
+                }
+            } catch (err) {
+                console.error("[Bridge] Failed to drain retroactive label:", err);
+            }
+        };
+
+        const id = setInterval(poll, 2000);
+        return () => clearInterval(id);
     }, []);
 
     // Memoized — recomputes only when Kotlin pushes new rawData, not on every tab change or state update

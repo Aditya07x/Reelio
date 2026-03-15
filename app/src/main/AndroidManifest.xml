@@ -45,6 +45,14 @@
             android:launchMode="singleTask" />
 
         <activity
+            android:name=".RetroactiveSurveyActivity"
+            android:theme="@style/Theme.InstagramTracker"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask" />
+
+        <activity
             android:name=".IntentionProbeActivity"
             android:theme="@style/Theme.InstagramTracker"
             android:taskAffinity=""
