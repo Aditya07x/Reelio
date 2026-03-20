@@ -54,6 +54,12 @@ const getDayCaptureWeight = (entry, personalBaselineSec = 180) => {
     return Math.max(0.45, baseWeight);
 };
 
+const getDaySessionDisplayProbability = (session, personalBaselineSec = 180) => {
+    const rawProbability = maybeNum(session?.S_t) ?? maybeNum(session?.captureProb);
+    if (!isFiniteNumber(rawProbability)) return null;
+    return Math.max(0, Math.min(1, rawProbability));
+};
+
 // ─── CaptureIcon — 4 minimal line-art faces, one per capture state ────────────
 const CaptureIcon = ({ stateId, size = 22 }) => {
     const ink = '#1A1612';
@@ -130,7 +136,7 @@ function DayDetailSheet({ dateStr, dayBucket, personalCaptureBaselineSec, onClos
 
     const weighted = sessions
         .map((e) => {
-            const prob = maybeNum(e.raw?.S_t);
+            const prob = getDaySessionDisplayProbability(e.raw, personalCaptureBaselineSec);
             if (!isFiniteNumber(prob)) return null;
             const weight = getDayCaptureWeight(e, personalCaptureBaselineSec);
             return weight > 0 ? { prob, weight } : null;
@@ -203,7 +209,7 @@ function DayDetailSheet({ dateStr, dayBucket, personalCaptureBaselineSec, onClos
                     )}
                     {sessions.map((entry, i) => {
                         const s = entry.raw || {};
-                        const prob = maybeNum(s.S_t);
+                        const prob = getDaySessionDisplayProbability(s, personalCaptureBaselineSec);
                         const state = isFiniteNumber(prob) ? stateFromCapture(prob) : CAPTURE_STATES[2];
                         const reels = maybeNum(s.nReels);
                         const dwell = maybeNum(s.avgDwell);

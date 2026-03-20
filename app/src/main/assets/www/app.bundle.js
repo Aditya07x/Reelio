@@ -1987,6 +1987,11 @@
       return Math.max(0.3, baseWeight * 0.75);
     return Math.max(0.45, baseWeight);
   };
+  const getDaySessionDisplayProbability = (session, personalBaselineSec = 180) => {
+    const rawProbability = maybeNum(session?.S_t) ?? maybeNum(session?.captureProb);
+    if (!isFiniteNumber(rawProbability)) return null;
+    return Math.max(0, Math.min(1, rawProbability));
+  };
   const CaptureIcon = ({ stateId, size = 22 }) => {
     const ink = "#1A1612";
     const state = CAPTURE_STATES.find((s) => s.id === stateId) || CAPTURE_STATES[3];
@@ -2021,7 +2026,7 @@
       return at - bt;
     });
     const weighted = sessions.map((e) => {
-      const prob = maybeNum(e.raw?.S_t);
+      const prob = getDaySessionDisplayProbability(e.raw, personalCaptureBaselineSec);
       if (!isFiniteNumber(prob))
         return null;
       const weight = getDayCaptureWeight(e, personalCaptureBaselineSec);
@@ -2088,7 +2093,7 @@
       padding: "20px 0"
     } }, "No session detail available"), sessions.map((entry, i) => {
       const s = entry.raw || {};
-      const prob = maybeNum(s.S_t);
+      const prob = getDaySessionDisplayProbability(s, personalCaptureBaselineSec);
       const state = isFiniteNumber(prob) ? stateFromCapture(prob) : CAPTURE_STATES[2];
       const reels = maybeNum(s.nReels);
       const dwell = maybeNum(s.avgDwell);
@@ -2918,7 +2923,7 @@
       lineHeight: 1.12,
       letterSpacing: "-0.02em",
       color: "#1A1612"
-    } }, "waiting for", /* @__PURE__ */ React.createElement("br", null), /* @__PURE__ */ React.createElement("em", { style: { fontStyle: "italic", fontWeight: 400 } }, "your next move."))), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }), /* @__PURE__ */ React.createElement("div", { style: {
+    } }, "meet", /* @__PURE__ */ React.createElement("br", null), /* @__PURE__ */ React.createElement("em", { style: { fontStyle: "italic", fontWeight: 400 } }, "your personal Instagram scroll tracker."))), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }), /* @__PURE__ */ React.createElement("div", { style: {
       position: "relative",
       zIndex: 20,
       padding: "0 18px 32px",
@@ -3033,12 +3038,36 @@
       lineHeight: 1.5
     } }, "Open Instagram Reels \u2014 Reelio starts tracking automatically."))));
   }
+  function getShortSessionEvidence(durationSec, reelCount, baselineSec = 180) {
+    const hasDuration = isFiniteNumber(durationSec);
+    const hasReels = isFiniteNumber(reelCount);
+    if (!hasDuration && !hasReels) return null;
+    const safeBaselineSec = isFiniteNumber(baselineSec) ? Math.max(baselineSec, 30) : 180;
+    const durationEvidence = hasDuration ? Math.min(Math.max(durationSec, 0) / safeBaselineSec, 1) : 0;
+    const reelEvidence = hasReels ? Math.min(Math.max(reelCount, 0) / 10, 1) : 0;
+    return Math.max(durationEvidence, reelEvidence);
+  }
+  function getSessionDisplayProbability(session, baselineSec = 180) {
+    const rawProbability = maybeNum(session?.S_t) ?? maybeNum(session?.captureProb);
+    if (!isFiniteNumber(rawProbability)) return null;
+    return Math.max(0, Math.min(1, rawProbability));
+  }
   function normalizeData(rawData) {
     const sessions = safeArr(rawData?.sessions).filter((s) => s && typeof s === "object");
     const mostRecent = sessions[sessions.length - 1] || null;
-    const sessionProbabilities = sessions.map((s) => maybeNum(s.S_t)).filter(isFiniteNumber);
-    const sessionDurations = sessions.map((s) => deriveSessionDurationSec(s)).filter(isFiniteNumber);
     const sessionReels = sessions.map((s) => maybeNum(s.nReels)).filter(isFiniteNumber);
+    const sessionDurations = sessions.map((s) => deriveSessionDurationSec(s)).filter(isFiniteNumber);
+    const personalCaptureBaselineSec = (() => {
+      const recentDurations = sessions.map((entry) => {
+        const source = entry?.raw || entry || {};
+        return maybeNum(entry?.durationSec) ?? maybeNum(source.durationSec) ?? maybeNum(source.sessionDurationSec) ?? deriveSessionDurationSec(source);
+      }).filter((durationSec) => isFiniteNumber(durationSec) && durationSec >= 20).slice(-30).sort((a, b) => a - b);
+      if (!recentDurations.length) return 180;
+      const mid = Math.floor(recentDurations.length / 2);
+      const median = recentDurations.length % 2 ? recentDurations[mid] : (recentDurations[mid - 1] + recentDurations[mid]) / 2;
+      return Math.min(300, Math.max(90, median));
+    })();
+    const sessionProbabilities = sessions.map((s) => getSessionDisplayProbability(s, personalCaptureBaselineSec)).filter(isFiniteNumber);
     const sessionDwells = sessions.map((s) => maybeNum(s.avgDwell)).filter(isFiniteNumber);
     const transition = rawData?.model_parameters?.transition_matrix;
     const sessTransition = rawData?.model_parameters?.session_transition_matrix;
@@ -3089,7 +3118,7 @@
       const derivedDurationSec = isFiniteNumber(explicitDurationSec) ? explicitDurationSec : isFiniteNumber(entry.durationSec) ? entry.durationSec : deriveSessionDurationSec(source);
       const durationMin = isFiniteNumber(explicitDurationMin) ? explicitDurationMin : isFiniteNumber(derivedDurationSec) ? derivedDurationSec / 60 : null;
       const reelCount = maybeNum(source.reelCount) ?? maybeNum(source.nReels) ?? maybeNum(source.totalReels);
-      const probability = maybeNum(source.S_t) ?? maybeNum(source.captureProb);
+      const probability = getSessionDisplayProbability(source, personalCaptureBaselineSec);
       const explicitGap = maybeNum(source.gapBeforeMin);
       const derivedGap = isFiniteNumber(prevTs2) && isFiniteNumber(ts) ? (ts - prevTs2) / 6e4 : null;
       const gapBeforeMin = isFiniteNumber(explicitGap) ? explicitGap : isFiniteNumber(derivedGap) ? Math.max(0, derivedGap) : null;
@@ -3185,7 +3214,8 @@
     const payloadGapMin = maybeNum(rawData?.timeSinceLastSessionMin);
     const timeSinceLastSessionMin = isFiniteNumber(payloadGapMin) && payloadGapMin > 0 ? payloadGapMin : derivedGapMin;
     const idleSinceLastSessionMin = maybeNum(rawData?.idleSinceLastSessionMin);
-    const captureRiskScoreRaw = maybeNum(rawData?.captureRiskScore) ?? (isFiniteNumber(maybeNum(mostRecent?.S_t)) ? maybeNum(mostRecent?.S_t) * 100 : null);
+    const latestDisplayProbability = getSessionDisplayProbability(mostRecent, personalCaptureBaselineSec);
+    const captureRiskScoreRaw = isFiniteNumber(latestDisplayProbability) ? latestDisplayProbability * 100 : maybeNum(rawData?.captureRiskScore) ?? (isFiniteNumber(maybeNum(mostRecent?.S_t)) ? maybeNum(mostRecent?.S_t) * 100 : null);
     const captureRiskScore = isFiniteNumber(captureRiskScoreRaw) ? Math.max(0, Math.min(100, captureRiskScoreRaw)) : null;
     const deriveRiskLabel = (score) => {
       if (!isFiniteNumber(score)) return null;
@@ -3194,7 +3224,7 @@
       if (score >= 25) return "STABLE";
       return "SAFE";
     };
-    const riskLabel = typeof rawData?.riskLabel === "string" && rawData.riskLabel ? rawData.riskLabel : deriveRiskLabel(captureRiskScore) || "SAFE";
+    const riskLabel = deriveRiskLabel(captureRiskScore) || "SAFE";
     const derivedAvgSessionDurationSec = averageOf(sessionDurations);
     const derivedAvgReelsPerSession = averageOf(sessionReels);
     const derivedAvgDwellTimeSec = averageOf(sessionDwells);
@@ -3356,17 +3386,6 @@
       recoveryWindowDelta: maybeNum(rawData?.stateDynamics?.recoveryWindowDelta),
       modelConfidence
     };
-    const personalCaptureBaselineSec = (() => {
-      const recentDurations = sessions.map((entry) => {
-        const source = entry?.raw || entry || {};
-        return maybeNum(entry?.durationSec) ?? maybeNum(source.durationSec) ?? maybeNum(source.sessionDurationSec) ?? deriveSessionDurationSec(source);
-      }).filter((durationSec) => isFiniteNumber(durationSec) && durationSec >= 20).slice(-30).sort((a, b) => a - b);
-      if (!recentDurations.length)
-        return 180;
-      const mid = Math.floor(recentDurations.length / 2);
-      const median = recentDurations.length % 2 ? recentDurations[mid] : (recentDurations[mid - 1] + recentDurations[mid]) / 2;
-      return Math.min(300, Math.max(90, median));
-    })();
     const getDailyCaptureWeight = (entry) => {
       const source = entry?.raw || entry || {};
       const explicitDurationSec = maybeNum(source.durationSec) ?? maybeNum(source.sessionDurationSec);
@@ -3386,7 +3405,7 @@
     const derivedHeatmapData = dateKeys.map((dateKey) => {
       const bucket = dateBuckets[dateKey] || [];
       const weighted = bucket.map((e) => {
-        const prob = maybeNum(e.raw?.S_t);
+        const prob = getSessionDisplayProbability(e.raw, personalCaptureBaselineSec);
         if (!isFiniteNumber(prob))
           return null;
         const weight = getDailyCaptureWeight(e);
@@ -3404,34 +3423,12 @@
         sessionCount: bucket.length
       };
     }).filter((d) => isFiniteNumber(d.avgCapture));
-    const heatmapData = safeArr(rawData?.heatmapData).length ? safeArr(rawData.heatmapData).map((d) => {
-      const date = d?.date || "";
-      const labels = deriveHeatmapLabels(date, d?.dayLabel || d?.d || "");
-      return {
-        date,
-        dayLabel: labels.dayLabel,
-        dateLabel: labels.dateLabel,
-        avgCapture: maybeNum(d?.avgCapture) ?? maybeNum(d?.v),
-        riskLevel: d?.riskLevel || null,
-        sessionCount: maybeNum(d?.sessionCount) ?? maybeNum(d?.s)
-      };
-    }) : safeArr(rawData?.days14).length ? safeArr(rawData.days14).map((d) => {
-      const date = d?.date || "";
-      const labels = deriveHeatmapLabels(date, d?.dayLabel || d?.d || "");
-      return {
-        date,
-        dayLabel: labels.dayLabel,
-        dateLabel: labels.dateLabel,
-        avgCapture: maybeNum(d?.avgCapture) ?? maybeNum(d?.v),
-        riskLevel: d?.riskLevel || null,
-        sessionCount: maybeNum(d?.sessionCount) ?? maybeNum(d?.s)
-      };
-    }) : derivedHeatmapData;
+    const heatmapData = derivedHeatmapData;
     heatmapData.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
     const derivedDoomStreak = (() => {
       let streak = 0;
       for (let i = sessions.length - 1; i >= 0; i -= 1) {
-        const p = maybeNum(sessions[i]?.S_t);
+        const p = getSessionDisplayProbability(sessions[i], personalCaptureBaselineSec);
         if (!isFiniteNumber(p) || p < DOOM_THRESHOLD) break;
         streak += 1;
       }
@@ -3440,7 +3437,7 @@
     const derivedMindfulStreak = (() => {
       let streak = 0;
       for (let i = sessions.length - 1; i >= 0; i -= 1) {
-        const p = maybeNum(sessions[i]?.S_t);
+        const p = getSessionDisplayProbability(sessions[i], personalCaptureBaselineSec);
         if (!isFiniteNumber(p) || p >= DOOM_THRESHOLD) break;
         streak += 1;
       }
@@ -3452,7 +3449,7 @@
       if (!withMood.length && !withRegret.length) return null;
       const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
       const isDoomSession = (s) => {
-        const p = maybeNum(s.S_t);
+        const p = getSessionDisplayProbability(s, personalCaptureBaselineSec);
         return isFiniteNumber(p) && p >= DOOM_THRESHOLD;
       };
       const doomMood = withMood.filter(isDoomSession);
@@ -3484,7 +3481,7 @@
       activeTimeToday,
       activeTimeTodaySeconds,
       interactionsToday: maybeNum(rawData?.interactionsToday) ?? derivedInteractionsToday,
-      capturedSessionsToday: maybeNum(rawData?.capturedSessionsToday) ?? derivedCapturedToday,
+      capturedSessionsToday: derivedCapturedToday ?? maybeNum(rawData?.capturedSessionsToday),
       avgSessionDurationSec: maybeNum(rawData?.avgSessionDurationSec) ?? derivedAvgSessionDurationSec,
       avgReelsPerSession: maybeNum(rawData?.avgReelsPerSession) ?? maybeNum(rawData?.avgNReels) ?? derivedAvgReelsPerSession,
       avgDwellTimeSec: maybeNum(rawData?.avgDwellTimeSec) ?? derivedAvgDwellTimeSec,
@@ -3493,9 +3490,9 @@
       pullIndex,
       totalReels: maybeNum(rawData?.totalReels) ?? (sessionReels.length ? sumOf(sessionReels) : timelineCapture.length || null),
       totalWatchedSeconds: maybeNum(rawData?.totalWatchedSeconds) ?? derivedTotalWatchedSeconds,
-      doomRate: maybeNum(rawData?.doomRate) ?? derivedAllTimeCaptureRate,
-      tenSessionAvgScore: maybeNum(rawData?.tenSessionAvgScore) ?? derivedTenSessionAvgScore,
-      allTimeCaptureRate: maybeNum(rawData?.allTimeCaptureRate) ?? derivedAllTimeCaptureRate,
+      doomRate: derivedAllTimeCaptureRate ?? maybeNum(rawData?.doomRate),
+      tenSessionAvgScore: derivedTenSessionAvgScore ?? maybeNum(rawData?.tenSessionAvgScore),
+      allTimeCaptureRate: derivedAllTimeCaptureRate ?? maybeNum(rawData?.allTimeCaptureRate),
       sessionDoomPersistence,
       escapeRate,
       modelConfidence,
@@ -3513,8 +3510,8 @@
       heatmapData,
       dateBuckets,
       todaySessions,
-      doomStreak: maybeNum(rawData?.doomStreak) ?? derivedDoomStreak,
-      mindfulStreak: maybeNum(rawData?.mindfulStreak) ?? derivedMindfulStreak,
+      doomStreak: derivedDoomStreak ?? maybeNum(rawData?.doomStreak),
+      mindfulStreak: derivedMindfulStreak ?? maybeNum(rawData?.mindfulStreak),
       moodDissonance,
       currentHour: maybeNum(rawData?.currentHour) ?? (/* @__PURE__ */ new Date()).getHours(),
       todayVsAvgDelta,

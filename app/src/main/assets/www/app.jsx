@@ -392,8 +392,8 @@ function OnboardingState() {
                     lineHeight: 1.12, letterSpacing: "-0.02em",
                     color: "#1A1612",
                 }}>
-                    waiting for<br />
-                    <em style={{ fontStyle: "italic", fontWeight: 400 }}>your next move.</em>
+                    meet<br />
+                    <em style={{ fontStyle: "italic", fontWeight: 400 }}>your personal Instagram scroll tracker.</em>
                 </div>
             </div>
 
@@ -521,6 +521,23 @@ function OnboardingState() {
     );
 }
 
+function getShortSessionEvidence(durationSec, reelCount, baselineSec = 180) {
+    const hasDuration = isFiniteNumber(durationSec);
+    const hasReels = isFiniteNumber(reelCount);
+    if (!hasDuration && !hasReels) return null;
+
+    const safeBaselineSec = isFiniteNumber(baselineSec) ? Math.max(baselineSec, 30) : 180;
+    const durationEvidence = hasDuration ? Math.min(Math.max(durationSec, 0) / safeBaselineSec, 1) : 0;
+    const reelEvidence = hasReels ? Math.min(Math.max(reelCount, 0) / 10, 1) : 0;
+    return Math.max(durationEvidence, reelEvidence);
+}
+
+function getSessionDisplayProbability(session, baselineSec = 180) {
+    const rawProbability = maybeNum(session?.S_t) ?? maybeNum(session?.captureProb);
+    if (!isFiniteNumber(rawProbability)) return null;
+    return Math.max(0, Math.min(1, rawProbability));
+}
+
 // ─── normalizeData ────────────────────────────────────────────────────────────
 function normalizeData(rawData) {
     // Apply any window-scoped retroactive label cache before deriving views.
@@ -545,9 +562,30 @@ function normalizeData(rawData) {
         .filter((s) => s && typeof s === "object")
         .map(mergeRetro);
     const mostRecent = sessions[sessions.length - 1] || null;
-    const sessionProbabilities = sessions.map((s) => maybeNum(s.S_t)).filter(isFiniteNumber);
-    const sessionDurations = sessions.map((s) => deriveSessionDurationSec(s)).filter(isFiniteNumber);
     const sessionReels = sessions.map((s) => maybeNum(s.nReels)).filter(isFiniteNumber);
+    const sessionDurations = sessions.map((s) => deriveSessionDurationSec(s)).filter(isFiniteNumber);
+    const personalCaptureBaselineSec = (() => {
+        const recentDurations = sessions
+            .map((entry) => {
+                const source = entry?.raw || entry || {};
+                return maybeNum(entry?.durationSec)
+                    ?? maybeNum(source.durationSec)
+                    ?? maybeNum(source.sessionDurationSec)
+                    ?? deriveSessionDurationSec(source);
+            })
+            .filter((durationSec) => isFiniteNumber(durationSec) && durationSec >= 20)
+            .slice(-30)
+            .sort((a, b) => a - b);
+        if (!recentDurations.length) return 180;
+        const mid = Math.floor(recentDurations.length / 2);
+        const median = recentDurations.length % 2
+            ? recentDurations[mid]
+            : (recentDurations[mid - 1] + recentDurations[mid]) / 2;
+        return Math.min(300, Math.max(90, median));
+    })();
+    const sessionProbabilities = sessions
+        .map((s) => getSessionDisplayProbability(s, personalCaptureBaselineSec))
+        .filter(isFiniteNumber);
     const sessionDwells = sessions.map((s) => maybeNum(s.avgDwell)).filter(isFiniteNumber);
     // transition_matrix = reel-level HMM A (within-session reel-to-reel, typically 0.85–0.95).
     // session_transition_matrix = session-level dominant-state transitions (behaviorally meaningful).
@@ -612,7 +650,7 @@ function normalizeData(rawData) {
             : (isFiniteNumber(derivedDurationSec) ? derivedDurationSec / 60 : null);
 
         const reelCount = maybeNum(source.reelCount) ?? maybeNum(source.nReels) ?? maybeNum(source.totalReels);
-        const probability = maybeNum(source.S_t) ?? maybeNum(source.captureProb);
+        const probability = getSessionDisplayProbability(source, personalCaptureBaselineSec);
         const explicitGap = maybeNum(source.gapBeforeMin);
         const derivedGap = (isFiniteNumber(prevTs) && isFiniteNumber(ts)) ? (ts - prevTs) / 60000 : null;
         const gapBeforeMin = isFiniteNumber(explicitGap)
@@ -758,7 +796,10 @@ function normalizeData(rawData) {
     // each dashboard call. Used by the header chip and the inactivity guard.
     const idleSinceLastSessionMin = maybeNum(rawData?.idleSinceLastSessionMin);
 
-    const captureRiskScoreRaw = maybeNum(rawData?.captureRiskScore) ?? (isFiniteNumber(maybeNum(mostRecent?.S_t)) ? maybeNum(mostRecent?.S_t) * 100 : null);
+    const latestDisplayProbability = getSessionDisplayProbability(mostRecent, personalCaptureBaselineSec);
+    const captureRiskScoreRaw = isFiniteNumber(latestDisplayProbability)
+        ? latestDisplayProbability * 100
+        : (maybeNum(rawData?.captureRiskScore) ?? (isFiniteNumber(maybeNum(mostRecent?.S_t)) ? maybeNum(mostRecent?.S_t) * 100 : null));
     const captureRiskScore = isFiniteNumber(captureRiskScoreRaw) ? Math.max(0, Math.min(100, captureRiskScoreRaw)) : null;
 
     const deriveRiskLabel = (score) => {
@@ -769,9 +810,7 @@ function normalizeData(rawData) {
         return "SAFE";
     };
 
-    const riskLabel = (typeof rawData?.riskLabel === "string" && rawData.riskLabel)
-        ? rawData.riskLabel
-        : (deriveRiskLabel(captureRiskScore) || "SAFE");
+    const riskLabel = deriveRiskLabel(captureRiskScore) || "SAFE";
 
     const derivedAvgSessionDurationSec = averageOf(sessionDurations);
     const derivedAvgReelsPerSession = averageOf(sessionReels);
@@ -987,26 +1026,6 @@ function normalizeData(rawData) {
         modelConfidence
     };
 
-    const personalCaptureBaselineSec = (() => {
-        const recentDurations = sessions
-            .map((entry) => {
-                const source = entry?.raw || entry || {};
-                return maybeNum(entry?.durationSec)
-                    ?? maybeNum(source.durationSec)
-                    ?? maybeNum(source.sessionDurationSec)
-                    ?? deriveSessionDurationSec(source);
-            })
-            .filter((durationSec) => isFiniteNumber(durationSec) && durationSec >= 20)
-            .slice(-30)
-            .sort((a, b) => a - b);
-        if (!recentDurations.length) return 180;
-        const mid = Math.floor(recentDurations.length / 2);
-        const median = recentDurations.length % 2
-            ? recentDurations[mid]
-            : (recentDurations[mid - 1] + recentDurations[mid]) / 2;
-        return Math.min(300, Math.max(90, median));
-    })();
-
     const getDailyCaptureWeight = (entry) => {
         const source = entry?.raw || entry || {};
         const explicitDurationSec = maybeNum(source.durationSec) ?? maybeNum(source.sessionDurationSec);
@@ -1029,7 +1048,7 @@ function normalizeData(rawData) {
         const bucket = dateBuckets[dateKey] || [];
         const weighted = bucket
             .map((e) => {
-                const prob = maybeNum(e.raw?.S_t);
+                const prob = getSessionDisplayProbability(e.raw, personalCaptureBaselineSec);
                 if (!isFiniteNumber(prob)) return null;
                 const weight = getDailyCaptureWeight(e);
                 return weight > 0 ? { prob, weight } : null;
@@ -1050,33 +1069,7 @@ function normalizeData(rawData) {
         };
     }).filter((d) => isFiniteNumber(d.avgCapture));
 
-    const heatmapData = safeArr(rawData?.heatmapData).length
-        ? safeArr(rawData.heatmapData).map((d) => {
-            const date = d?.date || "";
-            const labels = deriveHeatmapLabels(date, d?.dayLabel || d?.d || "");
-            return {
-                date,
-                dayLabel: labels.dayLabel,
-                dateLabel: labels.dateLabel,
-                avgCapture: maybeNum(d?.avgCapture) ?? maybeNum(d?.v),
-                riskLevel: d?.riskLevel || null,
-                sessionCount: maybeNum(d?.sessionCount) ?? maybeNum(d?.s)
-            };
-        })
-        : safeArr(rawData?.days14).length
-        ? safeArr(rawData.days14).map((d) => {
-            const date = d?.date || "";
-            const labels = deriveHeatmapLabels(date, d?.dayLabel || d?.d || "");
-            return {
-                date,
-                dayLabel: labels.dayLabel,
-                dateLabel: labels.dateLabel,
-                avgCapture: maybeNum(d?.avgCapture) ?? maybeNum(d?.v),
-                riskLevel: d?.riskLevel || null,
-                sessionCount: maybeNum(d?.sessionCount) ?? maybeNum(d?.s)
-            };
-        })
-        : derivedHeatmapData;
+    const heatmapData = derivedHeatmapData;
     heatmapData.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
 
     // Count of consecutive doom sessions from the most recent backwards.
@@ -1084,7 +1077,7 @@ function normalizeData(rawData) {
     const derivedDoomStreak = (() => {
         let streak = 0;
         for (let i = sessions.length - 1; i >= 0; i -= 1) {
-            const p = maybeNum(sessions[i]?.S_t);
+            const p = getSessionDisplayProbability(sessions[i], personalCaptureBaselineSec);
             if (!isFiniteNumber(p) || p < DOOM_THRESHOLD) break;
             streak += 1;
         }
@@ -1096,7 +1089,7 @@ function normalizeData(rawData) {
     const derivedMindfulStreak = (() => {
         let streak = 0;
         for (let i = sessions.length - 1; i >= 0; i -= 1) {
-            const p = maybeNum(sessions[i]?.S_t);
+            const p = getSessionDisplayProbability(sessions[i], personalCaptureBaselineSec);
             if (!isFiniteNumber(p) || p >= DOOM_THRESHOLD) break;
             streak += 1;
         }
@@ -1112,7 +1105,7 @@ function normalizeData(rawData) {
 
         const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
         const isDoomSession = (s) => {
-            const p = maybeNum(s.S_t);
+            const p = getSessionDisplayProbability(s, personalCaptureBaselineSec);
             return isFiniteNumber(p) && p >= DOOM_THRESHOLD;
         };
 
@@ -1161,7 +1154,7 @@ function normalizeData(rawData) {
         activeTimeToday,
         activeTimeTodaySeconds,
         interactionsToday: maybeNum(rawData?.interactionsToday) ?? derivedInteractionsToday,
-        capturedSessionsToday: maybeNum(rawData?.capturedSessionsToday) ?? derivedCapturedToday,
+        capturedSessionsToday: derivedCapturedToday ?? maybeNum(rawData?.capturedSessionsToday),
         avgSessionDurationSec: maybeNum(rawData?.avgSessionDurationSec) ?? derivedAvgSessionDurationSec,
         avgReelsPerSession: maybeNum(rawData?.avgReelsPerSession) ?? maybeNum(rawData?.avgNReels) ?? derivedAvgReelsPerSession,
         avgDwellTimeSec: maybeNum(rawData?.avgDwellTimeSec) ?? derivedAvgDwellTimeSec,
@@ -1170,9 +1163,9 @@ function normalizeData(rawData) {
         pullIndex,
         totalReels: maybeNum(rawData?.totalReels) ?? (sessionReels.length ? sumOf(sessionReels) : (timelineCapture.length || null)),
         totalWatchedSeconds: maybeNum(rawData?.totalWatchedSeconds) ?? derivedTotalWatchedSeconds,
-        doomRate: maybeNum(rawData?.doomRate) ?? derivedAllTimeCaptureRate,
-        tenSessionAvgScore: maybeNum(rawData?.tenSessionAvgScore) ?? derivedTenSessionAvgScore,
-        allTimeCaptureRate: maybeNum(rawData?.allTimeCaptureRate) ?? derivedAllTimeCaptureRate,
+        doomRate: derivedAllTimeCaptureRate ?? maybeNum(rawData?.doomRate),
+        tenSessionAvgScore: derivedTenSessionAvgScore ?? maybeNum(rawData?.tenSessionAvgScore),
+        allTimeCaptureRate: derivedAllTimeCaptureRate ?? maybeNum(rawData?.allTimeCaptureRate),
         sessionDoomPersistence,
         escapeRate,
         modelConfidence,
@@ -1190,8 +1183,8 @@ function normalizeData(rawData) {
         heatmapData,
         dateBuckets,
         todaySessions,
-        doomStreak: maybeNum(rawData?.doomStreak) ?? derivedDoomStreak,
-        mindfulStreak: maybeNum(rawData?.mindfulStreak) ?? derivedMindfulStreak,
+        doomStreak: derivedDoomStreak ?? maybeNum(rawData?.doomStreak),
+        mindfulStreak: derivedMindfulStreak ?? maybeNum(rawData?.mindfulStreak),
         moodDissonance,
         currentHour: maybeNum(rawData?.currentHour) ?? new Date().getHours(),
         todayVsAvgDelta,

@@ -253,7 +253,7 @@ def effective_session_reel_count(df: pd.DataFrame) -> int:
     return max(1, int(len(df)))
 
 
-def compute_session_behavior_evidence(df: pd.DataFrame) -> float:
+def compute_session_behavior_evidence(df: pd.DataFrame, baseline: 'UserBaseline' = None) -> float:
     """
     Estimate how much within-session evidence we have before contextual heuristics
     are allowed to dominate doom scoring. Very short sessions should not cross the
@@ -271,8 +271,20 @@ def compute_session_behavior_evidence(df: pd.DataFrame) -> float:
     else:
         total_dwell = float(n_reels) * 4.0
 
-    reel_evidence = min(n_reels / 8.0, 1.0)
-    duration_evidence = min(total_dwell / 120.0, 1.0)
+    if baseline is not None:
+        target_reels = float(np.clip(
+            baseline.session_len_mu + 0.5 * baseline.session_len_sig,
+            8.0,
+            40.0
+        ))
+        personal_dwell_sec = float(np.clip(np.exp(baseline.dwell_mu_personal), 2.0, 20.0))
+        target_duration_sec = float(np.clip(target_reels * personal_dwell_sec, 120.0, 900.0))
+    else:
+        target_reels = 8.0
+        target_duration_sec = 120.0
+
+    reel_evidence = min(n_reels / target_reels, 1.0)
+    duration_evidence = min(total_dwell / target_duration_sec, 1.0)
     return float(np.clip(max(reel_evidence, duration_evidence), 0.0, 1.0))
 
 
@@ -404,11 +416,18 @@ class UserBaseline:
         self.speed_sig_personal = 1.0
         self.session_len_mu = 10.0
         self.session_len_sig = 5.0
+        self.lux_mu_personal = 50.0
+        self.lux_mad_personal = 25.0
+        self.dark_room_rate = 0.5
+        self.charging_rate = 0.2
         self.typical_hour = np.ones(24) / 24.0
         self.typical_gap_mu = 120.0
+        self.typical_gap_sig = 60.0
         self.exit_rate_baseline = 0.05
         self.rewatch_rate_base = 0.1
         self.entropy_baseline = 2.5
+        self.dwell_trend_mu = 0.0
+        self.dwell_trend_sig = 0.5
         self.n_sessions_seen = 0
         self.last_updated = datetime.now().isoformat()
 
@@ -428,6 +447,11 @@ class UserBaseline:
         exits = session_df['AppExitAttempts'].sum() / sess_len
         rewatches = session_df['BackScrollCount'].sum() / sess_len
         entropy = session_df['ScrollRhythmEntropy'].mean()
+        final_trend = float(pd.to_numeric(session_df['SessionDwellTrend'], errors='coerce').fillna(0.0).iloc[-1]) if 'SessionDwellTrend' in session_df.columns else 0.0
+        gap_min = float(pd.to_numeric(session_df['TimeSinceLastSessionMin'], errors='coerce').fillna(0.0).iloc[0]) if 'TimeSinceLastSessionMin' in session_df.columns else 0.0
+        lux_session = float(pd.to_numeric(session_df['AmbientLuxStart'], errors='coerce').fillna(50.0).median()) if 'AmbientLuxStart' in session_df.columns else 50.0
+        dark_room_session = float(pd.to_numeric(session_df['IsScreenInDarkRoom'], errors='coerce').fillna(0.0).mean()) if 'IsScreenInDarkRoom' in session_df.columns else 0.0
+        charging_session = float(pd.to_numeric(session_df['IsCharging'], errors='coerce').fillna(0.0).mean()) if 'IsCharging' in session_df.columns else 0.0
         
         rho = adaptive_rho
         
@@ -440,10 +464,22 @@ class UserBaseline:
         old_mu = self.session_len_mu
         self.session_len_mu = rho * self.session_len_mu + (1 - rho) * sess_len
         self.session_len_sig = rho * self.session_len_sig + (1 - rho) * np.abs(sess_len - old_mu)
-        
+        old_lux_mu = self.lux_mu_personal
+        self.lux_mu_personal = rho * self.lux_mu_personal + (1 - rho) * lux_session
+        self.lux_mad_personal = rho * self.lux_mad_personal + (1 - rho) * abs(lux_session - old_lux_mu)
+        self.dark_room_rate = rho * self.dark_room_rate + (1 - rho) * dark_room_session
+        self.charging_rate = rho * self.charging_rate + (1 - rho) * charging_session
+        if gap_min > 0:
+            old_gap_mu = self.typical_gap_mu
+            self.typical_gap_mu = rho * self.typical_gap_mu + (1 - rho) * gap_min
+            self.typical_gap_sig = rho * self.typical_gap_sig + (1 - rho) * abs(gap_min - old_gap_mu)
+
         self.exit_rate_baseline = rho * self.exit_rate_baseline + (1 - rho) * exits
         self.rewatch_rate_base = rho * self.rewatch_rate_base + (1 - rho) * rewatches
         self.entropy_baseline = rho * self.entropy_baseline + (1 - rho) * entropy
+        old_trend_mu = self.dwell_trend_mu
+        self.dwell_trend_mu = rho * self.dwell_trend_mu + (1 - rho) * final_trend
+        self.dwell_trend_sig = rho * self.dwell_trend_sig + (1 - rho) * abs(final_trend - old_trend_mu)
         
         start_time_str = session_df.iloc[0]['StartTime']
         try:
@@ -488,6 +524,95 @@ def kl_divergence_categorical(p, q):
     p = p / np.sum(p)
     q = q / np.sum(q)
     return np.sum(p * np.log(p / q))
+
+
+def _rate_informativeness(rate: float) -> float:
+    rate = float(np.clip(rate, 0.0, 1.0))
+    return float(np.clip(1.0 - abs(2.0 * rate - 1.0), 0.0, 1.0))
+
+
+def _compute_sleep_window_metrics(hour: int, sleep_start: int, sleep_end: int) -> tuple:
+    sleep_start = int(sleep_start) % 24
+    sleep_end = int(sleep_end) % 24
+    hour = int(hour) % 24
+    if sleep_start == sleep_end:
+        return False, 0.0
+    if sleep_start > sleep_end:
+        in_sleep_window = (hour >= sleep_start) or (hour < sleep_end)
+        window_len = (24 - sleep_start) + sleep_end
+        elapsed = (hour - sleep_start) % 24
+    else:
+        in_sleep_window = (sleep_start <= hour < sleep_end)
+        window_len = sleep_end - sleep_start
+        elapsed = hour - sleep_start
+    if not in_sleep_window or window_len <= 0:
+        return False, 0.0
+    depth = float(np.clip((elapsed + 0.5) / max(window_len, 1), 0.0, 1.0))
+    return True, depth
+
+
+def compute_environment_context(session_df, baseline: 'UserBaseline' = None) -> dict:
+    lux = float(pd.to_numeric(session_df['AmbientLuxStart'], errors='coerce').fillna(50.0).median()) if 'AmbientLuxStart' in session_df.columns else 50.0
+    chrge = float(pd.to_numeric(session_df['IsCharging'], errors='coerce').fillna(0.0).mean()) if 'IsCharging' in session_df.columns else 0.0
+    dark_frac = float(pd.to_numeric(session_df['IsScreenInDarkRoom'], errors='coerce').fillna(float(lux < 15)).mean()) if 'IsScreenInDarkRoom' in session_df.columns else float(lux < 15)
+    phase = float(pd.to_numeric(session_df['CircadianPhase'], errors='coerce').fillna(0.5).iloc[0]) if 'CircadianPhase' in session_df.columns else 0.5
+    fatigue_risk = float(pd.to_numeric(session_df['fatigue_risk'], errors='coerce').fillna(0.0).iloc[0]) if 'fatigue_risk' in session_df.columns else 0.0
+    sleep_start = int(pd.to_numeric(session_df['SleepStart'], errors='coerce').fillna(1).iloc[0]) if 'SleepStart' in session_df.columns else 1
+    sleep_end = int(pd.to_numeric(session_df['SleepEnd'], errors='coerce').fillna(8).iloc[0]) if 'SleepEnd' in session_df.columns else 8
+
+    try:
+        hour = int(pd.to_datetime(session_df['StartTime'].iloc[0]).hour)
+    except Exception:
+        hour = 12
+
+    in_sleep_window, sleep_depth = _compute_sleep_window_metrics(hour, sleep_start, sleep_end)
+
+    if baseline is not None:
+        lux_center = float(max(baseline.lux_mu_personal, 1.0))
+        lux_scale = float(max(baseline.lux_mad_personal, 10.0))
+        dark_base = float(np.clip(baseline.dark_room_rate, 0.0, 1.0))
+        charge_base = float(np.clip(baseline.charging_rate, 0.0, 1.0))
+    else:
+        lux_center = 50.0
+        lux_scale = 20.0
+        dark_base = 0.5
+        charge_base = 0.2
+
+    low_lux_anomaly = float(np.clip((lux_center - lux) / (2.0 * lux_scale), 0.0, 1.0))
+    dark_room_anomaly = float(np.clip((dark_frac - dark_base) / max(1.0 - dark_base, 1e-3), 0.0, 1.0))
+    charging_anomaly = float(np.clip((chrge - charge_base) / max(1.0 - charge_base, 1e-3), 0.0, 1.0))
+
+    lux_informativeness = float(np.clip(np.log1p(lux_scale) / np.log(31.0), 0.0, 1.0))
+    dark_informativeness = _rate_informativeness(dark_base)
+    charge_informativeness = _rate_informativeness(charge_base)
+
+    sleep_intrusion = float(np.clip(0.65 + 0.35 * sleep_depth, 0.0, 1.0)) if in_sleep_window else 0.0
+    rest_disruption = float(np.clip(0.78 * sleep_intrusion + 0.22 * fatigue_risk, 0.0, 1.0))
+
+    env_blend = (
+        0.72 * rest_disruption +
+        0.12 * lux_informativeness * low_lux_anomaly +
+        0.10 * dark_informativeness * dark_room_anomaly +
+        0.06 * charge_informativeness * charging_anomaly
+    )
+    environment_risk = float(np.clip(max(rest_disruption, env_blend), 0.0, 1.0))
+
+    return {
+        'hour': float(hour),
+        'phase': float(phase),
+        'in_sleep_window': bool(in_sleep_window),
+        'sleep_depth': float(sleep_depth),
+        'sleep_intrusion': float(sleep_intrusion),
+        'fatigue_risk': float(fatigue_risk),
+        'rest_disruption': float(rest_disruption),
+        'low_lux_anomaly': float(low_lux_anomaly),
+        'dark_room_anomaly': float(dark_room_anomaly),
+        'charging_anomaly': float(charging_anomaly),
+        'lux_informativeness': float(lux_informativeness),
+        'dark_informativeness': float(dark_informativeness),
+        'charge_informativeness': float(charge_informativeness),
+        'environment_risk': float(environment_risk),
+    }
 
 def logsumexp(log_probs):
     log_probs = np.array(log_probs)
@@ -765,36 +890,35 @@ class DoomScorer:
             return {'doom_score': 0.0, 'label': 'CASUAL', 'components': {}}
             
         n_reels = max(1, effective_session_reel_count(session_df))
-        behavior_evidence = compute_session_behavior_evidence(session_df)
+        behavior_evidence = compute_session_behavior_evidence(session_df, baseline)
         
         c_length = min(n_reels / max(1.0, baseline.session_len_mu + 2 * baseline.session_len_sig), 1.0)
         
         exit_sum = session_df['AppExitAttempts'].sum() / n_reels
-        baseline_exit = max(baseline.exit_rate_baseline, 0.05)
-        c_volconst = 1.0 - np.exp(-exit_sum / (baseline_exit + 0.5))
+        baseline_exit = max(float(baseline.exit_rate_baseline), 0.01)
+        exit_scale = max(0.02, baseline_exit * 1.5)
+        c_volconst = 1.0 - np.exp(-exit_sum / exit_scale)
         c_volconst = float(np.clip(c_volconst, 0.0, 1.0))
         
+        gap_center = max(5.0, min(180.0, float(baseline.typical_gap_mu)))
+        gap_scale = max(3.0, min(45.0, 0.35 * gap_center + 0.5 * float(baseline.typical_gap_sig)))
         if gap_min <= 0:
             c_rapid = 0.0
-        elif gap_min < 3:
-            c_rapid = 1.0
-        elif gap_min < 7:
-            c_rapid = 0.6
-        elif gap_min < 15:
-            c_rapid = 0.3
         else:
-            c_rapid = 0.0
+            c_rapid = float(np.exp(-gap_min / gap_scale))
             
         # Use the latest entropy value (final state of session) instead of avg of historical states
         final_entropy = session_df['ScrollRhythmEntropy'].iloc[-1] if 'ScrollRhythmEntropy' in session_df.columns else 0.0
-        # Rhythmic swiping (low entropy) indicates automaticity. 
-        # Entropy of 0.0 (perfect rhythm) = 1.0 Automaticity. Entropy >= 4.0 = 0.0 Automaticity.
-        c_auto = float(np.clip(1.0 - (final_entropy / 4.0), 0.0, 1.0))
+        entropy_base = max(0.75, float(baseline.entropy_baseline))
+        abs_auto = float(np.clip(1.0 - (final_entropy / 4.0), 0.0, 1.0))
+        rel_auto = float(np.clip((entropy_base - final_entropy) / max(entropy_base, 1.0), 0.0, 1.0))
+        c_auto = float(np.clip(0.45 * abs_auto + 0.55 * rel_auto, 0.0, 1.0))
         
         # Use latest trend value
         trend_raw = session_df['SessionDwellTrend'].iloc[-1] if 'SessionDwellTrend' in session_df.columns else 0.0
-        trend = float(np.clip(trend_raw, -2.0, 2.0))
-        c_collapse = float(np.clip(-trend / 2.0, 0.0, 1.0))
+        trend_base = float(baseline.dwell_trend_mu)
+        trend_scale = max(0.25, min(3.0, 1.5 * float(baseline.dwell_trend_sig)))
+        c_collapse = float(np.clip((trend_base - trend_raw) / trend_scale, 0.0, 1.0))
         
         rewatch_sum = session_df['BackScrollCount'].sum() / n_reels
         # FIX (Bug 10): If no back-scrolls in session, rewatch_compulsion must be exactly 0, not clipped
@@ -804,22 +928,8 @@ class DoomScorer:
         else:
             c_rewatch = min(rewatch_sum / max(0.01, baseline.rewatch_rate_base + 0.01), 1.0)
         
-        lux = session_df['AmbientLuxStart'].iloc[0] if 'AmbientLuxStart' in session_df else 50.0
-        chrge = session_df['IsCharging'].iloc[0] if 'IsCharging' in session_df else 0
-        phase = session_df['CircadianPhase'].iloc[0] if 'CircadianPhase' in session_df else 0.5
-        
-        sleep_start = int(session_df['SleepStart'].iloc[0]) if 'SleepStart' in session_df.columns else 1
-        sleep_end   = int(session_df['SleepEnd'].iloc[0])   if 'SleepEnd'   in session_df.columns else 8
-
-        try:
-            hour = pd.to_datetime(session_df['StartTime'].iloc[0]).hour
-        except:
-            hour = 12
-
-        if sleep_start > sleep_end:
-            in_sleep_window = (hour >= sleep_start) or (hour < sleep_end)
-        else:
-            in_sleep_window = (sleep_start <= hour < sleep_end)
+        env_ctx = compute_environment_context(session_df, baseline)
+        in_sleep_window = bool(env_ctx['in_sleep_window'])
 
         # A long gap during the sleep window is NOT healthy recovery —
         # it just means they put the phone down for a bit then came back at 2AM.
@@ -827,21 +937,7 @@ class DoomScorer:
         # very short session inherit a strong penalty with little behavioral evidence.
         if in_sleep_window and gap_min > 60:
             c_rapid = max(c_rapid, 0.25 * behavior_evidence)
-
-        dark_frac  = session_df['IsScreenInDarkRoom'].mean() if 'IsScreenInDarkRoom' in session_df.columns else float(lux < 15)
-        is_dark_rm = 1.0 if (dark_frac > 0.5 and (phase > 0.75 or phase < 0.25)) else 0.0
-        sleep_penalty = 1.0 if in_sleep_window else 0.0
-        fatigue_risk = float(session_df['fatigue_risk'].iloc[0]) if 'fatigue_risk' in session_df.columns else 0.0
-        c_env_base = (
-            0.20 * is_dark_rm +
-            0.15 * float(chrge) +
-            0.10 * float(lux < 5) +
-            0.50 * sleep_penalty +
-            0.10 * fatigue_risk  # conservative; proxy-of-proxy pending validation
-        )
-        # Environment risk is absolute, not conditioned on previous state.
-        # Late night scrolling in a dark room is RISKY regardless of if you were casual 10 mins ago.
-        c_env = float(np.clip(c_env_base, 0.0, 1.0))
+        c_env = float(env_ctx['environment_risk'])
         context_evidence_scale = 0.35 + 0.65 * behavior_evidence
         c_rapid *= context_evidence_scale
         c_env *= context_evidence_scale
@@ -1265,7 +1361,7 @@ class ReelioCLSE:
             alert_rate = self.n_regime_alerts / self.n_sessions_seen
             C_stability = float(np.clip(1.0 - alert_rate, 0.0, 1.0))
         else:
-            C_stability = 1.0
+            C_stability = 0.0
 
         # Supervision confidence from label coverage + agreement drift.
         if self.n_sessions_seen > 0:
@@ -1274,8 +1370,8 @@ class ReelioCLSE:
             label_coverage = 0.0
         disagreement_penalty = float(np.clip(abs(self.running_disagreement) / 0.25, 0.0, 1.0))
         agreement_quality = 1.0 - disagreement_penalty
-        # Neutral when no labels; rises as labels accumulate and agree.
-        C_supervision = 0.5 if self.labeled_sessions == 0 else (0.6 * label_coverage + 0.4 * agreement_quality)
+        # No labels means no supervision evidence yet.
+        C_supervision = 0.0 if self.labeled_sessions == 0 else (0.6 * label_coverage + 0.4 * agreement_quality)
 
         # Weighted blend is easier to interpret than multiplicative collapse.
         overall = (
@@ -1284,6 +1380,10 @@ class ReelioCLSE:
             0.20 * C_stability +
             0.10 * C_supervision
         )
+        # Sparse-data guard: confidence should not read as "settled" until the model has
+        # both enough sessions and some separation in the learned dwell states.
+        readiness_gate = float(np.clip(0.5 * C_volume + 0.5 * C_separation, 0.0, 1.0))
+        overall *= (0.35 + 0.65 * readiness_gate)
 
         return {
             'overall': float(np.clip(overall, 0.0, 1.0)),
@@ -1547,10 +1647,9 @@ class ReelioCLSE:
             self._initialize_from_data(df, baseline)
             
         gap_hr = df['TimeSinceLastSessionMin'].iloc[0] / 60.0 if 'TimeSinceLastSessionMin' in df else 2.0
-        phase = df['CircadianPhase'].iloc[0] if 'CircadianPhase' in df else 0.5
         day_of_week = df['DayOfWeek'].iloc[0] if 'DayOfWeek' in df else 0
-        lux = df['AmbientLuxStart'].iloc[0] if 'AmbientLuxStart' in df else 50.0
-        chrge = df['IsCharging'].iloc[0] if 'IsCharging' in df else 0
+        env_ctx = compute_environment_context(df, baseline)
+        phase = env_ctx['phase']
         
         intended    = str(df['IntendedAction'].iloc[0]) if 'IntendedAction' in df.columns else ""
         prev_ctx    = str(df['PreviousContext'].iloc[0]) if 'PreviousContext' in df.columns else ""
@@ -1585,8 +1684,8 @@ class ReelioCLSE:
             np.sin(phase * 2 * np.pi),
             np.cos(phase * 2 * np.pi),
             gap_hr / 10.0,
-            1.0 if lux < 10 else 0.0,
-            1.0 if chrge else 0.0,
+            env_ctx['rest_disruption'],
+            env_ctx['charge_informativeness'] * env_ctx['charging_anomaly'],
             1.0 if day_of_week in (1, 7) else 0.0,
             stress_flag,                                 # index 7: pre-session stress/avoidance
             mood_risk                                    # index 8: pre-session state risk
@@ -1736,7 +1835,9 @@ def load_full_state(state_path: str):
     with open(state_path, 'r') as f:
         data = json.load(f)
         
-    if data.get('model_version', 0.0) < 3.0:
+    saved_model_version = float(data.get('model_version', 0.0))
+
+    if saved_model_version < 3.0:
         detector = RegimeDetector()
         detector.regret_validator = RegretValidator()
         return ReelioCLSE(), UserBaseline(), detector, DoomScorer(), None
@@ -1780,9 +1881,9 @@ def load_full_state(state_path: str):
     
     scorer = DoomScorer()
     s_state = data.get('scorer_state', {})
-    if 'component_weights' in s_state:
+    if 'component_weights' in s_state and saved_model_version >= 3.1:
         scorer.component_weights = np.array(s_state['component_weights'])
-    if 'n_updates' in s_state:
+    if 'n_updates' in s_state and saved_model_version >= 3.1:
         scorer.n_updates = s_state['n_updates']
     
     prev_g = data.get('prev_gamma')
@@ -1806,7 +1907,7 @@ def save_full_state(state_path: str, model, baseline, detector, scorer, prev_gam
             regret_validator_state = detector.regret_validator.to_dict()
         
         data = {
-            'model_version': 3.0,
+            'model_version': 3.1,
             'model_state': model._checkpoint_dict,
             'baseline_state': baseline.to_dict(),
             'detector_state': {
@@ -2233,34 +2334,33 @@ def run_dashboard_payload(csv_data: str, state_path: str = None, survey_data: di
             # Internal learning uses blended probability
             gap_min = float(s_df['TimeSinceLastSessionMin'].iloc[0]) if 'TimeSinceLastSessionMin' in s_df.columns else 60.0
             scorer_result = scorer.score(s_df, baseline, gap_min, prev_S_t=blended_prob)
-            behavior_evidence = compute_session_behavior_evidence(s_df)
-            
-            # When model confidence is low, blend heuristic into displayed score.
-            # This prevents near-zero S_t from hiding clearly bad sessions.
-            _model_conf = model.compute_model_confidence_breakdown()['overall']
-            _heuristic  = scorer_result.get('doom_score', 0.0)
-            if _model_conf < 0.70:
-                # Weight shifts toward heuristic as confidence drops, but short sessions
-                # still need enough within-session evidence before context can dominate.
-                _w_heus = (1.0 - _model_conf) * behavior_evidence
-                _w_hmm  = 1.0 - _w_heus
-                S_t_reported = float(np.clip(
-                    _w_hmm * doom_prob + _w_heus * _heuristic, 0.0, 1.0
-                ))
-            else:
-                S_t_reported = doom_prob
+            behavior_evidence = compute_session_behavior_evidence(s_df, baseline)
 
-            # Hard floor: if heuristic says this is elevated AND we're in the sleep window,
-            # don't let S_t report below 0.25 regardless of HMM output.
-            try:
-                _hour = pd.to_datetime(s_df['StartTime'].iloc[0]).hour
-                _sleep_start = int(s_df['SleepStart'].iloc[0]) if 'SleepStart' in s_df.columns else 1
-                _sleep_end   = int(s_df['SleepEnd'].iloc[0])   if 'SleepEnd'   in s_df.columns else 8
-                _in_sleep = (_hour >= _sleep_start) or (_hour < _sleep_end) if _sleep_start > _sleep_end else (_sleep_start <= _hour < _sleep_end)
-            except:
-                _in_sleep = False
-            if _in_sleep and _heuristic >= 0.50 and behavior_evidence >= 0.60:
-                S_t_reported = max(S_t_reported, 0.25)
+            # Reported score should respond to strong user-relative session evidence
+            # even when the HMM is overconfident in the opposite direction.
+            _model_conf = model.compute_model_confidence_breakdown()['overall']
+            _heuristic = float(scorer_result.get('doom_score', 0.0))
+            _length_signal = float(np.clip(
+                effective_session_reel_count(s_df) / max(1.0, baseline.session_len_mu + baseline.session_len_sig),
+                0.0,
+                1.0
+            ))
+            _disagreement = abs(_heuristic - doom_prob)
+            _arbitration = float(np.clip(
+                0.05 +
+                0.45 * behavior_evidence +
+                0.25 * _length_signal +
+                0.25 * _disagreement,
+                0.0,
+                0.9
+            ))
+            if _model_conf >= 0.85 and _disagreement <= 0.12:
+                _arbitration *= 0.35
+            S_t_reported = float(np.clip(
+                doom_prob + _arbitration * (_heuristic - doom_prob),
+                0.0,
+                1.0
+            ))
             scorer.update_weights(scorer_result['components'], blended_prob)
             
             # Historical Aggregation: Weight components by blended probability for stability
