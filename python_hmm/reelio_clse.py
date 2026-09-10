@@ -34,7 +34,7 @@ import random
 class ReelioCLSE:
     # --- Class Constants for Priors (Fix 2: MAP Priors) ---
     ALPHA_A = np.array([[2.0, 1.0], [1.0, 3.0]]) # State 0 prefers 0, State 1 strongly prefers 1
-    ALPHA_PI = np.array([2.0, 1.0])
+    ALPHA_PI = np.array([1.0, 1.0])
     
     # Normal-InverseGamma priors for log_dwell
     MU_PRIOR_D = np.array([np.log(5), np.log(20)])
